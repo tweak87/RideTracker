@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import simd
 
 struct SeatCalibration: Codable {
     let up: SIMD3<Double>
