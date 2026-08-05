@@ -34,6 +34,7 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
     @Published private(set) var ridePhase = "idle"
     @Published private(set) var qualityScore = 0
     @Published private(set) var status = "Bereit"
+    @Published private(set) var lastSavedURL: URL?
 
     let accessoryManager = BLEAccessoryManager()
     let rideEngine = RideEngine()
@@ -47,6 +48,8 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
     private var latestPressure: Double?
     private var latestLocation: CLLocation?
     private var startedAt: TimeInterval = 0
+    private var startedAtDate = Date()
+    private var endedAtDate = Date()
     private var latestClimbRate = 0.0
     private var lastAltitudeValue = 0.0
     private var lastAltitudeTimestamp = 0.0
@@ -75,7 +78,9 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
         acceptedLocationCount = 0
         ridePhase = "idle"
         qualityScore = 0
+        lastSavedURL = nil
         startedAt = ProcessInfo.processInfo.systemUptime
+        startedAtDate = Date()
         isRecording = true
         status = "Aufnahme läuft"
         location.startUpdatingLocation()
@@ -148,10 +153,47 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
     func stop() {
         guard isRecording else { return }
         isRecording = false
+        endedAtDate = Date()
         motion.stopDeviceMotionUpdates()
         altimeter.stopRelativeAltitudeUpdates()
         location.stopUpdatingLocation()
         status = "Aufnahme beendet: \(samples.count) Samples"
+    }
+
+    @discardableResult
+    func saveSession() throws -> URL {
+        let duration = samples.last?.timestamp ?? 0
+        let events = phaseDetector.events.map {
+            RideSessionEvent(id: UUID(), timestamp: $0.0, type: $0.1)
+        }
+        let document = RideSessionDocument(
+            schemaVersion: "2.0.0",
+            id: UUID(),
+            platform: "ios",
+            startedAt: startedAtDate,
+            endedAt: endedAtDate,
+            timebase: "systemUptime",
+            calibration: RideSessionCalibration(
+                mode: "manual",
+                source: "iphone",
+                isCalibrated: rideEngine.calibration != nil
+            ),
+            events: events,
+            samples: samples,
+            summary: RideSessionSummary(
+                durationSeconds: duration,
+                sampleCount: samples.count,
+                distanceMeters: filteredDistance,
+                acceptedLocations: acceptedLocationCount,
+                rejectedLocations: rejectedLocationCount,
+                qualityScore: qualityScore,
+                finalPhase: ridePhase
+            )
+        )
+        let url = try RideSessionStore.save(document)
+        lastSavedURL = url
+        status = "Session gespeichert: \(url.lastPathComponent)"
+        return url
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -161,9 +203,6 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
                 latestLocation = value
                 speedKmh = max(0, value.speed * 3.6)
                 filteredDistance = rideEngine.distanceMeters
-                if let first = locations.first {
-                    altitudeFusion.correctWithGPS(relativeAltitude: value.altitude - first.altitude)
-                }
             } else {
                 rejectedLocationCount += 1
             }
