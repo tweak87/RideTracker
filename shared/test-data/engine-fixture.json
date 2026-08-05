@@ -1,0 +1,30 @@
+{
+  "calibration": {
+    "up": [0, 0, 1],
+    "lateral": [1, 0, 0],
+    "forward": [0, 1, 0],
+    "source": "manual"
+  },
+  "motion": [
+    {"t": 0.00, "x": 0.00, "y": 0.00, "z": 1.00},
+    {"t": 0.01, "x": 0.10, "y": 0.20, "z": 1.50},
+    {"t": 0.02, "x": -0.20, "y": 0.10, "z": 0.20},
+    {"t": 0.03, "x": 0.30, "y": -0.40, "z": 2.00}
+  ],
+  "locations": [
+    {"t": 0, "lat": 48.000000, "lon": 7.000000, "accuracy": 5, "speed": 0},
+    {"t": 1, "lat": 48.000005, "lon": 7.000005, "accuracy": 8, "speed": 0},
+    {"t": 5, "lat": 48.000180, "lon": 7.000000, "accuracy": 5, "speed": 4},
+    {"t": 6, "lat": 48.010000, "lon": 7.010000, "accuracy": 5, "speed": 5},
+    {"t": 10, "lat": 48.000360, "lon": 7.000000, "accuracy": 5, "speed": 4}
+  ],
+  "expected": {
+    "positiveGSamples": 2,
+    "positiveGAverage": 1.75,
+    "airtimeSamples": 1,
+    "acceptedLocations": 3,
+    "rejectedLocations": 2,
+    "distanceMinM": 35,
+    "distanceMaxM": 45
+  }
+}
