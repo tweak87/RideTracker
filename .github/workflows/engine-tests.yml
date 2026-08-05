@@ -20,3 +20,5 @@ jobs:
           node-version: '22'
       - name: Run canonical fixture
         run: node shared/ride-engine/ride-engine.test.mjs
+      - name: Run sensor fusion tests
+        run: node shared/ride-engine/sensor-fusion.test.mjs
