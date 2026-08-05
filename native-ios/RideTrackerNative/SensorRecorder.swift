@@ -37,8 +37,10 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
     @Published private(set) var lastSavedURL: URL?
     @Published private(set) var calibrationSampleCount = 0
     @Published var forwardEdge: ForwardEdge = .top
+    @Published var recordVideo = true
 
     let accessoryManager = BLEAccessoryManager()
+    let videoRecorder = VideoRecorder()
     let rideEngine = RideEngine()
     let altitudeFusion = AltitudeFusion()
     let phaseDetector = RidePhaseDetector()
@@ -70,7 +72,8 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
 
     func requestPermissions() {
         location.requestWhenInUseAuthorization()
-        status = "Berechtigungen angefragt"
+        Task { await videoRecorder.requestPermissionsAndConfigure() }
+        status = "Standort, Kamera und Mikrofon angefragt"
     }
 
     private func startMotionForCalibration() {
@@ -92,21 +95,8 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
                 guard self.isRecording else { return }
                 let processed = self.rideEngine.processMotion(timestamp: timestamp, deviceG: acceleration)
                 let speed = max(0, self.latestLocation?.speed ?? 0)
-                self.ridePhase = self.phaseDetector.update(
-                    timestamp: timestamp,
-                    speedMS: speed,
-                    longitudinalG: processed.longitudinalG,
-                    climbRateMS: self.latestClimbRate,
-                    totalG: processed.totalG
-                )
-                self.qualityScore = QualityScore.calculate(
-                    motionSamples: self.samples.count,
-                    gpsAccepted: self.acceptedLocationCount,
-                    gpsRejected: self.rejectedLocationCount,
-                    gaps: 0,
-                    calibrated: self.rideEngine.calibration != nil,
-                    hasBarometer: CMAltimeter.isRelativeAltitudeAvailable()
-                )
+                self.ridePhase = self.phaseDetector.update(timestamp: timestamp, speedMS: speed, longitudinalG: processed.longitudinalG, climbRateMS: self.latestClimbRate, totalG: processed.totalG)
+                self.qualityScore = QualityScore.calculate(motionSamples: self.samples.count, gpsAccepted: self.acceptedLocationCount, gpsRejected: self.rejectedLocationCount, gaps: 0, calibrated: self.rideEngine.calibration != nil, hasBarometer: CMAltimeter.isRelativeAltitudeAvailable())
                 let loc = self.latestLocation
                 self.samples.append(RideSample(
                     id: UUID(), timestamp: timestamp,
@@ -150,6 +140,7 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
         isRecording = true
         status = "Aufnahme läuft · Session \(sessionID.uuidString.prefix(8))"
         location.startUpdatingLocation()
+        if recordVideo { videoRecorder.start(sessionID: sessionID, sensorStartUptime: startedAt) }
 
         if CMAltimeter.isRelativeAltitudeAvailable() {
             altimeter.startRelativeAltitudeUpdates(to: queue) { [weak self] data, _ in
@@ -176,6 +167,7 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
         endedAtDate = Date()
         altimeter.stopRelativeAltitudeUpdates()
         location.stopUpdatingLocation()
+        videoRecorder.stop()
         status = "Aufnahme beendet: \(samples.count) Samples"
     }
 
@@ -185,33 +177,22 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
         let events = phaseDetector.events.map { RideSessionEvent(id: UUID(), timestamp: $0.0, type: $0.1) }
         let cal = rideEngine.calibration
         let document = RideSessionDocument(
-            schemaVersion: "2.0.0",
-            id: sessionID,
-            platform: "ios",
-            startedAt: startedAtDate,
-            endedAt: endedAtDate,
-            timebase: "systemUptime",
+            schemaVersion: "2.0.0", id: sessionID, platform: "ios",
+            startedAt: startedAtDate, endedAt: endedAtDate, timebase: "systemUptime",
             calibration: RideSessionCalibration(
-                mode: "manual",
-                source: "iphone",
-                isCalibrated: cal != nil,
+                mode: "manual", source: "iphone", isCalibrated: cal != nil,
                 forwardEdge: forwardEdge.rawValue,
                 up: cal.map { [$0.up.x, $0.up.y, $0.up.z] },
                 lateral: cal.map { [$0.lateral.x, $0.lateral.y, $0.lateral.z] },
                 forward: cal.map { [$0.forward.x, $0.forward.y, $0.forward.z] }
             ),
-            video: RideSessionVideo(sessionID: sessionID.uuidString, filename: nil, startOffsetSeconds: 0),
-            events: events,
-            samples: samples,
-            summary: RideSessionSummary(
-                durationSeconds: duration,
-                sampleCount: samples.count,
-                distanceMeters: filteredDistance,
-                acceptedLocations: acceptedLocationCount,
-                rejectedLocations: rejectedLocationCount,
-                qualityScore: qualityScore,
-                finalPhase: ridePhase
-            )
+            video: RideSessionVideo(
+                sessionID: sessionID.uuidString,
+                filename: videoRecorder.lastVideoURL?.lastPathComponent,
+                startOffsetSeconds: videoRecorder.startOffsetSeconds
+            ),
+            events: events, samples: samples,
+            summary: RideSessionSummary(durationSeconds: duration, sampleCount: samples.count, distanceMeters: filteredDistance, acceptedLocations: acceptedLocationCount, rejectedLocations: rejectedLocationCount, qualityScore: qualityScore, finalPhase: ridePhase)
         )
         let url = try RideSessionStore.save(document)
         lastSavedURL = url
