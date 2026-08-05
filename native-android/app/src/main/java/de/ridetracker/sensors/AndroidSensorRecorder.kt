@@ -20,9 +20,15 @@ import com.google.android.gms.location.Priority
 import de.ridetracker.engine.AltitudeFusion
 import de.ridetracker.engine.QualityScore
 import de.ridetracker.engine.RidePhaseDetector
+import de.ridetracker.session.RideSessionDocument
+import de.ridetracker.session.RideSessionEvent
+import de.ridetracker.session.RideSessionSample
+import de.ridetracker.session.RideSessionSummary
+import java.io.File
+import java.time.Instant
 import kotlin.math.sqrt
 
-class AndroidSensorRecorder(context: Context) : SensorEventListener {
+class AndroidSensorRecorder(private val context: Context) : SensorEventListener {
     var isRecording by mutableStateOf(false)
         private set
     var status by mutableStateOf("Bereit")
@@ -45,6 +51,8 @@ class AndroidSensorRecorder(context: Context) : SensorEventListener {
         private set
     var hasBarometer by mutableStateOf(false)
         private set
+    var lastSavedPath by mutableStateOf<String?>(null)
+        private set
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val locationClient: FusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(context)
@@ -53,7 +61,10 @@ class AndroidSensorRecorder(context: Context) : SensorEventListener {
     private val pressure = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
     private val altitudeFusion = AltitudeFusion()
     private val phaseDetector = RidePhaseDetector()
+    private val sessionSamples = mutableListOf<RideSessionSample>()
+    private val sessionEvents = mutableListOf<RideSessionEvent>()
     private var lastLocation: Location? = null
+    private var latestLocation: Location? = null
     private var latestSpeedMs = 0.0
     private var latestTotalG = 1.0
     private var latestLongitudinalG = 0.0
@@ -61,6 +72,8 @@ class AndroidSensorRecorder(context: Context) : SensorEventListener {
     private var lastAltitudeTime = 0.0
     private var climbRate = 0.0
     private var startedAtNs = 0L
+    private var startedAtInstant = Instant.now()
+    private var previousPhase = "idle"
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -74,18 +87,22 @@ class AndroidSensorRecorder(context: Context) : SensorEventListener {
         reset()
         isRecording = true
         startedAtNs = SystemClock.elapsedRealtimeNanos()
+        startedAtInstant = Instant.now()
         status = "Aufnahme läuft"
+        locationClient.requestLocationUpdates(
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500L)
+                .setMinUpdateIntervalMillis(200L)
+                .setMinUpdateDistanceMeters(0f)
+                .build(),
+            locationCallback,
+            null,
+        )
         accelerometer?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
         gyroscope?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
         pressure?.also {
             hasBarometer = true
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500L)
-            .setMinUpdateIntervalMillis(200L)
-            .setMinUpdateDistanceMeters(0f)
-            .build()
-        locationClient.requestLocationUpdates(request, locationCallback, null)
     }
 
     fun stop() {
@@ -97,22 +114,54 @@ class AndroidSensorRecorder(context: Context) : SensorEventListener {
         status = "Beendet: $sampleCount Samples"
     }
 
+    fun saveSession(): File {
+        val duration = if (startedAtNs == 0L) 0.0 else
+            (SystemClock.elapsedRealtimeNanos() - startedAtNs) / 1_000_000_000.0
+        val document = RideSessionDocument(
+            startedAt = startedAtInstant,
+            endedAt = Instant.now(),
+            events = sessionEvents.toList(),
+            samples = sessionSamples.toList(),
+            summary = RideSessionSummary(
+                durationSeconds = duration,
+                sampleCount = sampleCount,
+                distanceMeters = distanceMeters,
+                acceptedLocations = acceptedLocations,
+                rejectedLocations = rejectedLocations,
+                qualityScore = qualityScore,
+                finalPhase = ridePhase,
+            ),
+            calibrationMode = "manual",
+            calibrated = false,
+        )
+        return document.save(context).also {
+            lastSavedPath = it.absolutePath
+            status = "Session gespeichert: ${it.name}"
+        }
+    }
+
     private fun reset() {
         sampleCount = 0
         speedKmh = 0.0
         relativeAltitudeM = 0.0
         ridePhase = "idle"
+        previousPhase = "idle"
         qualityScore = 0
         acceptedLocations = 0
         rejectedLocations = 0
         distanceMeters = 0.0
         lastLocation = null
+        latestLocation = null
         latestSpeedMs = 0.0
         latestTotalG = 1.0
         latestLongitudinalG = 0.0
         latestAltitude = 0.0
         lastAltitudeTime = 0.0
         climbRate = 0.0
+        hasBarometer = pressure != null
+        lastSavedPath = null
+        sessionSamples.clear()
+        sessionEvents.clear()
         altitudeFusion.reset()
     }
 
@@ -128,10 +177,30 @@ class AndroidSensorRecorder(context: Context) : SensorEventListener {
                 latestLongitudinalG = gy.toDouble()
                 sampleCount += 1
                 ridePhase = phaseDetector.update(t, latestSpeedMs, latestLongitudinalG, climbRate, latestTotalG)
+                if (ridePhase != previousPhase) {
+                    sessionEvents += RideSessionEvent(t, ridePhase)
+                    previousPhase = ridePhase
+                }
+                val loc = latestLocation
+                sessionSamples += RideSessionSample(
+                    timestamp = t,
+                    totalG = latestTotalG,
+                    longitudinalG = latestLongitudinalG,
+                    relativeAltitudeM = if (hasBarometer) relativeAltitudeM else null,
+                    speedMS = latestSpeedMs,
+                    latitude = loc?.latitude,
+                    longitude = loc?.longitude,
+                    horizontalAccuracyM = loc?.accuracy?.toDouble(),
+                    phase = ridePhase,
+                    qualityScore = qualityScore,
+                )
                 if (sampleCount % 50 == 0) updateQuality()
             }
             Sensor.TYPE_PRESSURE -> {
-                val absoluteAltitude = SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, event.values[0]).toDouble()
+                val absoluteAltitude = SensorManager.getAltitude(
+                    SensorManager.PRESSURE_STANDARD_ATMOSPHERE,
+                    event.values[0],
+                ).toDouble()
                 relativeAltitudeM = altitudeFusion.updateBarometer(absoluteAltitude)
                 if (lastAltitudeTime > 0.0 && t > lastAltitudeTime) {
                     climbRate = (relativeAltitudeM - latestAltitude) / (t - lastAltitudeTime)
@@ -152,7 +221,8 @@ class AndroidSensorRecorder(context: Context) : SensorEventListener {
         }
         val previous = lastLocation
         if (previous != null) {
-            val dt = ((location.elapsedRealtimeNanos - previous.elapsedRealtimeNanos) / 1_000_000_000.0).coerceAtLeast(0.001)
+            val dt = ((location.elapsedRealtimeNanos - previous.elapsedRealtimeNanos) / 1_000_000_000.0)
+                .coerceAtLeast(0.001)
             val distance = previous.distanceTo(location).toDouble()
             val impliedSpeed = distance / dt
             val uncertainty = maxOf(location.accuracy, previous.accuracy) * 0.55
@@ -167,10 +237,10 @@ class AndroidSensorRecorder(context: Context) : SensorEventListener {
             distanceMeters += distance
         }
         lastLocation = location
+        latestLocation = location
         acceptedLocations += 1
         latestSpeedMs = if (location.hasSpeed()) location.speed.toDouble().coerceAtLeast(0.0) else 0.0
         speedKmh = latestSpeedMs * 3.6
-        if (location.hasAltitude()) altitudeFusion.correctWithGps(location.altitude - (lastLocation?.altitude ?: location.altitude))
         updateQuality()
     }
 
@@ -180,7 +250,7 @@ class AndroidSensorRecorder(context: Context) : SensorEventListener {
             gpsAccepted = acceptedLocations,
             gpsRejected = rejectedLocations,
             gaps = 0,
-            calibrated = true,
+            calibrated = false,
             hasBarometer = hasBarometer,
         )
     }
