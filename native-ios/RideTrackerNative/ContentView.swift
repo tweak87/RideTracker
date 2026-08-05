@@ -35,6 +35,21 @@ struct ContentView: View {
                     .padding()
                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
 
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle("Video synchron aufzeichnen", isOn: $recorder.recordVideo)
+                            .disabled(recorder.isRecording)
+                        Text(recorder.videoRecorder.status)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if let video = recorder.videoRecorder.lastVideoURL {
+                            Text("\(video.lastPathComponent) · Offset \(recorder.videoRecorder.startOffsetSeconds, specifier: "%.3f") s")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding()
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Status").font(.caption).foregroundStyle(.secondary)
                         Text(recorder.status).frame(maxWidth: .infinity, alignment: .leading)
@@ -45,7 +60,8 @@ struct ContentView: View {
                     .padding()
                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
 
-                    Button("Berechtigungen anfragen") { recorder.requestPermissions() }.buttonStyle(.bordered)
+                    Button("Alle Berechtigungen & Kamera initialisieren") { recorder.requestPermissions() }
+                        .buttonStyle(.bordered)
                     Button(recorder.isRecording ? "Aufnahme stoppen" : "Aufnahme starten") {
                         recorder.isRecording ? recorder.stop() : recorder.start()
                     }
