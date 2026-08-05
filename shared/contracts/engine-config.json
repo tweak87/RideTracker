@@ -1,0 +1,22 @@
+{
+  "version": "1.0.0",
+  "gravityMs2": 9.80665,
+  "positiveGThreshold": 1.0,
+  "airtimeThreshold": 0.3,
+  "gps": {
+    "maxHorizontalAccuracyM": 40,
+    "stationarySpeedMs": 0.8,
+    "minimumAcceptedMovementM": 1.5,
+    "maxImpliedSpeedMs": 90,
+    "accuracyMultiplier": 0.55
+  },
+  "events": {
+    "launchLongitudinalG": 0.35,
+    "brakeLongitudinalG": -0.3,
+    "minimumEventDurationS": 0.12
+  },
+  "altitude": {
+    "barometerLowPassAlpha": 0.18,
+    "gpsCorrectionAlpha": 0.005
+  }
+}
