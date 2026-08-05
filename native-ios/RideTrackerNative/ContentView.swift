@@ -27,6 +27,11 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Status").font(.caption).foregroundStyle(.secondary)
                         Text(recorder.status).frame(maxWidth: .infinity, alignment: .leading)
+                        if let url = recorder.lastSavedURL {
+                            Text(url.lastPathComponent)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .padding()
                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -39,6 +44,12 @@ struct ContentView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(recorder.isRecording ? .red : .blue)
+
+                    Button("RideSession JSON speichern") {
+                        _ = try? recorder.saveSession()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(recorder.isRecording || recorder.samples.isEmpty)
                 }
                 .padding()
             }
