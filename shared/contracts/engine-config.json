@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "gravityMs2": 9.80665,
   "positiveGThreshold": 1.0,
   "airtimeThreshold": 0.3,
@@ -13,10 +13,33 @@
   "events": {
     "launchLongitudinalG": 0.35,
     "brakeLongitudinalG": -0.3,
+    "liftMaxSpeedMs": 8,
+    "liftMinClimbRateMs": 0.25,
+    "stationSpeedMs": 0.8,
+    "stationHoldS": 4,
     "minimumEventDurationS": 0.12
   },
   "altitude": {
     "barometerLowPassAlpha": 0.18,
     "gpsCorrectionAlpha": 0.005
-  }
+  },
+  "quality": {
+    "minimumMotionSamples": 500,
+    "gapPenaltyPerEvent": 0.02,
+    "weights": {
+      "motion": 0.30,
+      "gps": 0.30,
+      "calibration": 0.20,
+      "barometer": 0.10,
+      "baseline": 0.10
+    }
+  },
+  "sensorSources": [
+    "phone",
+    "apple_watch",
+    "wear_os",
+    "external_imu",
+    "external_gnss",
+    "external_barometer"
+  ]
 }
