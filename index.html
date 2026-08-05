@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07111f" />
+  <title>Ride Sensor Lab – iPhone Prototype</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07111f;--panel:#0e1b2d;--panel2:#13243a;--text:#eef5ff;--muted:#94a9c4;--accent:#49b9ff;--good:#55d68b;--warn:#ffbf47;--bad:#ff647c;--line:#27415f}
+    *{box-sizing:border-box} body{margin:0;background:linear-gradient(160deg,#07111f,#0b1930 55%,#07111f);font-family:system-ui,-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;color:var(--text);min-height:100vh}
+    main{max-width:980px;margin:auto;padding:calc(16px + env(safe-area-inset-top)) 14px calc(30px + env(safe-area-inset-bottom))}
+    h1{font-size:clamp(24px,6vw,42px);margin:4px 0 6px;letter-spacing:-.04em}.sub{color:var(--muted);margin:0 0 16px;line-height:1.45}
+    .notice{border:1px solid var(--line);background:#0b1828cc;padding:12px 14px;border-radius:14px;color:#c7d8eb;font-size:14px;line-height:1.45;margin-bottom:14px}
+    .controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;position:sticky;top:8px;z-index:4;background:#07111fe8;padding:8px 0;backdrop-filter:blur(10px)}
+    button{appearance:none;border:0;border-radius:13px;padding:13px 12px;font-weight:750;font-size:15px;background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+    button.primary{background:var(--accent);color:#001827;border-color:transparent}button.danger{background:var(--bad);color:#260009;border-color:transparent}button:disabled{opacity:.45}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.card{background:linear-gradient(180deg,#10213a,#0d1a2b);border:1px solid var(--line);border-radius:16px;padding:13px;min-width:0}
+    .wide{grid-column:1/-1}.label{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}.value{font-variant-numeric:tabular-nums;font-size:clamp(24px,7vw,38px);font-weight:790;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.unit{font-size:.48em;color:var(--muted);font-weight:650}
+    .mini{display:flex;justify-content:space-between;gap:8px;margin-top:8px;color:#c7d8eb;font-size:13px}.mini span:last-child{font-variant-numeric:tabular-nums;text-align:right}
+    canvas{width:100%;height:210px;display:block;margin-top:10px;border-radius:10px;background:#081321}.status{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}.dot{width:9px;height:9px;border-radius:99px;background:var(--bad)}.dot.on{background:var(--good)}
+    .log{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;font-size:12px;line-height:1.45;color:#bad0e8;max-height:170px;overflow:auto;background:#081321;padding:10px;border-radius:10px;margin-top:10px}
+    .exports{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}@media(min-width:760px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.controls{grid-template-columns:repeat(4,1fr)}}
+  </style>
+</head>
+<body><main>
+  <h1>Ride Sensor Lab</h1>
+  <p class="sub">Browser-Prototyp für iPhone: Bewegungsdaten, GPS, relative Lautstärke und lokale Fahrtaufzeichnung.</p>
+  <div class="notice"><strong>Sicherheit:</strong> Das iPhone vor Fahrtbeginn gemäß Betreiberregeln vollständig und fest verstauen. Nicht während der Fahrt halten oder bedienen. Messwerte sind experimentell und nicht sicherheits- oder prüftechnisch verwendbar.</div>
+
+  <div class="controls">
+    <button id="permissions" class="primary">1. Sensoren freigeben</button>
+    <button id="start" disabled>2. Aufnahme starten</button>
+    <button id="stop" class="danger" disabled>Aufnahme stoppen</button>
+    <button id="reset">Zurücksetzen</button>
+  </div>
+
+  <section class="grid">
+    <article class="card"><div class="label">Resultierende Last</div><div class="value" id="gTotal">– <span class="unit">g</span></div><div class="mini"><span>Maximum</span><span id="gMax">–</span></div></article>
+    <article class="card"><div class="label">Geräteachse Z</div><div class="value" id="gZ">– <span class="unit">g</span></div><div class="mini"><span>Minimum</span><span id="gMin">–</span></div></article>
+    <article class="card"><div class="label">GPS-Geschwindigkeit</div><div class="value" id="speed">– <span class="unit">km/h</span></div><div class="mini"><span>Maximum</span><span id="speedMax">–</span></div></article>
+    <article class="card"><div class="label">Relative Höhe</div><div class="value" id="altitude">– <span class="unit">m</span></div><div class="mini"><span>GPS-Genauigkeit</span><span id="accuracy">–</span></div></article>
+    <article class="card"><div class="label">Strecke</div><div class="value" id="distance">0 <span class="unit">m</span></div><div class="mini"><span>GPS-Punkte</span><span id="gpsCount">0</span></div></article>
+    <article class="card"><div class="label">Mikrofonpegel</div><div class="value" id="audio">– <span class="unit">dBFS</span></div><div class="mini"><span>Relativer Peak</span><span id="audioMax">–</span></div></article>
+    <article class="card"><div class="label">Rotationsrate</div><div class="value" id="rotation">– <span class="unit">°/s</span></div><div class="mini"><span>Maximum</span><span id="rotationMax">–</span></div></article>
+    <article class="card"><div class="label">Aufnahmedauer</div><div class="value" id="duration">00:00.0</div><div class="mini"><span>Samples</span><span id="sampleCount">0</span></div></article>
+
+    <article class="card wide"><div class="status"><span class="dot" id="recordDot"></span><span id="recordStatus">Nicht aktiv</span></div><canvas id="chart" width="900" height="250"></canvas></article>
+    <article class="card wide"><div class="label">Status und Diagnose</div><div id="log" class="log">Bereit. Öffne diese Seite auf dem iPhone über HTTPS und tippe auf „Sensoren freigeben“.</div>
+      <div class="exports"><button id="csv" disabled>CSV exportieren</button><button id="json" disabled>JSON exportieren</button></div>
+    </article>
+  </section>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id), G=9.80665;
+const state={permission:false,recording:false,startPerf:0,startWall:null,samples:[],gps:[],lastGps:null,distance:0,baseAlt:null,gMax:-Infinity,gMin:Infinity,speedMax:0,audioMax:-Infinity,rotationMax:0,watchId:null,audioCtx:null,stream:null,analyser:null,audioTimer:null,raf:null,lastMotion:null,chart:[]};
+function log(msg){const t=new Date().toLocaleTimeString();$('log').textContent=`[${t}] ${msg}\n`+$('log').textContent.slice(0,5000)}
+function fmt(n,d=2){return Number.isFinite(n)?n.toFixed(d):'–'}
+function setText(id,text){$(id).innerHTML=text}
+function elapsed(){return state.recording?(performance.now()-state.startPerf)/1000:0}
+function durationText(s){const m=Math.floor(s/60),r=s-m*60;return `${String(m).padStart(2,'0')}:${r.toFixed(1).padStart(4,'0')}`}
+function hav(a,b){const R=6371000,rad=Math.PI/180,dLat=(b.lat-a.lat)*rad,dLon=(b.lon-a.lon)*rad;const x=Math.sin(dLat/2)**2+Math.cos(a.lat*rad)*Math.cos(b.lat*rad)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+function draw(){const c=$('chart'),ctx=c.getContext('2d'),w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.strokeStyle='#27415f';ctx.lineWidth=1;for(let i=0;i<=4;i++){let y=i*h/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}ctx.fillStyle='#94a9c4';ctx.font='12px system-ui';ctx.fillText('4 g',8,14);ctx.fillText('0 g',8,h-8);if(state.chart.length<2)return;ctx.strokeStyle='#49b9ff';ctx.lineWidth=3;ctx.beginPath();state.chart.forEach((p,i)=>{const x=i/(state.chart.length-1)*w,y=h-Math.min(4,Math.max(0,p))/4*h;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke()}
+function updateClock(){if(state.recording){$('duration').textContent=durationText(elapsed());state.raf=requestAnimationFrame(updateClock)}}
+async function requestPermissions(){
+  try{
+    let motion='granted';
+    if(typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function') motion=await DeviceMotionEvent.requestPermission();
+    if(motion!=='granted') throw new Error('Bewegungssensoren wurden nicht freigegeben.');
+    window.addEventListener('devicemotion',onMotion,{passive:true});
+    log('Bewegungssensoren aktiv.');
+    if(navigator.geolocation){navigator.geolocation.getCurrentPosition(()=>log('GPS freigegeben.'),e=>log('GPS noch nicht verfügbar: '+e.message),{enableHighAccuracy:true,timeout:10000,maximumAge:0})}
+    if(navigator.mediaDevices?.getUserMedia){
+      try{state.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});state.audioCtx=new (window.AudioContext||window.webkitAudioContext)();await state.audioCtx.resume();const src=state.audioCtx.createMediaStreamSource(state.stream);state.analyser=state.audioCtx.createAnalyser();state.analyser.fftSize=1024;src.connect(state.analyser);startAudioMeter();log('Mikrofon aktiv; Anzeige ist relativer dBFS-Pegel, kein kalibrierter dB-SPL-Wert.')}catch(e){log('Mikrofon nicht aktiv: '+e.message)}
+    }
+    state.permission=true;$('start').disabled=false;$('permissions').disabled=true;log('Freigaben abgeschlossen.');
+  }catch(e){log('Freigabe fehlgeschlagen: '+e.message);alert(e.message)}
+}
+function startAudioMeter(){const data=new Float32Array(state.analyser.fftSize);state.audioTimer=setInterval(()=>{state.analyser.getFloatTimeDomainData(data);let sum=0;for(const v of data)sum+=v*v;const rms=Math.sqrt(sum/data.length);const db=rms>0?20*Math.log10(rms):-100;state.audioMax=Math.max(state.audioMax,db);setText('audio',`${fmt(db,1)} <span class="unit">dBFS</span>`);$('audioMax').textContent=fmt(state.audioMax,1)+' dBFS';if(state.recording)state.samples.push({type:'audio',t:elapsed(),dbfs:db})},100)}
+function onMotion(e){const aig=e.accelerationIncludingGravity||{},lin=e.acceleration||{},rr=e.rotationRate||{};const x=aig.x??NaN,y=aig.y??NaN,z=aig.z??NaN;const gx=x/G,gy=y/G,gz=z/G,total=Math.sqrt(gx*gx+gy*gy+gz*gz);const rot=Math.sqrt((rr.alpha||0)**2+(rr.beta||0)**2+(rr.gamma||0)**2);state.gMax=Math.max(state.gMax,total);state.gMin=Math.min(state.gMin,total);state.rotationMax=Math.max(state.rotationMax,rot);setText('gTotal',`${fmt(total)} <span class="unit">g</span>`);setText('gZ',`${fmt(gz)} <span class="unit">g</span>`);$('gMax').textContent=fmt(state.gMax)+' g';$('gMin').textContent=fmt(state.gMin)+' g';setText('rotation',`${fmt(rot,0)} <span class="unit">°/s</span>`);$('rotationMax').textContent=fmt(state.rotationMax,0)+' °/s';state.chart.push(total);if(state.chart.length>180)state.chart.shift();draw();state.lastMotion={total,gx,gy,gz};if(state.recording){state.samples.push({type:'motion',t:elapsed(),interval_ms:e.interval??null,acc_g:{x:gx,y:gy,z:gz,total},linear_ms2:{x:lin.x??null,y:lin.y??null,z:lin.z??null},rotation_dps:{alpha:rr.alpha??null,beta:rr.beta??null,gamma:rr.gamma??null}});$('sampleCount').textContent=state.samples.length}}
+function onGps(p){const c=p.coords,pt={type:'gps',t:elapsed(),lat:c.latitude,lon:c.longitude,accuracy_m:c.accuracy,altitude_m:c.altitude,altitude_accuracy_m:c.altitudeAccuracy,heading_deg:c.heading,speed_ms:c.speed};if(state.recording){if(state.lastGps){const d=hav(state.lastGps,pt);if(d<Math.max(100,c.accuracy*3))state.distance+=d}state.lastGps=pt;state.gps.push(pt);state.samples.push(pt)}let speed=Number.isFinite(c.speed)?c.speed*3.6:NaN;state.speedMax=Math.max(state.speedMax,Number.isFinite(speed)?speed:0);if(state.baseAlt===null&&Number.isFinite(c.altitude))state.baseAlt=c.altitude;const rel=Number.isFinite(c.altitude)&&state.baseAlt!==null?c.altitude-state.baseAlt:NaN;setText('speed',`${fmt(speed,1)} <span class="unit">km/h</span>`);$('speedMax').textContent=fmt(state.speedMax,1)+' km/h';setText('altitude',`${fmt(rel,1)} <span class="unit">m</span>`);$('accuracy').textContent=fmt(c.accuracy,0)+' m';setText('distance',`${fmt(state.distance,0)} <span class="unit">m</span>`);$('gpsCount').textContent=state.gps.length;$('sampleCount').textContent=state.samples.length}
+function onGpsError(e){log('GPS-Fehler: '+e.message)}
+function start(){state.recording=true;state.startPerf=performance.now();state.startWall=new Date().toISOString();state.samples=[];state.gps=[];state.lastGps=null;state.distance=0;state.baseAlt=null;state.gMax=-Infinity;state.gMin=Infinity;state.speedMax=0;state.rotationMax=0;state.audioMax=-Infinity;if(navigator.geolocation)state.watchId=navigator.geolocation.watchPosition(onGps,onGpsError,{enableHighAccuracy:true,maximumAge:0,timeout:15000});$('start').disabled=true;$('stop').disabled=false;$('csv').disabled=true;$('json').disabled=true;$('recordDot').classList.add('on');$('recordStatus').textContent='Aufnahme läuft';log('Aufnahme gestartet.');updateClock()}
+function stop(){state.recording=false;if(state.watchId!==null)navigator.geolocation.clearWatch(state.watchId);state.watchId=null;cancelAnimationFrame(state.raf);$('start').disabled=false;$('stop').disabled=true;$('csv').disabled=!state.samples.length;$('json').disabled=!state.samples.length;$('recordDot').classList.remove('on');$('recordStatus').textContent='Aufnahme beendet';log(`Aufnahme beendet: ${state.samples.length} Datensätze, ${fmt(state.distance,0)} m GPS-Strecke.`)}
+function reset(){if(state.recording)stop();state.samples=[];state.gps=[];state.chart=[];state.distance=0;state.gMax=-Infinity;state.gMin=Infinity;state.speedMax=0;state.rotationMax=0;state.audioMax=-Infinity;['gTotal','gZ','speed','altitude','audio','rotation'].forEach(id=>setText(id,'–'));setText('distance','0 <span class="unit">m</span>');$('duration').textContent='00:00.0';$('sampleCount').textContent='0';$('gpsCount').textContent='0';$('csv').disabled=true;$('json').disabled=true;draw();log('Messdaten zurückgesetzt.')}
+function download(name,type,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}
+function exportJSON(){download(`ride-${new Date().toISOString().replace(/[:.]/g,'-')}.json`,'application/json',JSON.stringify({format:'ride-sensor-lab-v1',started_at:state.startWall,notes:'Experimental browser measurements; g axes are device-relative; audio is dBFS.',summary:{duration_s:elapsed(),distance_m:state.distance,max_resultant_g:state.gMax,min_resultant_g:state.gMin,max_speed_kmh:state.speedMax,max_rotation_dps:state.rotationMax,max_audio_dbfs:state.audioMax},samples:state.samples},null,2))}
+function exportCSV(){const rows=['type,t_s,ax_g,ay_g,az_g,total_g,lin_x_ms2,lin_y_ms2,lin_z_ms2,rot_alpha_dps,rot_beta_dps,rot_gamma_dps,lat,lon,accuracy_m,altitude_m,speed_ms,audio_dbfs'];for(const s of state.samples)rows.push([s.type,s.t,s.acc_g?.x,s.acc_g?.y,s.acc_g?.z,s.acc_g?.total,s.linear_ms2?.x,s.linear_ms2?.y,s.linear_ms2?.z,s.rotation_dps?.alpha,s.rotation_dps?.beta,s.rotation_dps?.gamma,s.lat,s.lon,s.accuracy_m,s.altitude_m,s.speed_ms,s.dbfs].map(v=>v??'').join(','));download(`ride-${new Date().toISOString().replace(/[:.]/g,'-')}.csv`,'text/csv;charset=utf-8',rows.join('\n'))}
+$('permissions').onclick=requestPermissions;$('start').onclick=start;$('stop').onclick=stop;$('reset').onclick=reset;$('json').onclick=exportJSON;$('csv').onclick=exportCSV;draw();
+</script></body></html>
