@@ -10,7 +10,7 @@
     <application
         android:allowBackup="true"
         android:label="RideTracker"
-        android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+        android:theme="@style/Theme.RideTracker">
         <activity
             android:name=".MainActivity"
             android:exported="true">
