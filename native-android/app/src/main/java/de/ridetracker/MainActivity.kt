@@ -9,8 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import de.ridetracker.engine.ForwardEdge
@@ -24,7 +23,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 val recorder = remember { AndroidSensorRecorder(applicationContext) }
                 val videoRecorder = remember { AndroidVideoRecorder(applicationContext, this@MainActivity) }
-                var recordVideo = remember { true }
+                var recordVideo by remember { mutableStateOf(true) }
                 LaunchedEffect(Unit) { videoRecorder.configure() }
 
                 val permissions = buildList {
