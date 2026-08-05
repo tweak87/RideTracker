@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
                     Text("Relative Höhe: ${"%.1f".format(recorder.relativeAltitudeM)} m")
                     Text("GPS: ${recorder.acceptedLocations} akzeptiert / ${recorder.rejectedLocations} verworfen")
                     Text("Barometer: ${if (recorder.hasBarometer) "verfügbar" else "nicht verfügbar"}")
+                    recorder.lastSavedPath?.let { Text("Gespeichert: $it") }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Button(
                             enabled = !recorder.isRecording,
@@ -69,6 +70,10 @@ class MainActivity : ComponentActivity() {
                             onClick = recorder::stop
                         ) { Text("Stop") }
                     }
+                    Button(
+                        enabled = !recorder.isRecording && recorder.sampleCount > 0,
+                        onClick = { recorder.saveSession() }
+                    ) { Text("RideSession JSON speichern") }
                 }
             }
         }
