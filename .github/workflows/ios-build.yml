@@ -11,14 +11,18 @@ on:
 jobs:
   build:
     runs-on: macos-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+
       - name: Install XcodeGen
         run: brew install xcodegen
+
       - name: Generate Xcode project
         working-directory: native-ios
         run: xcodegen generate
-      - name: Build simulator target
+
+      - name: Static analysis
         working-directory: native-ios
         run: |
           xcodebuild \
@@ -26,5 +30,29 @@ jobs:
             -scheme RideTrackerNative \
             -sdk iphonesimulator \
             -configuration Debug \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            analyze
+
+      - name: Build simulator target
+        working-directory: native-ios
+        run: |
+          rm -rf build/RideTrackerBuild.xcresult
+          xcodebuild \
+            -project RideTrackerNative.xcodeproj \
+            -scheme RideTrackerNative \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath build/DerivedData \
+            -resultBundlePath build/RideTrackerBuild.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+      - name: Upload iOS build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RideTracker-iOS-build-diagnostics
+          path: native-ios/build/RideTrackerBuild.xcresult
+          if-no-files-found: ignore
+          retention-days: 14
