@@ -35,6 +35,8 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
     @Published private(set) var qualityScore = 0
     @Published private(set) var status = "Bereit"
     @Published private(set) var lastSavedURL: URL?
+    @Published private(set) var calibrationSampleCount = 0
+    @Published var forwardEdge: ForwardEdge = .top
 
     let accessoryManager = BLEAccessoryManager()
     let rideEngine = RideEngine()
@@ -53,6 +55,8 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
     private var latestClimbRate = 0.0
     private var lastAltitudeValue = 0.0
     private var lastAltitudeTimestamp = 0.0
+    private var calibrationBuffer: [SIMD3<Double>] = []
+    private(set) var sessionID = UUID()
 
     override init() {
         super.init()
@@ -61,6 +65,7 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
         location.activityType = .automotiveNavigation
         location.distanceFilter = kCLDistanceFilterNone
         location.pausesLocationUpdatesAutomatically = false
+        startMotionForCalibration()
     }
 
     func requestPermissions() {
@@ -68,55 +73,23 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
         status = "Berechtigungen angefragt"
     }
 
-    func start() {
-        guard !isRecording else { return }
-        samples.removeAll(keepingCapacity: true)
-        rideEngine.reset()
-        altitudeFusion.reset()
-        filteredDistance = 0
-        rejectedLocationCount = 0
-        acceptedLocationCount = 0
-        ridePhase = "idle"
-        qualityScore = 0
-        lastSavedURL = nil
-        startedAt = ProcessInfo.processInfo.systemUptime
-        startedAtDate = Date()
-        isRecording = true
-        status = "Aufnahme läuft"
-        location.startUpdatingLocation()
-
-        if CMAltimeter.isRelativeAltitudeAvailable() {
-            altimeter.startRelativeAltitudeUpdates(to: queue) { [weak self] data, _ in
-                guard let self, let data else { return }
-                let altitude = data.relativeAltitude.doubleValue
-                let pressure = data.pressure.doubleValue
-                let timestamp = ProcessInfo.processInfo.systemUptime - self.startedAt
-                Task { @MainActor in
-                    self.latestPressure = pressure
-                    self.relativeAltitude = self.altitudeFusion.updateBarometer(altitude)
-                    if self.lastAltitudeTimestamp > 0, timestamp > self.lastAltitudeTimestamp {
-                        self.latestClimbRate = (self.relativeAltitude - self.lastAltitudeValue) / (timestamp - self.lastAltitudeTimestamp)
-                    }
-                    self.lastAltitudeValue = self.relativeAltitude
-                    self.lastAltitudeTimestamp = timestamp
-                }
-            }
-        }
-
-        guard motion.isDeviceMotionAvailable else {
-            status = "Device Motion nicht verfügbar"
-            return
-        }
+    private func startMotionForCalibration() {
+        guard motion.isDeviceMotionAvailable, !motion.isDeviceMotionActive else { return }
         motion.deviceMotionUpdateInterval = 1.0 / 100.0
         motion.startDeviceMotionUpdates(using: .xArbitraryCorrectedZVertical, to: queue) { [weak self] data, error in
             guard let self, let data, error == nil else { return }
-            let timestamp = ProcessInfo.processInfo.systemUptime - self.startedAt
+            let gravity = SIMD3(data.gravity.x, data.gravity.y, data.gravity.z)
             let acceleration = SIMD3(
                 data.gravity.x + data.userAcceleration.x,
                 data.gravity.y + data.userAcceleration.y,
                 data.gravity.z + data.userAcceleration.z
             )
+            let timestamp = self.isRecording ? ProcessInfo.processInfo.systemUptime - self.startedAt : 0
             Task { @MainActor in
+                self.calibrationBuffer.append(gravity)
+                if self.calibrationBuffer.count > 250 { self.calibrationBuffer.removeFirst(self.calibrationBuffer.count - 250) }
+                self.calibrationSampleCount = self.calibrationBuffer.count
+                guard self.isRecording else { return }
                 let processed = self.rideEngine.processMotion(timestamp: timestamp, deviceG: acceleration)
                 let speed = max(0, self.latestLocation?.speed ?? 0)
                 self.ridePhase = self.phaseDetector.update(
@@ -150,11 +123,57 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
         }
     }
 
+    func calibrateNow() {
+        guard let calibration = CalibrationMath.build(gravitySamples: Array(calibrationBuffer.suffix(150)), forwardEdge: forwardEdge) else {
+            status = "Kalibrierung fehlgeschlagen: Gerät ruhig halten"
+            return
+        }
+        rideEngine.calibration = calibration
+        status = "Kalibriert · Fahrtrichtung: \(forwardEdge.title)"
+    }
+
+    func start() {
+        guard !isRecording else { return }
+        startMotionForCalibration()
+        samples.removeAll(keepingCapacity: true)
+        rideEngine.reset()
+        altitudeFusion.reset()
+        filteredDistance = 0
+        rejectedLocationCount = 0
+        acceptedLocationCount = 0
+        ridePhase = "idle"
+        qualityScore = 0
+        lastSavedURL = nil
+        sessionID = UUID()
+        startedAt = ProcessInfo.processInfo.systemUptime
+        startedAtDate = Date()
+        isRecording = true
+        status = "Aufnahme läuft · Session \(sessionID.uuidString.prefix(8))"
+        location.startUpdatingLocation()
+
+        if CMAltimeter.isRelativeAltitudeAvailable() {
+            altimeter.startRelativeAltitudeUpdates(to: queue) { [weak self] data, _ in
+                guard let self, let data else { return }
+                let altitude = data.relativeAltitude.doubleValue
+                let pressure = data.pressure.doubleValue
+                let timestamp = ProcessInfo.processInfo.systemUptime - self.startedAt
+                Task { @MainActor in
+                    self.latestPressure = pressure
+                    self.relativeAltitude = self.altitudeFusion.updateBarometer(altitude)
+                    if self.lastAltitudeTimestamp > 0, timestamp > self.lastAltitudeTimestamp {
+                        self.latestClimbRate = (self.relativeAltitude - self.lastAltitudeValue) / (timestamp - self.lastAltitudeTimestamp)
+                    }
+                    self.lastAltitudeValue = self.relativeAltitude
+                    self.lastAltitudeTimestamp = timestamp
+                }
+            }
+        }
+    }
+
     func stop() {
         guard isRecording else { return }
         isRecording = false
         endedAtDate = Date()
-        motion.stopDeviceMotionUpdates()
         altimeter.stopRelativeAltitudeUpdates()
         location.stopUpdatingLocation()
         status = "Aufnahme beendet: \(samples.count) Samples"
@@ -163,12 +182,11 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
     @discardableResult
     func saveSession() throws -> URL {
         let duration = samples.last?.timestamp ?? 0
-        let events = phaseDetector.events.map {
-            RideSessionEvent(id: UUID(), timestamp: $0.0, type: $0.1)
-        }
+        let events = phaseDetector.events.map { RideSessionEvent(id: UUID(), timestamp: $0.0, type: $0.1) }
+        let cal = rideEngine.calibration
         let document = RideSessionDocument(
             schemaVersion: "2.0.0",
-            id: UUID(),
+            id: sessionID,
             platform: "ios",
             startedAt: startedAtDate,
             endedAt: endedAtDate,
@@ -176,8 +194,13 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
             calibration: RideSessionCalibration(
                 mode: "manual",
                 source: "iphone",
-                isCalibrated: rideEngine.calibration != nil
+                isCalibrated: cal != nil,
+                forwardEdge: forwardEdge.rawValue,
+                up: cal.map { [$0.up.x, $0.up.y, $0.up.z] },
+                lateral: cal.map { [$0.lateral.x, $0.lateral.y, $0.lateral.z] },
+                forward: cal.map { [$0.forward.x, $0.forward.y, $0.forward.z] }
             ),
+            video: RideSessionVideo(sessionID: sessionID.uuidString, filename: nil, startOffsetSeconds: 0),
             events: events,
             samples: samples,
             summary: RideSessionSummary(
@@ -203,9 +226,7 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
                 latestLocation = value
                 speedKmh = max(0, value.speed * 3.6)
                 filteredDistance = rideEngine.distanceMeters
-            } else {
-                rejectedLocationCount += 1
-            }
+            } else { rejectedLocationCount += 1 }
         }
     }
 
