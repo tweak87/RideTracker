@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleDisplayName</key><string>RideTracker</string>
+<key>NSMotionUsageDescription</key><string>RideTracker benötigt Bewegungsdaten zur Analyse von G-Kräften und Fahrbewegungen.</string>
+<key>NSLocationWhenInUseUsageDescription</key><string>RideTracker benötigt den Standort zur Aufzeichnung der Strecke und Zuordnung des Freizeitparks.</string>
+<key>NSMicrophoneUsageDescription</key><string>RideTracker benötigt das Mikrofon für den relativen Lautstärkeverlauf und Videoaufnahmen.</string>
+<key>NSCameraUsageDescription</key><string>RideTracker benötigt die Kamera für synchronisierte Fahrtvideos.</string>
+<key>UIBackgroundModes</key><array><string>location</string></array>
+<key>UILaunchScreen</key><dict/></dict></plist>
