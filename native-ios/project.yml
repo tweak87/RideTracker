@@ -1,0 +1,17 @@
+name: RideTrackerNative
+options:
+  bundleIdPrefix: de.tweak87
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  RideTrackerNative:
+    type: application
+    platform: iOS
+    sources: [RideTrackerNative]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.tweak87.RideTrackerNative
+        INFOPLIST_FILE: RideTrackerNative/Info.plist
+        SWIFT_VERSION: 5.10
+    scheme:
+      testTargets: []
