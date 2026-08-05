@@ -17,6 +17,8 @@ struct RideSample: Codable, Identifiable {
     let longitude: Double?
     let gpsAltitude: Double?
     let speed: Double?
+    let horizontalAccuracy: Double?
+    let source: String
 }
 
 @MainActor
@@ -25,7 +27,11 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
     @Published private(set) var samples: [RideSample] = []
     @Published private(set) var relativeAltitude: Double = 0
     @Published private(set) var speedKmh: Double = 0
+    @Published private(set) var filteredDistance: Double = 0
+    @Published private(set) var rejectedLocationCount = 0
     @Published private(set) var status = "Bereit"
+
+    let accessoryManager = BLEAccessoryManager()
 
     private let motion = CMMotionManager()
     private let altimeter = CMAltimeter()
@@ -34,6 +40,7 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
     private var latestAltitude: Double?
     private var latestPressure: Double?
     private var latestLocation: CLLocation?
+    private var lastAcceptedLocation: CLLocation?
     private var startedAt: TimeInterval = 0
 
     override init() {
@@ -42,6 +49,7 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
         location.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         location.activityType = .automotiveNavigation
         location.distanceFilter = kCLDistanceFilterNone
+        location.pausesLocationUpdatesAutomatically = false
     }
 
     func requestPermissions() {
@@ -52,6 +60,9 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
     func start() {
         guard !isRecording else { return }
         samples.removeAll(keepingCapacity: true)
+        filteredDistance = 0
+        rejectedLocationCount = 0
+        lastAcceptedLocation = nil
         startedAt = ProcessInfo.processInfo.systemUptime
         isRecording = true
         status = "Aufnahme läuft"
@@ -90,11 +101,11 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
                 latitude: location?.coordinate.latitude,
                 longitude: location?.coordinate.longitude,
                 gpsAltitude: location?.altitude,
-                speed: location?.speed
+                speed: location?.speed,
+                horizontalAccuracy: location?.horizontalAccuracy,
+                source: "iphone"
             )
-            Task { @MainActor in
-                self.samples.append(sample)
-            }
+            Task { @MainActor in self.samples.append(sample) }
         }
     }
 
@@ -107,10 +118,36 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
         status = "Aufnahme beendet: \(samples.count) Samples"
     }
 
+    private func accept(_ value: CLLocation) -> Bool {
+        guard value.horizontalAccuracy >= 0, value.horizontalAccuracy <= 35 else { return false }
+        guard let previous = lastAcceptedLocation else { return true }
+        let dt = max(0.2, value.timestamp.timeIntervalSince(previous.timestamp))
+        let distance = value.distance(from: previous)
+        let reportedSpeed = max(0, value.speed)
+        let impliedSpeed = distance / dt
+        let combinedAccuracy = max(3, (value.horizontalAccuracy + previous.horizontalAccuracy) / 2)
+        let plausibleMaximum = max(18, reportedSpeed * 2.5 + 8)
+        if impliedSpeed > plausibleMaximum && distance > combinedAccuracy { return false }
+        let moving = reportedSpeed >= 1.2 || impliedSpeed >= 1.5
+        let significance = max(3.5, min(12, combinedAccuracy * 0.65))
+        if !moving && distance < significance { return false }
+        if distance < 2 && dt < 2 { return false }
+        return true
+    }
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let value = locations.last else { return }
-        latestLocation = value
-        speedKmh = max(0, value.speed * 3.6)
+        for value in locations {
+            guard accept(value) else {
+                rejectedLocationCount += 1
+                continue
+            }
+            if let previous = lastAcceptedLocation {
+                filteredDistance += value.distance(from: previous)
+            }
+            lastAcceptedLocation = value
+            latestLocation = value
+            speedKmh = max(0, value.speed * 3.6)
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
