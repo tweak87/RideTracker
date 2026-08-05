@@ -24,8 +24,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Add Update 6 module
-        run: sed -i 's#</body>#<script src="update6.js"></script></body>#' index.html
+      - name: Add RideTracker modules
+        run: sed -i 's#</body>#<script src="update6.js"></script><script src="update7.js"></script></body>#' index.html
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
