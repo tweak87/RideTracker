@@ -1,0 +1,30 @@
+name: Build iOS
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "native-ios/**"
+      - "shared/**"
+      - ".github/workflows/ios-build.yml"
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: native-ios
+        run: xcodegen generate
+      - name: Build simulator target
+        working-directory: native-ios
+        run: |
+          xcodebuild \
+            -project RideTrackerNative.xcodeproj \
+            -scheme RideTrackerNative \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build
