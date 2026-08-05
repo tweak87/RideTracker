@@ -1,0 +1,22 @@
+name: Test Ride Engine
+
+on:
+  push:
+    paths:
+      - 'shared/**'
+      - '.github/workflows/engine-tests.yml'
+  pull_request:
+    paths:
+      - 'shared/**'
+  workflow_dispatch:
+
+jobs:
+  test-js-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run canonical fixture
+        run: node shared/ride-engine/ride-engine.test.mjs
