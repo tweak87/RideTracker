@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ridetracker.local/schemas/ride-session.schema.json",
+  "title": "RideTracker Session",
+  "type": "object",
+  "required": ["formatVersion", "sessionId", "startedAt", "samples"],
+  "properties": {
+    "formatVersion": {"type": "string"},
+    "engineVersion": {"type": "string"},
+    "sessionId": {"type": "string"},
+    "startedAt": {"type": "string", "format": "date-time"},
+    "endedAt": {"type": ["string", "null"], "format": "date-time"},
+    "platform": {"enum": ["web", "ios", "android"]},
+    "park": {"type": ["object", "null"]},
+    "ride": {"type": ["object", "null"]},
+    "calibration": {"type": ["object", "null"]},
+    "sensorSources": {"type": "array", "items": {"type": "string"}},
+    "summary": {"type": "object"},
+    "samples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["t", "source", "type"],
+        "properties": {
+          "t": {"type": "number", "minimum": 0},
+          "source": {"type": "string"},
+          "type": {"enum": ["motion", "location", "altitude", "audio", "heartRate", "event"]},
+          "raw": {"type": ["object", "null"]},
+          "processed": {"type": ["object", "null"]},
+          "quality": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+        }
+      }
+    }
+  }
+}
