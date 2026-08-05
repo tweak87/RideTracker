@@ -10,6 +10,16 @@ struct RideSessionCalibration: Codable {
     let mode: String
     let source: String
     let isCalibrated: Bool
+    let forwardEdge: String?
+    let up: [Double]?
+    let lateral: [Double]?
+    let forward: [Double]?
+}
+
+struct RideSessionVideo: Codable {
+    let sessionID: String
+    let filename: String?
+    let startOffsetSeconds: Double
 }
 
 struct RideSessionSummary: Codable {
@@ -30,6 +40,7 @@ struct RideSessionDocument: Codable, Identifiable {
     let endedAt: Date
     let timebase: String
     let calibration: RideSessionCalibration
+    let video: RideSessionVideo
     let events: [RideSessionEvent]
     let samples: [RideSample]
     let summary: RideSessionSummary
@@ -41,11 +52,10 @@ enum RideSessionStore {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         let data = try encoder.encode(session)
-
         let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
-        let filename = "RideTracker-\(formatter.string(from: session.startedAt)).ride.json"
+        let filename = "RideTracker-\(formatter.string(from: session.startedAt))-\(session.id.uuidString.prefix(8)).ride.json"
         let url = directory.appendingPathComponent(filename)
         try data.write(to: url, options: .atomic)
         return url
