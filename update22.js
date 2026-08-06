@@ -18,11 +18,12 @@
   const style = document.createElement('style');
   style.id = 'rtHudDockStyle';
   style.textContent = `
-    #rtHudWorkspace{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start;width:100%}
-    #rtHudWorkspace.editor-open{grid-template-columns:clamp(220px,30vw,360px) minmax(0,1fr)}
-    #rtHudEditorColumn{min-width:0;display:none}
+    #rtHudWorkspace{display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"video";gap:14px;align-items:start;width:100%}
+    #rtHudWorkspace.editor-open{grid-template-columns:clamp(220px,30vw,360px) minmax(0,1fr);grid-template-areas:"editor video"}
+    #rtHudEditorColumn{grid-area:editor;min-width:0;display:none}
     #rtHudWorkspace.editor-open #rtHudEditorColumn{display:block}
-    #rtHudVideoColumn{min-width:0;position:relative}
+    #rtHudVideoColumn{grid-area:video;min-width:0;position:relative;width:100%}
+    #rtHudVideoColumn #videoWrap{width:100%!important;max-width:100%!important;margin-inline:auto!important}
     #rtHudEditor{
       position:sticky!important;top:calc(env(safe-area-inset-top,0px) + 76px)!important;inset:auto!important;
       margin:0!important;width:100%!important;max-width:none!important;max-height:calc(100dvh - 100px)!important;
@@ -30,10 +31,11 @@
       display:none!important;overflow:auto!important;padding:14px!important
     }
     #rtHudEditor.open{display:block!important}
-    #rtHudCanvas.editing{pointer-events:auto!important;touch-action:none!important;cursor:move!important}
+    #rtHudCanvas.editing{pointer-events:auto!important;touch-action:none!important;cursor:grab!important;-webkit-user-select:none!important;user-select:none!important}
+    #rtHudCanvas.editing:active{cursor:grabbing!important}
     #rtHudDragState{display:none;margin:8px 0 0;padding:8px 10px;border:1px solid #00e5ff;border-radius:10px;background:rgba(0,229,255,.10);color:#f5fbff;font:600 12px system-ui}
     #rtHudWorkspace.drag-active #rtHudDragState{display:block}
-    #rtHudWorkspace.drag-active #videoWrap{outline:2px solid #00e5ff;outline-offset:3px}
+    #rtHudWorkspace.drag-active #videoWrap{outline:2px solid #00e5ff;outline-offset:3px;overscroll-behavior:contain}
     #rtHudQuickNav{display:grid;grid-template-columns:1fr;gap:7px;margin:10px 0 14px}
     #rtHudQuickNav button{display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 10px;border:1px solid #315361;border-radius:10px;background:#102733;color:#fff;font:600 12px system-ui;text-align:left}
     #rtHudQuickNav button.active{border-color:#00e5ff;background:rgba(0,229,255,.14)}
@@ -45,13 +47,28 @@
     #rtHudWorkspace.editor-open #rtHudHandles{display:block}
     .rtHudHandle{position:absolute;transform:translate(-50%,-50%);pointer-events:auto;width:30px;height:30px;border-radius:50%;border:2px solid #00e5ff;background:#07161b;color:#fff;font:700 15px system-ui;box-shadow:0 2px 10px #000;display:grid;place-items:center;padding:0}
     .rtHudHandle.active{background:#00e5ff;color:#061416}
-    @media(max-width:720px){
-      #rtHudWorkspace.editor-open{grid-template-columns:minmax(168px,43vw) minmax(0,1fr);gap:8px}
-      #rtHudEditor{top:calc(env(safe-area-inset-top,0px) + 64px)!important;max-height:72dvh!important;padding:10px!important;font-size:12px!important}
+
+    /* Smartphone-Hochformat: Vorschau in voller Breite, Einstellungen darunter. */
+    @media (max-width:720px) and (orientation:portrait){
+      #rtHudWorkspace.editor-open{grid-template-columns:minmax(0,1fr);grid-template-areas:"video" "editor";gap:12px}
+      #rtHudEditor{position:relative!important;top:auto!important;max-height:none!important;padding:12px!important;font-size:13px!important}
+      #rtHudEditorColumn{width:100%!important}
+      #rtHudVideoColumn{width:100%!important}
+      #rtHudVideoColumn #videoWrap{min-height:0!important;aspect-ratio:9/16!important;max-height:68dvh!important}
+      #rtHudEditor .row{grid-template-columns:1fr auto!important}
+      #rtHudEditor input[type=range]{width:min(46vw,190px)!important}
+      #rtHudEditorButton{font-size:11px!important;padding:8px 9px!important}
+      .rtHudHandle{width:30px;height:30px;font-size:14px}
+    }
+
+    /* Smartphone-Querformat: kompakter Editor links, große Vorschau rechts. */
+    @media (max-height:720px) and (orientation:landscape){
+      #rtHudWorkspace.editor-open{grid-template-columns:clamp(210px,32vw,330px) minmax(0,1fr);grid-template-areas:"editor video";gap:10px}
+      #rtHudEditor{top:calc(env(safe-area-inset-top,0px) + 8px)!important;max-height:calc(100dvh - 20px)!important;padding:10px!important;font-size:12px!important}
       #rtHudEditor .row{grid-template-columns:1fr!important}
       #rtHudEditor input[type=range]{width:100%!important}
-      #rtHudEditorButton{font-size:10px!important;padding:7px 8px!important}
-      .rtHudHandle{width:26px;height:26px;font-size:13px}
+      #rtHudVideoColumn #videoWrap{height:min(82dvh,720px)!important;aspect-ratio:16/9!important}
+      .rtHudHandle{width:28px;height:28px;font-size:13px}
     }
   `;
   document.getElementById('rtHudDockStyle')?.remove();
@@ -74,7 +91,7 @@
     videoColumn.appendChild(wrap);
     const dragState = document.createElement('div');
     dragState.id = 'rtHudDragState';
-    dragState.textContent = 'Verschiebemodus aktiv: Element im Videobild antippen und ziehen.';
+    dragState.textContent = 'Verschiebemodus aktiv: Element gedrückt halten und frei an die gewünschte Position ziehen.';
     videoColumn.appendChild(dragState);
   } else {
     editorColumn = document.getElementById('rtHudEditorColumn') || document.createElement('div');
@@ -88,6 +105,7 @@
     workspace.prepend(editorColumn);
   }
 
+  document.getElementById('rtHudHandles')?.remove();
   const handles = document.createElement('div');
   handles.id = 'rtHudHandles';
   wrap.appendChild(handles);
@@ -173,10 +191,10 @@
   function contentRect() {
     const box = wrap.getBoundingClientRect();
     const video = visibleVideo();
-    const sw = video?.videoWidth || (box.width >= box.height ? 1920 : 1080);
-    const sh = video?.videoHeight || (box.width >= box.height ? 1080 : 1920);
+    const sw = video?.videoWidth || (matchMedia('(orientation: portrait)').matches ? 1080 : 1920);
+    const sh = video?.videoHeight || (matchMedia('(orientation: portrait)').matches ? 1920 : 1080);
     const sa = sw / sh;
-    const ba = box.width / box.height;
+    const ba = box.width / Math.max(box.height, 1);
     let x = 0, y = 0, width = box.width, height = box.height;
     if (ba > sa) { height = box.height; width = height * sa; x = (box.width - width) / 2; }
     else { width = box.width; height = width / sa; y = (box.height - height) / 2; }
@@ -211,16 +229,34 @@
     canvas.style.pointerEvents = open && editing ? 'auto' : 'none';
     canvas.style.touchAction = open && editing ? 'none' : 'auto';
     if (open) decorateEditor();
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
   };
 
   new MutationObserver(syncState).observe(editor, { attributes: true, attributeFilter: ['class'] });
   new MutationObserver(syncState).observe(canvas, { attributes: true, attributeFilter: ['class'] });
 
+  /* Wichtig: Pointer-Ereignisse werden nicht mehr im Capture-Handler gestoppt.
+     Dadurch erreicht eine Fingerbewegung den eigentlichen Drag-Handler in update21.js
+     kontinuierlich vom pointerdown bis pointerup. */
   canvas.addEventListener('pointerdown', event => {
     if (!canvas.classList.contains('editing')) return;
     event.preventDefault();
-    event.stopPropagation();
-  }, { capture: true });
+  }, { passive: false });
+  canvas.addEventListener('pointermove', event => {
+    if (canvas.classList.contains('editing')) event.preventDefault();
+  }, { passive: false });
+  canvas.addEventListener('pointercancel', () => {
+    try { canvas.releasePointerCapture?.(event.pointerId); } catch (_) {}
+  });
+
+  const orientationRefresh = () => {
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('resize'));
+      syncState();
+    });
+  };
+  addEventListener('orientationchange', () => setTimeout(orientationRefresh, 120));
+  screen.orientation?.addEventListener?.('change', orientationRefresh);
 
   syncState();
   requestAnimationFrame(updateHandles);
