@@ -23,38 +23,16 @@ import java.io.File
 
 enum class FunctionalSection { HOME, RECORD, RIDES, MAP, SETTINGS, HUD, STATISTICS, ACHIEVEMENTS, MEDIA }
 
-data class AndroidRideEntry(
-    val file: File,
-    val title: String,
-    val distanceMeters: Double,
-    val durationSeconds: Double,
-    val latitude: Double?,
-    val longitude: Double?
-)
+data class AndroidRideEntry(val file: File, val title: String, val distanceMeters: Double, val durationSeconds: Double, val latitude: Double?, val longitude: Double?)
 
 private fun loadRides(context: Context): List<AndroidRideEntry> = context.filesDir.walkTopDown()
     .filter { it.isFile && it.name.endsWith(".ride.json") }
     .mapNotNull { file ->
         runCatching {
-            val root = JSONObject(file.readText())
-            val summary = root.optJSONObject("summary")
-            val contextJson = root.optJSONObject("context")
-            val samples = root.optJSONArray("samples")
-            var lat: Double? = null
-            var lon: Double? = null
-            if (samples != null) for (i in 0 until samples.length()) {
-                val sample = samples.optJSONObject(i) ?: continue
-                if (sample.has("latitude") && sample.has("longitude")) { lat = sample.optDouble("latitude"); lon = sample.optDouble("longitude"); break }
-            }
-            AndroidRideEntry(
-                file,
-                contextJson?.optString("rideName")?.takeIf { it.isNotBlank() }
-                    ?: contextJson?.optString("parkName")?.takeIf { it.isNotBlank() }
-                    ?: file.nameWithoutExtension,
-                summary?.optDouble("distanceMeters") ?: 0.0,
-                summary?.optDouble("durationSeconds") ?: 0.0,
-                lat, lon
-            )
+            val root = JSONObject(file.readText()); val summary = root.optJSONObject("summary"); val contextJson = root.optJSONObject("context"); val samples = root.optJSONArray("samples")
+            var lat: Double? = null; var lon: Double? = null
+            if (samples != null) for (i in 0 until samples.length()) { val sample = samples.optJSONObject(i) ?: continue; if (sample.has("latitude") && sample.has("longitude")) { lat = sample.optDouble("latitude"); lon = sample.optDouble("longitude"); break } }
+            AndroidRideEntry(file, contextJson?.optString("rideName")?.takeIf { it.isNotBlank() } ?: contextJson?.optString("parkName")?.takeIf { it.isNotBlank() } ?: file.nameWithoutExtension, summary?.optDouble("distanceMeters") ?: 0.0, summary?.optDouble("durationSeconds") ?: 0.0, lat, lon)
         }.getOrNull()
     }.sortedByDescending { it.file.lastModified() }.toList()
 
@@ -71,16 +49,12 @@ fun FunctionalRideTrackerApp(activity: Activity) {
     LaunchedEffect(heartRate.latestHeartRate, heartRate.deviceName) { recorder.setHeartRate(heartRate.latestHeartRate, heartRate.deviceName) }
 
     val permissions = buildList {
-        add(Manifest.permission.ACCESS_FINE_LOCATION); add(Manifest.permission.ACCESS_COARSE_LOCATION)
-        add(Manifest.permission.CAMERA); add(Manifest.permission.RECORD_AUDIO)
+        add(Manifest.permission.ACCESS_FINE_LOCATION); add(Manifest.permission.ACCESS_COARSE_LOCATION); add(Manifest.permission.CAMERA); add(Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { add(Manifest.permission.BLUETOOTH_SCAN); add(Manifest.permission.BLUETOOTH_CONNECT) }
     }.toTypedArray()
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         val locationGranted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true || result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (locationGranted && recorder.calibrateNow()) {
-            recorder.start()
-            if (pendingVideo) videoRecorder.start(recorder.sessionId, recorder.recordingStartNs)
-        }
+        if (locationGranted && recorder.calibrateNow()) { recorder.start(); if (pendingVideo) videoRecorder.start(recorder.sessionId, recorder.recordingStartNs) }
     }
 
     Scaffold(
@@ -90,18 +64,13 @@ fun FunctionalRideTrackerApp(activity: Activity) {
             Column {
                 if (recorder.isRecording) Surface(color = MaterialTheme.colorScheme.errorContainer) {
                     Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("● Aufnahme läuft", Modifier.weight(1f))
-                        Button(onClick = { videoRecorder.stop(); recorder.attachVideo(videoRecorder.lastVideoFile?.name, videoRecorder.startOffsetSeconds); recorder.stop() }) { Text("Stoppen") }
+                        Text("● Aufnahme läuft", Modifier.weight(1f)); Button(onClick = { videoRecorder.stop(); recorder.attachVideo(videoRecorder.lastVideoFile?.name, videoRecorder.startOffsetSeconds); recorder.stop() }) { Text("Stoppen") }
                     }
                 }
                 NavigationBar {
-                    listOf(
-                        FunctionalSection.HOME to "Start",
-                        FunctionalSection.RECORD to "Aufzeichnen",
-                        FunctionalSection.RIDES to "Fahrten",
-                        FunctionalSection.MAP to "Karte",
-                        FunctionalSection.SETTINGS to "Einstellungen"
-                    ).forEach { (target, label) -> NavigationBarItem(section == target, { section = target }, { Text(label.take(1)) }, label = { Text(label) }) }
+                    listOf(FunctionalSection.HOME to "Start", FunctionalSection.RECORD to "Aufzeichnen", FunctionalSection.RIDES to "Fahrten", FunctionalSection.MAP to "Karte", FunctionalSection.SETTINGS to "Einstellungen").forEach { (target, label) ->
+                        NavigationBarItem(section == target, { section = target }, { Text(label.take(1)) }, label = { Text(label) })
+                    }
                 }
             }
         }
@@ -112,7 +81,7 @@ fun FunctionalRideTrackerApp(activity: Activity) {
             FunctionalSection.RIDES -> AndroidRideLibrary(Modifier.padding(padding), context)
             FunctionalSection.MAP -> AndroidRideMapList(Modifier.padding(padding), context)
             FunctionalSection.SETTINGS -> AndroidSettings(Modifier.padding(padding), recorder, heartRate) { section = FunctionalSection.HUD }
-            FunctionalSection.HUD -> AndroidHudSettings(Modifier.padding(padding))
+            FunctionalSection.HUD -> AndroidHudFullscreenEditor(Modifier.padding(padding))
             FunctionalSection.STATISTICS -> StatisticsScreen(Modifier.padding(padding))
             FunctionalSection.ACHIEVEMENTS -> AchievementsScreen(Modifier.padding(padding))
             FunctionalSection.MEDIA -> RideMediaScreen(Modifier.padding(padding), profiles)
@@ -127,16 +96,14 @@ fun FunctionalRideTrackerApp(activity: Activity) {
         DashboardCard("Meine Fahrten", "Gespeicherte RidePackages öffnen") { select(FunctionalSection.RIDES) }
         DashboardCard("Parks & Strecken", "GPS-Fahrten und Startpositionen") { select(FunctionalSection.MAP) }
         DashboardCard("Einstellungen", "Kalibrierung, Sensoren und Berechtigungen") { select(FunctionalSection.SETTINGS) }
-        DashboardCard("HUD-Konfiguration", "Größe, Transparenz und Elemente") { select(FunctionalSection.HUD) }
+        DashboardCard("HUD-Konfiguration", "Vollbild-Editor für Hoch- und Querformat") { select(FunctionalSection.HUD) }
         DashboardCard("Statistiken", "Kilometer, Fahrzeit und Rekorde") { select(FunctionalSection.STATISTICS) }
         DashboardCard("Achievements", "Persönliche Meilensteine") { select(FunctionalSection.ACHIEVEMENTS) }
         DashboardCard("Bilder & Bewertungen", "Bahnbilder und Sterne") { select(FunctionalSection.MEDIA) }
     }
 }
 
-@Composable private fun DashboardCard(title: String, subtitle: String, click: () -> Unit) {
-    Card(onClick = click, modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) { Text(title, style = MaterialTheme.typography.titleMedium); Text(subtitle, style = MaterialTheme.typography.bodySmall) } }
-}
+@Composable private fun DashboardCard(title: String, subtitle: String, click: () -> Unit) { Card(onClick = click, modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) { Text(title, style = MaterialTheme.typography.titleMedium); Text(subtitle, style = MaterialTheme.typography.bodySmall) } } }
 
 @Composable private fun AndroidRecording(modifier: Modifier, recorder: AndroidSensorRecorder, video: AndroidVideoRecorder, start: (Boolean) -> Unit) {
     var dialog by remember { mutableStateOf(false) }
@@ -162,8 +129,7 @@ fun FunctionalRideTrackerApp(activity: Activity) {
 @Composable private fun AndroidRideMapList(modifier: Modifier, context: Context) {
     val rides = remember { loadRides(context).filter { it.latitude != null && it.longitude != null } }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Parks & Strecken", style = MaterialTheme.typography.headlineMedium)
-        if (rides.isEmpty()) Text("Noch keine Fahrten mit GPS-Daten vorhanden.")
+        Text("Parks & Strecken", style = MaterialTheme.typography.headlineMedium); if (rides.isEmpty()) Text("Noch keine Fahrten mit GPS-Daten vorhanden.")
         rides.forEach { ride -> Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp)) { Text(ride.title, style = MaterialTheme.typography.titleMedium); Text("${"%.5f".format(ride.latitude)}, ${"%.5f".format(ride.longitude)}"); Text("${"%.2f".format(ride.distanceMeters / 1000)} km") } } }
     }
 }
@@ -178,14 +144,5 @@ fun FunctionalRideTrackerApp(activity: Activity) {
 }
 
 @Composable private fun AndroidHudSettings(modifier: Modifier) {
-    var opacity by remember { mutableFloatStateOf(0.86f) }; var scale by remember { mutableFloatStateOf(1f) }; var pulse by remember { mutableStateOf(true) }; var forces by remember { mutableStateOf(true) }; var speed by remember { mutableStateOf(true) }; var vibration by remember { mutableStateOf(true) }
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("HUD-Konfiguration", style = MaterialTheme.typography.headlineMedium)
-        Text("Panel-Transparenz"); Slider(opacity, { opacity = it }, valueRange = 0.15f..1f)
-        Text("HUD-Größe"); Slider(scale, { scale = it }, valueRange = 0.5f..1.8f)
-        Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(pulse, { pulse = it }); Text("Puls") }
-        Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(forces, { forces = it }); Text("G-Kräfte") }
-        Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(speed, { speed = it }); Text("Geschwindigkeit") }
-        Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(vibration, { vibration = it }); Text("Vibration") }
-    }
+    Column(modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) { Text("Der neue HUD-Editor wird im Vollbild geöffnet.") }
 }
