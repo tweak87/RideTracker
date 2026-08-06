@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.util.UUID
 
+@SuppressLint("MissingPermission")
 class AndroidHeartRateManager(private val context: Context) {
     var status by mutableStateOf("Nicht verbunden"); private set
     var latestHeartRate by mutableStateOf<Int?>(null); private set
@@ -36,7 +37,6 @@ class AndroidHeartRateManager(private val context: Context) {
         override fun onScanFailed(errorCode: Int) { status = "Bluetooth-Suche fehlgeschlagen ($errorCode)" }
     }
 
-    @SuppressLint("MissingPermission")
     fun scan() {
         latestHeartRate = null; foundDevice = null; status = "Suche Pulsuhr …"
         val filter = ScanFilter.Builder().setServiceUuid(ParcelUuid(heartRateService)).build()
@@ -44,7 +44,6 @@ class AndroidHeartRateManager(private val context: Context) {
         adapter.bluetoothLeScanner?.startScan(listOf(filter), settings, scanCallback) ?: run { status = "Bluetooth LE nicht verfügbar" }
     }
 
-    @SuppressLint("MissingPermission")
     fun connect() {
         val device = foundDevice ?: run { status = "Zuerst Pulsuhr suchen"; return }
         status = "Verbindet …"
@@ -52,17 +51,14 @@ class AndroidHeartRateManager(private val context: Context) {
         gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
     }
 
-    @SuppressLint("MissingPermission")
     fun close() { adapter.bluetoothLeScanner?.stopScan(scanCallback); gatt?.close(); gatt = null }
 
     private val callback = object : BluetoothGattCallback() {
-        @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt, statusCode: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED) { status = "Verbunden"; gatt.discoverServices() }
             else if (newState == BluetoothProfile.STATE_DISCONNECTED) status = "Getrennt"
         }
 
-        @SuppressLint("MissingPermission")
         override fun onServicesDiscovered(gatt: BluetoothGatt, statusCode: Int) {
             val characteristic = gatt.getService(heartRateService)?.getCharacteristic(heartRateMeasurement) ?: run { status = "Herzfrequenzdienst fehlt"; return }
             gatt.setCharacteristicNotification(characteristic, true)
@@ -73,9 +69,10 @@ class AndroidHeartRateManager(private val context: Context) {
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-            val flags = characteristic.value.getOrNull(0)?.toInt() ?: return
-            latestHeartRate = if (flags and 1 == 0) characteristic.value.getOrNull(1)?.toInt()?.and(0xff)
-            else if (characteristic.value.size >= 3) (characteristic.value[1].toInt() and 0xff) or ((characteristic.value[2].toInt() and 0xff) shl 8) else null
+            val values = characteristic.value
+            val flags = values.getOrNull(0)?.toInt() ?: return
+            latestHeartRate = if (flags and 1 == 0) values.getOrNull(1)?.toInt()?.and(0xff)
+            else if (values.size >= 3) (values[1].toInt() and 0xff) or ((values[2].toInt() and 0xff) shl 8) else null
         }
     }
 }
