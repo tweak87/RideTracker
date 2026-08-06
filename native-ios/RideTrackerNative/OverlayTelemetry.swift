@@ -22,11 +22,15 @@ struct OverlayConfiguration: Codable, Equatable {
         var pulseCritical: Int
         var vibrationWarning: Double
         var vibrationCritical: Double
+        var jerkWarningGPerSecond: Double?
+        var jerkCriticalGPerSecond: Double?
     }
     var version: String
     var designWidth: Double
     var designHeight: Double
-    var layout: [String: [Double]]
+    var portraitDesignWidth: Double
+    var portraitDesignHeight: Double
+    var layouts: [String: [String: [Double]]]
     var limits: Limits
 }
 
