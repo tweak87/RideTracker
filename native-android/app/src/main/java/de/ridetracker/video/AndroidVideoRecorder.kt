@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.SystemClock
+import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FileOutputOptions
@@ -19,7 +20,6 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import java.io.File
-import java.util.UUID
 
 class AndroidVideoRecorder(
     private val context: Context,
@@ -34,6 +34,7 @@ class AndroidVideoRecorder(
     var startOffsetSeconds by mutableStateOf(0.0)
         private set
 
+    val cameraSources = CameraSourceManager(context)
     private var videoCapture: VideoCapture<Recorder>? = null
     private var activeRecording: Recording? = null
 
@@ -47,10 +48,39 @@ class AndroidVideoRecorder(
                     .build()
                 videoCapture = VideoCapture.withOutput(recorder)
                 provider.unbindAll()
-                provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, videoCapture)
-                status = "Video bereit"
+
+                val orderedIds = cameraSources.orderedSources().map { it.id }
+                var boundId: String? = null
+                var lastError: Throwable? = null
+                for (cameraId in orderedIds) {
+                    val selector = CameraSelector.Builder()
+                        .addCameraFilter { infos -> infos.filter { Camera2CameraInfo.from(it).cameraId == cameraId } }
+                        .build()
+                    try {
+                        provider.bindToLifecycle(lifecycleOwner, selector, videoCapture)
+                        boundId = cameraId
+                        break
+                    } catch (error: Throwable) {
+                        lastError = error
+                        provider.unbindAll()
+                    }
+                }
+                if (boundId == null) {
+                    provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, videoCapture)
+                    boundId = "fallback-back"
+                }
+                status = "Video bereit: $boundId"
+                lastError?.let { if (orderedIds.isNotEmpty()) status += " (Fallback aktiv)" }
             }.onFailure { status = "Kamerafehler: ${it.localizedMessage}" }
         }, ContextCompat.getMainExecutor(context))
+    }
+
+    fun reconfigureSelectedCamera() {
+        if (isRecording) {
+            status = "Kamera kann während der Aufnahme nicht gewechselt werden"
+            return
+        }
+        configure()
     }
 
     fun start(sessionId: String, sensorStartNs: Long) {
