@@ -1,3 +1,4 @@
+import AVKit
 import SwiftUI
 
 enum NativeSection: String, CaseIterable, Identifiable {
@@ -11,7 +12,12 @@ struct AppShellView: View {
     @EnvironmentObject private var recorder: SensorRecorder
     @EnvironmentObject private var profiles: UserProfileStore
     @State private var section: NativeSection = .home
+    @State private var previousSection: NativeSection = .home
+    @State private var pendingSection: NativeSection?
+    @State private var suppressNavigationGuard = false
+    @State private var showUnsavedDialog = false
     @State private var showProfiles = false
+
     var body: some View {
         TabView(selection: $section) {
             NativeDashboard(section:$section,profileName:profiles.activeProfile.name,showProfiles:{showProfiles=true}).tag(NativeSection.home).tabItem{Label("Start",systemImage:NativeSection.home.icon)}
@@ -25,6 +31,30 @@ struct AppShellView: View {
         .overlay(alignment:.topLeading){ GlobalMenuButton(section:$section).padding(.top,8).padding(.leading,8) }
         .safeAreaInset(edge:.bottom,spacing:0){ if recorder.isRecording { HStack(spacing:10){Circle().fill(.red).frame(width:10,height:10);VStack(alignment:.leading){Text("Aufnahme läuft").font(.headline);Text("Sensoren und optional Video werden aufgezeichnet.").font(.caption).foregroundStyle(.secondary)};Spacer();Button("Stoppen",role:.destructive){recorder.stop()}.buttonStyle(.borderedProminent).tint(.red)}.padding(12).background(.ultraThinMaterial) } }
         .sheet(isPresented:$showProfiles){NativeProfileSheet().environmentObject(profiles)}
+        .onChange(of: section) { oldValue, newValue in
+            if suppressNavigationGuard { suppressNavigationGuard = false; previousSection = newValue; return }
+            if oldValue == .record && newValue != .record && !recorder.isRecording && !recorder.samples.isEmpty && recorder.lastSavedURL == nil {
+                pendingSection = newValue
+                suppressNavigationGuard = true
+                section = .record
+                showUnsavedDialog = true
+            } else { previousSection = newValue }
+        }
+        .confirmationDialog("Fahrt noch nicht gespeichert", isPresented:$showUnsavedDialog, titleVisibility:.visible) {
+            Button("Speichern und wechseln") {
+                _ = try? recorder.saveSession()
+                completePendingNavigation()
+            }
+            Button("Ohne Speichern wechseln", role:.destructive) { completePendingNavigation() }
+            Button("Abbrechen", role:.cancel) { pendingSection = nil }
+        } message: { Text("Möchtest du die aufgezeichnete Fahrt vor dem Wechsel bewusst speichern?") }
+    }
+
+    private func completePendingNavigation() {
+        guard let target = pendingSection else { return }
+        pendingSection = nil
+        suppressNavigationGuard = true
+        section = target
     }
 }
 
@@ -36,13 +66,20 @@ private struct GlobalMenuButton: View {
 
 private struct NativeDashboard: View {
     @Binding var section: NativeSection; let profileName:String; let showProfiles:()->Void
-    var body: some View { NavigationStack { ScrollView { VStack(alignment:.leading,spacing:14){Text("RideTracker").font(.largeTitle.bold());Text("Angemeldet: \(profileName)").foregroundStyle(.secondary);NativeMenuCard("Neue Fahrt","Video und Telemetrie aufzeichnen","record.circle.fill"){section = .record};NativeMenuCard("Meine Fahrten","Gespeicherte RidePackages öffnen","list.bullet.rectangle.fill"){section = .rides};NativeMenuCard("Parks & Strecken","GPS-Fahrten und Startpositionen","map.fill"){section = .map};NativeMenuCard("Geräte & Sensoren","Interne und externe Quellen konfigurieren","sensor.tag.radiowaves.forward.fill"){section = .devices};NativeMenuCard("Einstellungen","Kalibrierung, Sensoren und Berechtigungen","gearshape.fill"){section = .settings};NativeMenuCard("HUD-Konfiguration","Vollbild-Editor für Hoch- und Querformat","rectangle.3.group.fill"){section = .hud};Button("Benutzer verwalten",action:showProfiles).buttonStyle(.bordered).frame(maxWidth:.infinity)}.padding() }.navigationTitle("Übersicht") } }
+    var body: some View { NavigationStack { ScrollView { VStack(alignment:.leading,spacing:14){Text("RideTracker").font(.largeTitle.bold());Text("Angemeldet: \(profileName)").foregroundStyle(.secondary);NativeMenuCard("Neue Fahrt","Video und Telemetrie aufzeichnen","record.circle.fill"){section = .record};NativeMenuCard("Meine Fahrten","Videos ansehen und Angaben bearbeiten","list.bullet.rectangle.fill"){section = .rides};NativeMenuCard("Parks & Strecken","GPS-Fahrten und Startpositionen","map.fill"){section = .map};NativeMenuCard("Geräte & Sensoren","Interne und externe Quellen konfigurieren","sensor.tag.radiowaves.forward.fill"){section = .devices};NativeMenuCard("Einstellungen","Kalibrierung, Sensoren und Berechtigungen","gearshape.fill"){section = .settings};NativeMenuCard("HUD-Konfiguration","Vollbild-Editor für Hoch- und Querformat","rectangle.3.group.fill"){section = .hud};Button("Benutzer verwalten",action:showProfiles).buttonStyle(.bordered).frame(maxWidth:.infinity)}.padding() }.navigationTitle("Übersicht") } }
 }
 
 private struct NativeRecordingView: View {
     @EnvironmentObject private var recorder: SensorRecorder
     @State private var showStartChoice=false
-    var body: some View { NavigationStack { ScrollView { VStack(spacing:14){RoundedRectangle(cornerRadius:20).fill(Color.black).aspectRatio(16/9,contentMode:.fit).overlay{ZStack{VStack(spacing:8){Image(systemName:"video.fill").font(.largeTitle);Text(recorder.videoRecorder.status).font(.caption).foregroundStyle(.secondary);Text("Native Kameravorschau wird über AVFoundation bereitgestellt.").font(.caption2).foregroundStyle(.secondary)};NativeLiveHUDOverlay(recorder:recorder)}.clipShape(RoundedRectangle(cornerRadius:20))};HStack{Text("Status");Spacer();Text(recorder.status)};HStack{Text("Tempo");Spacer();Text(String(format:"%.1f km/h",recorder.speedKmh)).monospacedDigit()};HStack{Text("Höhe");Spacer();Text(String(format:"%.1f m",recorder.relativeAltitude)).monospacedDigit()};Button(recorder.isRecording ? "Aufnahme stoppen":"Kalibrieren & Fahrt starten"){if recorder.isRecording{recorder.stop()}else{showStartChoice=true}}.buttonStyle(.borderedProminent).tint(recorder.isRecording ? .red:.blue).frame(maxWidth:.infinity);Button("RidePackage speichern"){_=try? recorder.saveSession()}.buttonStyle(.bordered).disabled(recorder.isRecording || recorder.samples.isEmpty)}.padding() }.navigationTitle("Neue Fahrt").confirmationDialog("Video mit aufzeichnen?",isPresented:$showStartChoice,titleVisibility:.visible){Button("Mit Video starten"){recorder.calibrateAndStart(video:true)};Button("Ohne Video starten"){recorder.calibrateAndStart(video:false)};Button("Abbrechen",role:.cancel){}} } }
+    var body: some View { NavigationStack { ScrollView { VStack(spacing:14){
+        if !recorder.isRecording, let url = recorder.videoRecorder.lastVideoURL, FileManager.default.fileExists(atPath:url.path) {
+            VStack(alignment:.leading,spacing:8){Text("Videovorschau").font(.headline);VideoPlayer(player:AVPlayer(url:url)).frame(minHeight:220).aspectRatio(16/9,contentMode:.fit)}
+        } else {
+            RoundedRectangle(cornerRadius:20).fill(Color.black).aspectRatio(16/9,contentMode:.fit).overlay{ZStack{VStack(spacing:8){Image(systemName:"video.fill").font(.largeTitle);Text(recorder.videoRecorder.status).font(.caption).foregroundStyle(.secondary);Text("Native Kameravorschau wird über AVFoundation bereitgestellt.").font(.caption2).foregroundStyle(.secondary)};NativeLiveHUDOverlay(recorder:recorder)}.clipShape(RoundedRectangle(cornerRadius:20))}
+        }
+        HStack{Text("Status");Spacer();Text(recorder.status)};HStack{Text("Tempo");Spacer();Text(String(format:"%.1f km/h",recorder.speedKmh)).monospacedDigit()};HStack{Text("Höhe");Spacer();Text(String(format:"%.1f m",recorder.relativeAltitude)).monospacedDigit()};Button(recorder.isRecording ? "Aufnahme stoppen":"Kalibrieren & Fahrt starten"){if recorder.isRecording{recorder.stop()}else{showStartChoice=true}}.buttonStyle(.borderedProminent).tint(recorder.isRecording ? .red:.blue).frame(maxWidth:.infinity);Button("Fahrt bewusst speichern"){_=try? recorder.saveSession()}.buttonStyle(.bordered).disabled(recorder.isRecording || recorder.samples.isEmpty)
+    }.padding() }.navigationTitle("Neue Fahrt").confirmationDialog("Video mit aufzeichnen?",isPresented:$showStartChoice,titleVisibility:.visible){Button("Mit Video starten"){recorder.calibrateAndStart(video:true)};Button("Ohne Video starten"){recorder.calibrateAndStart(video:false)};Button("Abbrechen",role:.cancel){}} } }
 }
 
 private struct NativeMenuCard: View { let title:String;let subtitle:String;let icon:String;let action:()->Void;init(_ title:String,_ subtitle:String,_ icon:String,action:@escaping()->Void){self.title=title;self.subtitle=subtitle;self.icon=icon;self.action=action};var body:some View{Button(action:action){HStack(spacing:14){Image(systemName:icon).font(.title2).frame(width:40);VStack(alignment:.leading){Text(title).font(.headline);Text(subtitle).font(.caption).foregroundStyle(.secondary)};Spacer();Image(systemName:"chevron.right").foregroundStyle(.secondary)}.padding().background(.thinMaterial,in:RoundedRectangle(cornerRadius:17))}.buttonStyle(.plain)}}
