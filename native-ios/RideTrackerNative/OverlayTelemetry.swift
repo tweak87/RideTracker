@@ -37,7 +37,7 @@ extension OverlayTelemetryFrame {
         return .init(
             timestampMs: timestampMs,
             gForce: .init(lateral: sample.lateralG, vertical: sample.normalG, longitudinal: sample.longitudinalG, total: sample.totalG),
-            speed: .init(valueKmh: sample.speedMS * 3.6, source: "gps", accuracyKmh: nil),
+            speed: .init(valueKmh: max(0, (sample.speed ?? 0) * 3.6), source: "gps", accuracyKmh: sample.horizontalAccuracy.map { $0 * 3.6 }),
             heartRate: .init(bpm: bpm, source: bpm == nil ? "none" : "bluetooth", valid: bpm != nil),
             vibration: .init(rmsMs2: vibrationRmsMs2, peakMs2: vibrationPeakMs2, level: vibrationRmsMs2 >= 7 ? "high" : vibrationRmsMs2 >= 3 ? "medium" : "low"),
             recording: .init(active: true, elapsedMs: timestampMs)
