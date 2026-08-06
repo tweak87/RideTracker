@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import de.ridetracker.session.LocalProfileStore
 import org.json.JSONObject
 
 data class LocalRideStats(
@@ -22,9 +23,11 @@ data class LocalRideStats(
 
 private fun loadStats(context: Context): LocalRideStats {
     var result = LocalRideStats()
+    val activeId = LocalProfileStore.current(context).id
     context.filesDir.listFiles { file -> file.name.endsWith(".ride.json") }?.forEach { file ->
         runCatching {
             val root = JSONObject(file.readText())
+            if (root.optJSONObject("owner")?.optString("profileID") != activeId) return@runCatching
             val summary = root.optJSONObject("summary")
             var speed = result.maxSpeedKmh
             var g = result.maxG
@@ -50,10 +53,20 @@ private fun loadStats(context: Context): LocalRideStats {
 @Composable
 fun StatisticsScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val profiles = remember { LocalProfileStore(context.applicationContext) }
     var stats by remember { mutableStateOf(LocalRideStats()) }
-    LaunchedEffect(Unit) { stats = loadStats(context) }
+    var confirmReset by remember { mutableStateOf(false) }
+    LaunchedEffect(profiles.activeProfileId) { stats = loadStats(context) }
+    if (confirmReset) AlertDialog(
+        onDismissRequest = { confirmReset = false },
+        title = { Text("Statistiken zurücksetzen?") },
+        text = { Text("Alle lokalen Fahrten und Statistiken von ${profiles.activeProfile.name} werden gelöscht.") },
+        confirmButton = { TextButton(onClick = { profiles.resetActiveData(); stats = loadStats(context); confirmReset = false }) { Text("Löschen") } },
+        dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Abbrechen") } },
+    )
     Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Statistiken", style = MaterialTheme.typography.headlineMedium)
+        Text("Benutzer: ${profiles.activeProfile.name}", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatCard("Fahrten", "${stats.rides}", Modifier.weight(1f))
             StatCard("Gesamtstrecke", "%.2f km".format(stats.distanceMeters / 1000), Modifier.weight(1f))
@@ -66,12 +79,14 @@ fun StatisticsScreen(modifier: Modifier = Modifier) {
             StatCard("Max. Gesamt-G", "%.2f g".format(stats.maxG), Modifier.weight(1f))
             StatCard("Beste Qualität", "${stats.bestQuality}/100", Modifier.weight(1f))
         }
+        Button(onClick = { confirmReset = true }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Statistiken zurücksetzen") }
     }
 }
 
 @Composable
 fun AchievementsScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val profile = remember { LocalProfileStore.current(context) }
     var stats by remember { mutableStateOf(LocalRideStats()) }
     LaunchedEffect(Unit) { stats = loadStats(context) }
     val achievements = listOf(
@@ -83,7 +98,7 @@ fun AchievementsScreen(modifier: Modifier = Modifier) {
         Triple("G-Force", "Mindestens 4,0 g messen", stats.maxG >= 4),
     )
     LazyColumn(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { Text("Achievements", style = MaterialTheme.typography.headlineMedium) }
+        item { Text("Achievements", style = MaterialTheme.typography.headlineMedium); Text("Benutzer: ${profile.name}", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(achievements) { (title, detail, done) ->
             Card(modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
