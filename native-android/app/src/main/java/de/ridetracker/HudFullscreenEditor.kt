@@ -1,7 +1,7 @@
 package de.ridetracker
 
-import android.app.Activity
 import android.content.pm.ActivityInfo
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -16,7 +16,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.max
@@ -26,7 +25,7 @@ private enum class HudMode { Portrait, Landscape }
 
 @Composable
 fun AndroidHudFullscreenEditor(modifier: Modifier = Modifier) {
-    val activity = LocalContext.current as? Activity
+    val activity = LocalActivity.current
     var editing by remember { mutableStateOf(false) }
     if (!editing) {
         Column(modifier.fillMaxSize().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
