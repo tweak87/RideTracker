@@ -96,11 +96,15 @@ private struct NativeRecordingView: View {
                         .fill(Color.black)
                         .aspectRatio(16/9, contentMode: .fit)
                         .overlay {
-                            VStack(spacing: 8) {
-                                Image(systemName: "video.fill").font(.largeTitle)
-                                Text(recorder.videoRecorder.status).font(.caption).foregroundStyle(.secondary)
-                                Text("Native Kameravorschau wird über AVFoundation bereitgestellt.").font(.caption2).foregroundStyle(.secondary)
+                            ZStack {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "video.fill").font(.largeTitle)
+                                    Text(recorder.videoRecorder.status).font(.caption).foregroundStyle(.secondary)
+                                    Text("Native Kameravorschau wird über AVFoundation bereitgestellt.").font(.caption2).foregroundStyle(.secondary)
+                                }
+                                NativeLiveHUDOverlay(recorder: recorder)
                             }
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
                         }
                     HStack { Text("Status"); Spacer(); Text(recorder.status) }
                     HStack { Text("Tempo"); Spacer(); Text(String(format: "%.1f km/h", recorder.speedKmh)).monospacedDigit() }
