@@ -93,8 +93,53 @@ function formatG(v){return Number.isFinite(v)?`${v.toFixed(2)}g`:'–';}
 function formatTime(s){const m=Math.floor(s/60);return `${String(m).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;}
 function drawCursor(t){
   const canvas=q('rideSessionG'); if(!canvas||!session)return;
-  // Re-render is handled by Update 11; add a high-contrast cursor without changing the data model.
   const duration=Math.max(1,session.durationSeconds||1),ctx=canvas.getContext('2d');
   const x=34+Math.min(1,t/duration)*(canvas.width-52);
   ctx.save();ctx.strokeStyle='#ff6680';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,12);ctx.lineTo(x,canvas.height-28);ctx.stroke();ctx.restore();
 }
+
+// Update 13: app dashboard and unified start flow.
+const appMain = document.querySelector('main');
+if (appMain && !document.getElementById('rideDashboard')) {
+  const style = document.createElement('style');
+  style.textContent = `
+    #rideDashboard{position:fixed;inset:0;z-index:1000;background:radial-gradient(circle at 50% -10%,#1a4168,#07111f 48%);overflow:auto;padding:calc(24px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom));color:var(--t)}
+    .dashInner{max-width:780px;margin:auto}.dashHero{margin:20px 0 24px}.dashHero h2{font-size:clamp(36px,10vw,64px);margin:0;letter-spacing:-.05em}.dashHero p{color:var(--m);font-size:16px;line-height:1.5}.dashMenu{display:grid;gap:12px}.dashAction{display:flex;align-items:center;text-align:left;gap:14px;width:100%;padding:18px;border-radius:18px;background:linear-gradient(180deg,#17304d,#10233a);border:1px solid var(--l)}.dashAction strong{display:block;font-size:18px}.dashAction small{display:block;color:var(--m);margin-top:4px;font-weight:500}.dashIcon{font-size:28px;width:42px}.dashCommunity{margin-top:22px;padding:16px;border:1px solid var(--l);border-radius:16px;background:#0b192a;color:var(--m);line-height:1.45}.appBack{position:fixed;right:14px;top:calc(12px + env(safe-area-inset-top));z-index:999;display:none}
+  `;
+  document.head.appendChild(style);
+  const dashboard = document.createElement('section');
+  dashboard.id = 'rideDashboard';
+  dashboard.innerHTML = `<div class="dashInner"><div class="dashHero"><div class="label">RideTracker Community</div><h2>Deine Fahrt.<br>Unsere Strecke.</h2><p>Fahrten aufzeichnen, auswerten und aus mehreren Messungen präzisere Achterbahn-Modelle aufbauen.</p></div><div class="dashMenu"><button class="dashAction" data-view="record"><span class="dashIcon">●</span><span><strong>Neue Fahrt</strong><small>Kalibrierung, Kamera und Sensoren gemeinsam starten</small></span></button><button class="dashAction" data-view="rides"><span class="dashIcon">☷</span><span><strong>Meine Fahrten</strong><small>RidePackages importieren und analysieren</small></span></button><button class="dashAction" data-view="map"><span class="dashIcon">⌖</span><span><strong>Karte</strong><small>Parks, Bahnen und aufgezeichnete Strecken</small></span></button></div><div class="dashCommunity"><b>Community-Ziel</b><br>Mehrfach aufgezeichnete Fahrten werden künftig räumlich ausgerichtet, von Ausreißern bereinigt und zu versionierten Master-Tracks mit Konfidenzwerten zusammengeführt.</div></div>`;
+  document.body.appendChild(dashboard);
+  const back = document.createElement('button'); back.className='appBack'; back.textContent='Menü'; document.body.appendChild(back);
+  const openApp = target => {
+    dashboard.style.display='none'; back.style.display='block';
+    if(target==='record') document.querySelector('.controls')?.scrollIntoView({behavior:'smooth'});
+    if(target==='rides') document.getElementById('sessionImportCard')?.scrollIntoView({behavior:'smooth'});
+    if(target==='map') document.getElementById('parkMapCard')?.scrollIntoView({behavior:'smooth'});
+  };
+  dashboard.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>openApp(button.dataset.view)));
+  back.addEventListener('click',()=>{dashboard.style.display='block';back.style.display='none';});
+}
+
+const oldControls = document.querySelector('.controls');
+if (oldControls && !document.getElementById('unifiedRideStart')) {
+  const unified = document.createElement('button');
+  unified.id='unifiedRideStart'; unified.className='primary'; unified.textContent='Kalibrieren & Fahrt starten';
+  oldControls.prepend(unified);
+  unified.addEventListener('click', async () => {
+    unified.disabled=true; unified.textContent='Initialisiere …';
+    try {
+      const init=q('init'), arm=q('arm'), start=q('start');
+      if(init && !init.disabled) { init.click(); await waitUntil(()=>!arm?.disabled,12000); }
+      if(arm && !arm.disabled) { arm.click(); await new Promise(r=>setTimeout(r,1200)); }
+      if(start && !start.disabled) start.click();
+      unified.textContent='Aufnahme läuft';
+    } catch(error) {
+      unified.disabled=false; unified.textContent='Erneut versuchen';
+      console.error('Unified ride start failed',error);
+    }
+  });
+  q('stop')?.addEventListener('click',()=>{unified.disabled=false;unified.textContent='Kalibrieren & Fahrt starten';});
+}
+function waitUntil(predicate, timeout=8000){return new Promise((resolve,reject)=>{const start=Date.now();const timer=setInterval(()=>{if(predicate()){clearInterval(timer);resolve();}else if(Date.now()-start>timeout){clearInterval(timer);reject(new Error('Zeitüberschreitung'));}},100);});}
