@@ -44,13 +44,10 @@ jobs:
 
       - name: Verify canonical HUD architecture
         run: |
-          # D: exactly one standalone editor is deployed.
           grep -q 'RideTrackerStandaloneHudEditor' update28.js
           grep -q 'update28.js?v=' index.html
-          # E: exactly one live renderer is deployed.
           grep -q 'rtConfiguredLiveHud' update29.js
           grep -q 'update29.js?v=' index.html
-          # A/B/C/F: legacy systems are not deployed.
           ! grep -q 'update20.js?v=' index.html
           ! grep -q 'update21.js?v=' index.html
           ! grep -q 'update22.js?v=' index.html
@@ -63,10 +60,8 @@ jobs:
           ! grep -E -q '>HUD: (Klein|Mittel|Groß)<' index.html
           ! grep -q '>HUD verschieben<' index.html
           ! grep -q '>Positionen zurücksetzen<' index.html
-          # Hidden bridge keeps legacy sensor update targets without rendering UI.
           grep -q 'id="rtLegacyTelemetryBridge"' index.html
           grep -q 'id="hudLong"' index.html
-          # Native recording views remain free of legacy controls.
           ! grep -R -E 'Modus: Telemetrie|HUD: (Klein|Mittel|Groß)|HUD verschieben|Positionen zurücksetzen|Streckenkonstruktion' native-ios/RideTrackerNative/ContentView.swift native-android/app/src/main/java/de/ridetracker/FunctionalRideTrackerApp.kt
 
       - name: Configure GitHub Pages
@@ -80,3 +75,5 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          timeout: 1200000
