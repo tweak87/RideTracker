@@ -7,35 +7,45 @@ struct ProfileRootView: View {
     @State private var showRideMedia = false
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            ContentView()
-
-            HStack(spacing: 8) {
-                Button { showRideMedia = true } label: {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.caption.bold())
-                        .padding(10)
-                        .background(.ultraThinMaterial, in: Circle())
+        ContentView()
+            .safeAreaInset(edge: .top, spacing: 0) {
+                HStack(spacing: 10) {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.headline)
+                        .frame(width: 38, height: 38)
+                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("RideTracker").font(.headline)
+                        Text("Fahrten · Telemetrie · Community")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    Button { showRideMedia = true } label: {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .frame(width: 38, height: 38)
+                            .background(.thinMaterial, in: Circle())
+                    }
+                    Button { showProfiles = true } label: {
+                        Label(profiles.activeProfile.name, systemImage: "person.crop.circle.fill")
+                            .font(.caption.bold())
+                            .lineLimit(1)
+                            .padding(.horizontal, 10)
+                            .frame(height: 38)
+                            .background(.thinMaterial, in: Capsule())
+                    }
                 }
-                Button { showProfiles = true } label: {
-                    Label(profiles.activeProfile.name, systemImage: "person.crop.circle.fill")
-                        .font(.caption.bold())
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(.ultraThinMaterial, in: Capsule())
-                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
             }
-            .padding(.top, 8)
-            .padding(.trailing, 12)
-
-            if recorder.isRecording {
-                VStack {
-                    Spacer()
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if recorder.isRecording {
                     HStack(spacing: 10) {
                         Circle().fill(.red).frame(width: 10, height: 10)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Aufnahme läuft").font(.headline)
-                            Text("Sensoren und optional Video werden aufgezeichnet.").font(.caption).opacity(0.8)
+                            Text("Sensoren und optional Video werden aufgezeichnet.")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
                         Button("Stoppen", role: .destructive) { recorder.stop() }
@@ -43,17 +53,13 @@ struct ProfileRootView: View {
                             .tint(.red)
                     }
                     .padding(12)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 6)
+                    .background(.ultraThinMaterial)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .zIndex(100)
             }
-        }
-        .animation(.easeInOut, value: recorder.isRecording)
-        .sheet(isPresented: $showProfiles) { ProfileManagementView() }
-        .sheet(isPresented: $showRideMedia) { RideMediaView(profiles: profiles).environmentObject(profiles) }
+            .animation(.easeInOut, value: recorder.isRecording)
+            .sheet(isPresented: $showProfiles) { ProfileManagementView() }
+            .sheet(isPresented: $showRideMedia) { RideMediaView(profiles: profiles).environmentObject(profiles) }
     }
 }
 
