@@ -55,13 +55,14 @@ data class RideSessionDocument(
     val communityComment: String = "",
     val heartRateSource: String? = null,
 ) {
-    fun toJson(): JSONObject = JSONObject().apply {
+    fun toJson(owner: LocalUserProfile? = null): JSONObject = JSONObject().apply {
         put("schemaVersion", "2.0.0")
         put("id", id)
         put("platform", "android")
         put("startedAt", startedAt.toString())
         put("endedAt", endedAt.toString())
         put("timebase", "elapsedRealtimeNanos")
+        owner?.let { put("owner", JSONObject().put("profileID", it.id).put("displayName", it.name)) }
         put("calibration", JSONObject().apply {
             put("mode", calibrationMode); put("source", "android_phone"); put("isCalibrated", calibration != null); put("forwardEdge", forwardEdge)
             putVector("up", calibration?.up); putVector("lateral", calibration?.lateral); putVector("forward", calibration?.forward)
@@ -89,7 +90,7 @@ data class RideSessionDocument(
     fun save(context: Context): File {
         val stamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC).format(startedAt)
         val file = File(context.filesDir, "RideTracker-$stamp-${id.take(8)}.ride.json")
-        file.writeText(toJson().toString(2)); RidePackageStore.save(context, this, file); return file
+        file.writeText(toJson(LocalProfileStore.current(context)).toString(2)); RidePackageStore.save(context, this, file); return file
     }
 }
 
