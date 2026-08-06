@@ -30,9 +30,10 @@ jobs:
           node --check update14.js
           node --check update15.js
           node --check update16.js
+          node --check update17.js
 
       - name: Add RideTracker modules
-        run: sed -i 's#</body>#<script src="update6.js"></script><script src="update7.js"></script><script src="update8.js"></script><script type="module" src="shared/ride-engine/browser-adapter.js"></script><script type="module" src="update11.js"></script><script type="module" src="update12.js"></script><script src="update13.js"></script><script src="update14.js"></script><script src="update16.js"></script><script src="update15.js"></script></body>#' index.html
+        run: sed -i 's#</body>#<script src="update6.js"></script><script src="update7.js"></script><script src="update8.js"></script><script type="module" src="shared/ride-engine/browser-adapter.js"></script><script type="module" src="update11.js"></script><script type="module" src="update12.js"></script><script src="update13.js"></script><script src="update14.js"></script><script src="update16.js"></script><script src="update15.js"></script><script src="update17.js"></script></body>#' index.html
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
