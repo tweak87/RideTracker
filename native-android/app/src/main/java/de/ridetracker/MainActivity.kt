@@ -24,7 +24,9 @@ import de.ridetracker.sensors.AndroidHeartRateManager
 import de.ridetracker.sensors.AndroidSensorRecorder
 import de.ridetracker.video.AndroidVideoRecorder
 
-enum class AppSection(val title: String) { HOME("Start"), RECORD("Aufzeichnen"), RIDES("Fahrten"), MAP("Karte") }
+enum class AppSection(val title: String) {
+    HOME("Start"), RECORD("Aufzeichnen"), RIDES("Fahrten"), MAP("Karte"), STATISTICS("Statistiken"), ACHIEVEMENTS("Achievements")
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,6 +70,8 @@ class MainActivity : ComponentActivity() {
                         )
                         AppSection.RIDES -> Placeholder(Modifier.padding(padding), "Meine Fahrten", "Lokale RidePackages werden hier als Liste eingebunden.")
                         AppSection.MAP -> Placeholder(Modifier.padding(padding), "Parkkarte", "Hier erscheinen Parks, Bahnen, eigene Fahrten und Community-Master-Tracks.")
+                        AppSection.STATISTICS -> StatisticsScreen(Modifier.padding(padding))
+                        AppSection.ACHIEVEMENTS -> AchievementsScreen(Modifier.padding(padding))
                     }
                 }
             }
@@ -77,12 +81,14 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun Dashboard(modifier: Modifier = Modifier, onSelect: (AppSection) -> Unit) {
-    Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("RideTracker", style = MaterialTheme.typography.headlineLarge)
         Text("Aufzeichnen, auswerten und gemeinsam präzisere Achterbahn-Strecken aufbauen.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         MenuCard("Neue Fahrt", "Kalibrierung, Sensoren und optional Video gemeinsam starten") { onSelect(AppSection.RECORD) }
         MenuCard("Meine Fahrten", "Gespeicherte RidePackages und Auswertungen") { onSelect(AppSection.RIDES) }
         MenuCard("Karte", "Parks, Bahnen und aufgezeichnete Strecken") { onSelect(AppSection.MAP) }
+        MenuCard("Statistiken", "Gefahrene Kilometer, Fahrzeit und persönliche Rekorde") { onSelect(AppSection.STATISTICS) }
+        MenuCard("Achievements", "Meilensteine und persönliche Erfolge") { onSelect(AppSection.ACHIEVEMENTS) }
     }
 }
 
