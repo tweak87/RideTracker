@@ -42,10 +42,11 @@ jobs:
           node --check update26.js
           node --check update27.js
           node --check update28.js
+          node --check update29.js
           node --check shared/overlay/overlay-core.js
 
       - name: Add RideTracker modules
-        run: sed -i 's#</body>#<script src="update6.js"></script><script src="update7.js"></script><script src="update8.js"></script><script type="module" src="shared/ride-engine/browser-adapter.js"></script><script type="module" src="update11.js"></script><script type="module" src="update12.js"></script><script src="update13.js"></script><script src="update14.js"></script><script src="update16.js"></script><script src="update15.js"></script><script src="update17.js"></script><script src="update18.js"></script><script src="update19.js"></script><script type="module" src="update20.js"></script><script type="module" src="update21.js"></script><script src="update22.js"></script><script src="update23.js"></script><script src="update24.js"></script><script src="update25.js"></script><script src="update26.js"></script><script src="update27.js"></script><script src="update28.js"></script></body>#' index.html
+        run: sed -i 's#</body>#<script src="update6.js"></script><script src="update7.js"></script><script src="update8.js"></script><script type="module" src="shared/ride-engine/browser-adapter.js"></script><script type="module" src="update11.js"></script><script type="module" src="update12.js"></script><script src="update13.js"></script><script src="update14.js"></script><script src="update16.js"></script><script src="update15.js"></script><script src="update17.js"></script><script src="update18.js"></script><script src="update19.js"></script><script type="module" src="update20.js"></script><script type="module" src="update21.js"></script><script src="update22.js"></script><script src="update23.js"></script><script src="update24.js"></script><script src="update25.js"></script><script src="update26.js"></script><script src="update27.js"></script><script src="update28.js"></script><script src="update29.js"></script></body>#' index.html
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
