@@ -24,23 +24,49 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate JavaScript syntax
+      - name: Validate active JavaScript syntax
         run: |
-          for file in update{13..32}.js shared/overlay/overlay-core.js; do node --check "$file"; done
+          for file in \
+            update13.js update14.js update15.js update16.js update17.js update18.js update19.js \
+            update23.js update24.js update25.js update26.js update27.js update28.js update29.js \
+            shared/overlay/overlay-core.js scripts/prepare-pages.mjs; do
+            node --check "$file"
+          done
 
-      - name: Add RideTracker modules
+      - name: Remove legacy HUD markup
+        run: node scripts/prepare-pages.mjs
+
+      - name: Add active RideTracker modules
         run: |
           VERSION="${GITHUB_SHA}"
-          sed -i "s#</body>#<script src=\"update6.js?v=${VERSION}\"></script><script src=\"update7.js?v=${VERSION}\"></script><script src=\"update8.js?v=${VERSION}\"></script><script type=\"module\" src=\"shared/ride-engine/browser-adapter.js?v=${VERSION}\"></script><script type=\"module\" src=\"update11.js?v=${VERSION}\"></script><script type=\"module\" src=\"update12.js?v=${VERSION}\"></script><script src=\"update13.js?v=${VERSION}\"></script><script src=\"update14.js?v=${VERSION}\"></script><script src=\"update16.js?v=${VERSION}\"></script><script src=\"update15.js?v=${VERSION}\"></script><script src=\"update17.js?v=${VERSION}\"></script><script src=\"update18.js?v=${VERSION}\"></script><script src=\"update19.js?v=${VERSION}\"></script><script type=\"module\" src=\"update20.js?v=${VERSION}\"></script><script type=\"module\" src=\"update21.js?v=${VERSION}\"></script><script src=\"update22.js?v=${VERSION}\"></script><script src=\"update23.js?v=${VERSION}\"></script><script src=\"update24.js?v=${VERSION}\"></script><script src=\"update25.js?v=${VERSION}\"></script><script src=\"update26.js?v=${VERSION}\"></script><script src=\"update27.js?v=${VERSION}\"></script><script src=\"update28.js?v=${VERSION}\"></script><script src=\"update29.js?v=${VERSION}\"></script><script src=\"update30.js?v=${VERSION}\"></script><script src=\"update31.js?v=${VERSION}\"></script><script src=\"update32.js?v=${VERSION}\"></script></body>#" index.html
+          sed -i "s#</body>#<script src=\"update6.js?v=${VERSION}\"></script><script src=\"update7.js?v=${VERSION}\"></script><script src=\"update8.js?v=${VERSION}\"></script><script type=\"module\" src=\"shared/ride-engine/browser-adapter.js?v=${VERSION}\"></script><script type=\"module\" src=\"update11.js?v=${VERSION}\"></script><script type=\"module\" src=\"update12.js?v=${VERSION}\"></script><script src=\"update13.js?v=${VERSION}\"></script><script src=\"update14.js?v=${VERSION}\"></script><script src=\"update16.js?v=${VERSION}\"></script><script src=\"update15.js?v=${VERSION}\"></script><script src=\"update17.js?v=${VERSION}\"></script><script src=\"update18.js?v=${VERSION}\"></script><script src=\"update19.js?v=${VERSION}\"></script><script src=\"update23.js?v=${VERSION}\"></script><script src=\"update24.js?v=${VERSION}\"></script><script src=\"update25.js?v=${VERSION}\"></script><script src=\"update26.js?v=${VERSION}\"></script><script src=\"update27.js?v=${VERSION}\"></script><script src=\"update28.js?v=${VERSION}\"></script><script src=\"update29.js?v=${VERSION}\"></script></body>#" index.html
           sed -i '/<head>/a <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">' index.html
 
-      - name: Verify canonical HUD routing
+      - name: Verify canonical HUD architecture
         run: |
-          ! grep -q 'toolbar.innerHTML' update20.js
-          ! grep -q 'canvas.id = .rtSharedOverlay.' update20.js
-          grep -q 'RideTrackerStandaloneHudEditor' update32.js
-          grep -q 'rtHudConfigView' update32.js
-          grep -q 'update32.js?v=' index.html
+          # D: exactly one standalone editor is deployed.
+          grep -q 'RideTrackerStandaloneHudEditor' update28.js
+          grep -q 'update28.js?v=' index.html
+          # E: exactly one live renderer is deployed.
+          grep -q 'rtConfiguredLiveHud' update29.js
+          grep -q 'update29.js?v=' index.html
+          # A/B/C/F: legacy systems are not deployed.
+          ! grep -q 'update20.js?v=' index.html
+          ! grep -q 'update21.js?v=' index.html
+          ! grep -q 'update22.js?v=' index.html
+          ! grep -q 'update30.js?v=' index.html
+          ! grep -q 'update31.js?v=' index.html
+          ! grep -q 'update32.js?v=' index.html
+          ! grep -q 'id="rtHudConfigView"' update23.js
+          ! grep -q 'id="rtHudCanvas"' index.html
+          ! grep -q '>Modus: Telemetrie<' index.html
+          ! grep -E -q '>HUD: (Klein|Mittel|Groß)<' index.html
+          ! grep -q '>HUD verschieben<' index.html
+          ! grep -q '>Positionen zurücksetzen<' index.html
+          # Hidden bridge keeps legacy sensor update targets without rendering UI.
+          grep -q 'id="rtLegacyTelemetryBridge"' index.html
+          grep -q 'id="hudLong"' index.html
+          # Native recording views remain free of legacy controls.
           ! grep -R -E 'Modus: Telemetrie|HUD: (Klein|Mittel|Groß)|HUD verschieben|Positionen zurücksetzen|Streckenkonstruktion' native-ios/RideTrackerNative/ContentView.swift native-android/app/src/main/java/de/ridetracker/FunctionalRideTrackerApp.kt
 
       - name: Configure GitHub Pages
