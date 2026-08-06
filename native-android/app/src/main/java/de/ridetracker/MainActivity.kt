@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import de.ridetracker.engine.ForwardEdge
@@ -25,7 +26,7 @@ import de.ridetracker.sensors.AndroidSensorRecorder
 import de.ridetracker.session.LocalProfileStore
 import de.ridetracker.video.AndroidVideoRecorder
 
-enum class AppSection { HOME, RECORD, RIDES, MAP, STATISTICS, ACHIEVEMENTS }
+enum class AppSection { HOME, RECORD, RIDES, MAP, STATISTICS, ACHIEVEMENTS, MEDIA }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,21 +57,46 @@ class MainActivity : ComponentActivity() {
 
                 if (showProfiles) ProfileDialog(profiles) { showProfiles = false }
 
-                Scaffold(bottomBar = {
-                    NavigationBar {
-                        NavigationBarItem(section == AppSection.HOME, { section = AppSection.HOME }, { Icon(Icons.Default.Home, null) }, label = { Text("Start") })
-                        NavigationBarItem(section == AppSection.RECORD, { section = AppSection.RECORD }, { Icon(Icons.Default.PlayCircle, null) }, label = { Text("Aufzeichnen") })
-                        NavigationBarItem(section == AppSection.RIDES, { section = AppSection.RIDES }, { Icon(Icons.Default.List, null) }, label = { Text("Fahrten") })
-                        NavigationBarItem(section == AppSection.MAP, { section = AppSection.MAP }, { Icon(Icons.Default.Map, null) }, label = { Text("Karte") })
+                Box(Modifier.fillMaxSize()) {
+                    Scaffold(bottomBar = {
+                        NavigationBar {
+                            NavigationBarItem(section == AppSection.HOME, { section = AppSection.HOME }, { Icon(Icons.Default.Home, null) }, label = { Text("Start") })
+                            NavigationBarItem(section == AppSection.RECORD, { section = AppSection.RECORD }, { Icon(Icons.Default.PlayCircle, null) }, label = { Text("Aufzeichnen") })
+                            NavigationBarItem(section == AppSection.RIDES, { section = AppSection.RIDES }, { Icon(Icons.Default.List, null) }, label = { Text("Fahrten") })
+                            NavigationBarItem(section == AppSection.MAP, { section = AppSection.MAP }, { Icon(Icons.Default.Map, null) }, label = { Text("Karte") })
+                        }
+                    }) { padding ->
+                        when (section) {
+                            AppSection.HOME -> Dashboard(Modifier.padding(padding), profiles.activeProfile.name, { showProfiles = true }) { section = it }
+                            AppSection.RECORD -> RecordingScreen(Modifier.padding(padding), recorder, videoRecorder, heartRate) { withVideo -> pendingVideo = withVideo; permissionLauncher.launch(permissions) }
+                            AppSection.RIDES -> Placeholder(Modifier.padding(padding), "Meine Fahrten", "Lokale RidePackages werden hier als Liste eingebunden.")
+                            AppSection.MAP -> Placeholder(Modifier.padding(padding), "Parkkarte", "Hier erscheinen Parks, Bahnen, eigene Fahrten und Community-Master-Tracks.")
+                            AppSection.STATISTICS -> StatisticsScreen(Modifier.padding(padding))
+                            AppSection.ACHIEVEMENTS -> AchievementsScreen(Modifier.padding(padding))
+                            AppSection.MEDIA -> RideMediaScreen(Modifier.padding(padding), profiles)
+                        }
                     }
-                }) { padding ->
-                    when (section) {
-                        AppSection.HOME -> Dashboard(Modifier.padding(padding), profiles.activeProfile.name, { showProfiles = true }) { section = it }
-                        AppSection.RECORD -> RecordingScreen(Modifier.padding(padding), recorder, videoRecorder, heartRate) { withVideo -> pendingVideo = withVideo; permissionLauncher.launch(permissions) }
-                        AppSection.RIDES -> Placeholder(Modifier.padding(padding), "Meine Fahrten", "Lokale RidePackages werden hier als Liste eingebunden.")
-                        AppSection.MAP -> Placeholder(Modifier.padding(padding), "Parkkarte", "Hier erscheinen Parks, Bahnen, eigene Fahrten und Community-Master-Tracks.")
-                        AppSection.STATISTICS -> StatisticsScreen(Modifier.padding(padding))
-                        AppSection.ACHIEVEMENTS -> AchievementsScreen(Modifier.padding(padding))
+                    if (recorder.isRecording) {
+                        Card(
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(start = 10.dp, end = 10.dp, bottom = 88.dp).fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                        ) {
+                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("●", color = MaterialTheme.colorScheme.error)
+                                Column(Modifier.weight(1f)) {
+                                    Text("Aufnahme läuft", style = MaterialTheme.typography.titleMedium)
+                                    Text("Sensoren und optional Video werden aufgezeichnet.", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Button(
+                                    onClick = {
+                                        videoRecorder.stop()
+                                        recorder.attachVideo(videoRecorder.lastVideoFile?.name, videoRecorder.startOffsetSeconds)
+                                        recorder.stop()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                                ) { Text("Stoppen") }
+                            }
+                        }
                     }
                 }
             }
@@ -88,6 +114,7 @@ private fun Dashboard(modifier: Modifier, profileName: String, onProfiles: () ->
         Text("Aufzeichnen, auswerten und gemeinsam präzisere Achterbahn-Strecken aufbauen.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         MenuCard("Neue Fahrt", "Kalibrierung, Sensoren und optional Video gemeinsam starten") { onSelect(AppSection.RECORD) }
         MenuCard("Meine Fahrten", "Gespeicherte RidePackages und Auswertungen") { onSelect(AppSection.RIDES) }
+        MenuCard("Bilder & Bewertungen", "Bahnbilder hinterlegen und Sterne vergeben") { onSelect(AppSection.MEDIA) }
         MenuCard("Karte", "Parks, Bahnen und aufgezeichnete Strecken") { onSelect(AppSection.MAP) }
         MenuCard("Statistiken", "Gefahrene Kilometer, Fahrzeit und persönliche Rekorde") { onSelect(AppSection.STATISTICS) }
         MenuCard("Achievements", "Meilensteine und persönliche Erfolge") { onSelect(AppSection.ACHIEVEMENTS) }
