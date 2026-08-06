@@ -10,14 +10,16 @@
   async function refresh(){
     if(!navigator.mediaDevices?.enumerateDevices) return [];
     const devices=await navigator.mediaDevices.enumerateDevices();
-    state.sources=devices.filter(d=>d.kind==='videoinput').map((d,index)=>({
+    const mediaSources=devices.filter(d=>d.kind==='videoinput').map((d,index)=>({
       id:d.deviceId||`camera-${index}`,
       label:d.label||`Kamera ${index+1}`,
       transport:'mediaDevices',
       available:true,
       quality:1,
     }));
-    if(!state.primary&&state.sources[0]) state.primary=state.sources[0].id;
+    const networkSources=state.sources.filter(source=>source.transport==='network');
+    state.sources=[...mediaSources,...networkSources];
+    if(!state.primary&&mediaSources[0]) state.primary=mediaSources[0].id;
     save();
     window.dispatchEvent(new CustomEvent('ridetracker:camera-sources',{detail:snapshot()}));
     return state.sources;
@@ -30,14 +32,39 @@
   function select(primary,fallbacks=[]){state.primary=primary||null;state.fallbacks=[...new Set(fallbacks.filter(Boolean))];save()}
   function ordered(){return [state.primary,...state.fallbacks].filter(Boolean).map(id=>state.sources.find(s=>s.id===id)).filter(Boolean)}
   function snapshot(){return {sources:state.sources.slice(),primary:state.primary,fallbacks:state.fallbacks.slice(),ordered:ordered()}}
+  function selectedMediaSource(){return ordered().find(source=>source.transport==='mediaDevices'&&source.available!==false)||state.sources.find(source=>source.transport==='mediaDevices')}
   async function constraints(){
-    const source=ordered().find(s=>s.available!==false)||state.sources[0];
+    const source=selectedMediaSource();
     if(!source) return {video:true,audio:true};
-    if(source.transport==='mediaDevices') return {video:{deviceId:{exact:source.id}},audio:true};
-    return {video:true,audio:true,externalUrl:source.url||null};
+    return {video:{deviceId:{exact:source.id}},audio:true};
   }
 
   load();
   navigator.mediaDevices?.addEventListener?.('devicechange',()=>refresh().catch(()=>{}));
+
+  const mediaDevices=navigator.mediaDevices;
+  if(mediaDevices?.getUserMedia&&!mediaDevices.__rideTrackerCameraWrapped){
+    const original=mediaDevices.getUserMedia.bind(mediaDevices);
+    mediaDevices.getUserMedia=async requested=>{
+      const input=requested&&typeof requested==='object'?{...requested}:{video:true};
+      if(input.video){
+        const source=selectedMediaSource();
+        const video=input.video===true?{}:{...(input.video||{})};
+        if(source&&!video.deviceId) video.deviceId={exact:source.id};
+        input.video=video;
+      }
+      try{return await original(input)}catch(error){
+        if(input.video&&input.video.deviceId){
+          const fallback={...input,video:{...input.video}};
+          delete fallback.video.deviceId;
+          return original(fallback);
+        }
+        throw error;
+      }
+    };
+    Object.defineProperty(mediaDevices,'__rideTrackerCameraWrapped',{value:true});
+  }
+
   window.RideTrackerCameraSources={refresh,addNetworkSource,select,ordered,snapshot,constraints};
+  refresh().catch(()=>{});
 })();
