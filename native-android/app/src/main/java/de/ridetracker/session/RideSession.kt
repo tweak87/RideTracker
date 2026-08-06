@@ -107,6 +107,7 @@ data class RideSessionDocument(
         val stamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC).format(startedAt)
         val file = File(context.filesDir, "RideTracker-$stamp-${id.take(8)}.ride.json")
         file.writeText(toJson().toString(2))
+        RidePackageStore.save(context, this, file)
         return file
     }
 }
