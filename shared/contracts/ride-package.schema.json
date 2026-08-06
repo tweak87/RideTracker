@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ridetracker.app/schemas/ride-package-1.0.0.json",
+  "title": "RideTracker RidePackage Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "packageVersion",
+    "sessionID",
+    "createdAt",
+    "telemetry",
+    "media",
+    "integrity"
+  ],
+  "properties": {
+    "packageVersion": { "const": "1.0.0" },
+    "sessionID": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 128
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "platform": {
+      "type": "string",
+      "enum": ["web", "ios", "android", "imported"]
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filename", "schemaVersion", "sessionID"],
+      "properties": {
+        "filename": { "type": "string", "pattern": "\\.ride\\.json$" },
+        "schemaVersion": { "const": "2.0.0" },
+        "sessionID": { "type": "string" },
+        "sampleCount": { "type": "integer", "minimum": 0 },
+        "durationSeconds": { "type": "number", "minimum": 0 }
+      }
+    },
+    "media": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "filename", "sessionID", "startOffsetSeconds"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["video", "photo", "audio"] },
+          "filename": { "type": "string", "minLength": 1 },
+          "sessionID": { "type": "string" },
+          "startOffsetSeconds": { "type": "number" },
+          "durationSeconds": { "type": "number", "minimum": 0 },
+          "mimeType": { "type": "string" },
+          "sizeBytes": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "parkID": { "type": ["string", "null"] },
+        "rideID": { "type": ["string", "null"] },
+        "parkName": { "type": ["string", "null"] },
+        "rideName": { "type": ["string", "null"] },
+        "latitude": { "type": ["number", "null"], "minimum": -90, "maximum": 90 },
+        "longitude": { "type": ["number", "null"], "minimum": -180, "maximum": 180 }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["visibility", "locationPrecision"],
+      "properties": {
+        "visibility": { "type": "string", "enum": ["private", "unlisted", "community"] },
+        "locationPrecision": { "type": "string", "enum": ["exact", "park", "hidden"] }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "files"],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "files": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{64}$"
+          }
+        }
+      }
+    }
+  }
+}
