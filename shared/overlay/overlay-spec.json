@@ -1,0 +1,48 @@
+{
+  "version": "1.0.0",
+  "designWidth": 1920,
+  "designHeight": 1080,
+  "axes": {
+    "x": "lateral",
+    "y": "longitudinal",
+    "z": "vertical",
+    "positive": { "lateral": "right", "longitudinal": "forward", "vertical": "up" }
+  },
+  "theme": {
+    "cyan": "#00E5FF",
+    "white": "#F5FBFF",
+    "muted": "#7D929A",
+    "panel": "#DB061416",
+    "grid": "#59234047",
+    "heart": "#FF334E",
+    "warning": "#FFAA20",
+    "critical": "#FF3B30"
+  },
+  "layout": {
+    "pulse": [0.020, 0.618, 0.292, 0.315],
+    "gDial": [0.417, 0.481, 0.167, 0.296],
+    "gValues": [0.330, 0.834, 0.344, 0.110],
+    "speed": [0.704, 0.608, 0.277, 0.330],
+    "vibration": [0.801, 0.061, 0.185, 0.240]
+  },
+  "limits": {
+    "gDisplayRange": 4.0,
+    "speedScales": [100, 200, 300],
+    "pulseWarning": 120,
+    "pulseCritical": 160,
+    "vibrationWarning": 3.0,
+    "vibrationCritical": 7.0
+  },
+  "smoothingMs": {
+    "gPointer": 80,
+    "gNumbers": 150,
+    "speed": 250,
+    "heartRate": 300,
+    "vibration": 100
+  },
+  "sampling": {
+    "motionHz": 100,
+    "displayHz": 60,
+    "vibrationHz": 25
+  }
+}
