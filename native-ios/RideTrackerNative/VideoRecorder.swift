@@ -10,6 +10,7 @@ final class VideoRecorder: NSObject, ObservableObject, AVCaptureFileOutputRecord
     @Published private(set) var startOffsetSeconds: Double = 0
 
     let captureSession = AVCaptureSession()
+    let cameraSources = CameraSourceManager()
     private let movieOutput = AVCaptureMovieFileOutput()
     private let sessionQueue = DispatchQueue(label: "de.ridetracker.camera")
     private var sensorStartUptime: TimeInterval = 0
@@ -18,21 +19,31 @@ final class VideoRecorder: NSObject, ObservableObject, AVCaptureFileOutputRecord
         let camera = await AVCaptureDevice.requestAccess(for: .video)
         let microphone = await AVCaptureDevice.requestAccess(for: .audio)
         guard camera else { status = "Kamerazugriff verweigert"; return }
-        configure(includeAudio: microphone)
+        cameraSources.refresh()
+        configure(includeAudio: microphone, camera: cameraSources.selectedDevice())
     }
 
-    private func configure(includeAudio: Bool) {
-        guard !isConfigured else { return }
+    func reconfigureSelectedCamera() {
+        guard !isRecording else { status = "Kamera kann während der Aufnahme nicht gewechselt werden"; return }
+        cameraSources.refresh()
+        isConfigured = false
+        configure(includeAudio: AVCaptureDevice.authorizationStatus(for: .audio) == .authorized, camera: cameraSources.selectedDevice())
+    }
+
+    private func configure(includeAudio: Bool, camera: AVCaptureDevice?) {
         sessionQueue.async { [weak self] in
             guard let self else { return }
+            self.captureSession.stopRunning()
             self.captureSession.beginConfiguration()
             self.captureSession.sessionPreset = .high
+            self.captureSession.inputs.forEach(self.captureSession.removeInput)
+            self.captureSession.outputs.forEach(self.captureSession.removeOutput)
             defer { self.captureSession.commitConfiguration() }
 
-            guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+            guard let camera,
                   let videoInput = try? AVCaptureDeviceInput(device: camera),
                   self.captureSession.canAddInput(videoInput) else {
-                Task { @MainActor in self.status = "Rückkamera nicht verfügbar" }
+                Task { @MainActor in self.status = "Ausgewählte Kamera nicht verfügbar" }
                 return
             }
             self.captureSession.addInput(videoInput)
@@ -51,7 +62,7 @@ final class VideoRecorder: NSObject, ObservableObject, AVCaptureFileOutputRecord
             self.captureSession.startRunning()
             Task { @MainActor in
                 self.isConfigured = true
-                self.status = "Video bereit"
+                self.status = "Video bereit: \(camera.localizedName)"
             }
         }
     }
