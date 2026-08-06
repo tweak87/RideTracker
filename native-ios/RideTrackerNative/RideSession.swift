@@ -15,7 +15,10 @@ struct RideSessionDocument: Codable, Identifiable {
     let startedAt: Date
     let endedAt: Date
     let timebase: String
-    let owner: RideSessionOwner
+    var owner: RideSessionOwner = {
+        let profile = UserProfileStore.current
+        return RideSessionOwner(profileID: profile.id.uuidString, displayName: profile.name)
+    }()
     let calibration: RideSessionCalibration
     let video: RideSessionVideo
     let events: [RideSessionEvent]
