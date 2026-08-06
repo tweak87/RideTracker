@@ -3,10 +3,19 @@ import fs from 'node:fs';
 import { chooseSpeedScale, normalizeFrame, pointerPosition, smoothValue, vibrationLevel } from './overlay-core.js';
 const spec = JSON.parse(fs.readFileSync(new URL('./overlay-spec.json', import.meta.url)));
 assert.equal(spec.designWidth, 1920);
+assert.equal(spec.portraitDesignHeight, 1920);
 assert.equal(spec.axes.x, 'lateral');
 assert.equal(spec.axes.y, 'longitudinal');
 assert.equal(spec.axes.z, 'vertical');
-assert.deepEqual(spec.layout.gDial, [0.417,0.481,0.167,0.296]);
+assert.deepEqual(spec.layouts.landscape.gDial, [0.417,0.481,0.167,0.296]);
+assert.deepEqual(spec.layouts.portrait.gDial, [0.250,0.255,0.500,0.280]);
+for (const layout of Object.values(spec.layouts)) for (const rect of Object.values(layout)) {
+  assert.equal(rect.length, 4);
+  assert.ok(rect.every(Number.isFinite));
+  assert.ok(rect[0] >= 0 && rect[1] >= 0 && rect[2] > 0 && rect[3] > 0);
+  assert.ok(rect[0] + rect[2] <= 1.001 && rect[1] + rect[3] <= 1.001);
+}
+assert.equal(spec.derivedMetrics.jerk, 'd(gForce)/dt');
 assert.equal(chooseSpeedScale(87, 91, spec.limits.speedScales), 100);
 assert.equal(chooseSpeedScale(187, 201, spec.limits.speedScales), 300);
 assert.equal(vibrationLevel(2.9, spec.limits), 'low');
