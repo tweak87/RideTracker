@@ -57,46 +57,66 @@ class MainActivity : ComponentActivity() {
 
                 if (showProfiles) ProfileDialog(profiles) { showProfiles = false }
 
-                Box(Modifier.fillMaxSize()) {
-                    Scaffold(bottomBar = {
-                        NavigationBar {
-                            NavigationBarItem(section == AppSection.HOME, { section = AppSection.HOME }, { Icon(Icons.Default.Home, null) }, label = { Text("Start") })
-                            NavigationBarItem(section == AppSection.RECORD, { section = AppSection.RECORD }, { Icon(Icons.Default.PlayCircle, null) }, label = { Text("Aufzeichnen") })
-                            NavigationBarItem(section == AppSection.RIDES, { section = AppSection.RIDES }, { Icon(Icons.Default.List, null) }, label = { Text("Fahrten") })
-                            NavigationBarItem(section == AppSection.MAP, { section = AppSection.MAP }, { Icon(Icons.Default.Map, null) }, label = { Text("Karte") })
-                        }
-                    }) { padding ->
-                        when (section) {
-                            AppSection.HOME -> Dashboard(Modifier.padding(padding), profiles.activeProfile.name, { showProfiles = true }) { section = it }
-                            AppSection.RECORD -> RecordingScreen(Modifier.padding(padding), recorder, videoRecorder, heartRate) { withVideo -> pendingVideo = withVideo; permissionLauncher.launch(permissions) }
-                            AppSection.RIDES -> Placeholder(Modifier.padding(padding), "Meine Fahrten", "Lokale RidePackages werden hier als Liste eingebunden.")
-                            AppSection.MAP -> Placeholder(Modifier.padding(padding), "Parkkarte", "Hier erscheinen Parks, Bahnen, eigene Fahrten und Community-Master-Tracks.")
-                            AppSection.STATISTICS -> StatisticsScreen(Modifier.padding(padding))
-                            AppSection.ACHIEVEMENTS -> AchievementsScreen(Modifier.padding(padding))
-                            AppSection.MEDIA -> RideMediaScreen(Modifier.padding(padding), profiles)
-                        }
-                    }
-                    if (recorder.isRecording) {
-                        Card(
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(start = 10.dp, end = 10.dp, bottom = 88.dp).fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-                        ) {
-                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text("●", color = MaterialTheme.colorScheme.error)
+                Scaffold(
+                    contentWindowInsets = WindowInsets.safeDrawing,
+                    topBar = {
+                        Surface(tonalElevation = 3.dp) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text("☰", style = MaterialTheme.typography.titleLarge)
                                 Column(Modifier.weight(1f)) {
-                                    Text("Aufnahme läuft", style = MaterialTheme.typography.titleMedium)
-                                    Text("Sensoren und optional Video werden aufgezeichnet.", style = MaterialTheme.typography.bodySmall)
+                                    Text("RideTracker", style = MaterialTheme.typography.titleMedium)
+                                    Text("Fahrten · Telemetrie · Community", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Button(
-                                    onClick = {
-                                        videoRecorder.stop()
-                                        recorder.attachVideo(videoRecorder.lastVideoFile?.name, videoRecorder.startOffsetSeconds)
-                                        recorder.stop()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                                ) { Text("Stoppen") }
+                                TextButton(onClick = { showProfiles = true }) { Text("👤 ${profiles.activeProfile.name}", maxLines = 1) }
                             }
                         }
+                    },
+                    bottomBar = {
+                        Column {
+                            if (recorder.isRecording) {
+                                Surface(color = MaterialTheme.colorScheme.errorContainer, tonalElevation = 6.dp) {
+                                    Row(
+                                        Modifier.fillMaxWidth().padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Text("●", color = MaterialTheme.colorScheme.error)
+                                        Column(Modifier.weight(1f)) {
+                                            Text("Aufnahme läuft", style = MaterialTheme.typography.titleMedium)
+                                            Text("Sensoren und optional Video werden aufgezeichnet.", style = MaterialTheme.typography.bodySmall)
+                                        }
+                                        Button(
+                                            onClick = {
+                                                videoRecorder.stop()
+                                                recorder.attachVideo(videoRecorder.lastVideoFile?.name, videoRecorder.startOffsetSeconds)
+                                                recorder.stop()
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                                        ) { Text("Stoppen") }
+                                    }
+                                }
+                            }
+                            NavigationBar {
+                                NavigationBarItem(section == AppSection.HOME, { section = AppSection.HOME }, { Icon(Icons.Default.Home, null) }, label = { Text("Start") })
+                                NavigationBarItem(section == AppSection.RECORD, { section = AppSection.RECORD }, { Icon(Icons.Default.PlayCircle, null) }, label = { Text("Aufzeichnen") })
+                                NavigationBarItem(section == AppSection.RIDES, { section = AppSection.RIDES }, { Icon(Icons.Default.List, null) }, label = { Text("Fahrten") })
+                                NavigationBarItem(section == AppSection.MAP, { section = AppSection.MAP }, { Icon(Icons.Default.Map, null) }, label = { Text("Karte") })
+                            }
+                        }
+                    }
+                ) { padding ->
+                    when (section) {
+                        AppSection.HOME -> Dashboard(Modifier.padding(padding), profiles.activeProfile.name, { showProfiles = true }) { section = it }
+                        AppSection.RECORD -> RecordingScreen(Modifier.padding(padding), recorder, videoRecorder, heartRate) { withVideo -> pendingVideo = withVideo; permissionLauncher.launch(permissions) }
+                        AppSection.RIDES -> Placeholder(Modifier.padding(padding), "Meine Fahrten", "Lokale RidePackages werden hier als Liste eingebunden.")
+                        AppSection.MAP -> Placeholder(Modifier.padding(padding), "Parkkarte", "Hier erscheinen Parks, Bahnen, eigene Fahrten und Community-Master-Tracks.")
+                        AppSection.STATISTICS -> StatisticsScreen(Modifier.padding(padding))
+                        AppSection.ACHIEVEMENTS -> AchievementsScreen(Modifier.padding(padding))
+                        AppSection.MEDIA -> RideMediaScreen(Modifier.padding(padding), profiles)
                     }
                 }
             }
@@ -107,10 +127,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun Dashboard(modifier: Modifier, profileName: String, onProfiles: () -> Unit, onSelect: (AppSection) -> Unit) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Column { Text("RideTracker", style = MaterialTheme.typography.headlineLarge); Text("Angemeldet: $profileName", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Button(onClick = onProfiles) { Text("Benutzer") }
-        }
+        Text("Übersicht", style = MaterialTheme.typography.headlineLarge)
+        Text("Angemeldet: $profileName", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("Aufzeichnen, auswerten und gemeinsam präzisere Achterbahn-Strecken aufbauen.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         MenuCard("Neue Fahrt", "Kalibrierung, Sensoren und optional Video gemeinsam starten") { onSelect(AppSection.RECORD) }
         MenuCard("Meine Fahrten", "Gespeicherte RidePackages und Auswertungen") { onSelect(AppSection.RIDES) }
@@ -118,6 +136,7 @@ private fun Dashboard(modifier: Modifier, profileName: String, onProfiles: () ->
         MenuCard("Karte", "Parks, Bahnen und aufgezeichnete Strecken") { onSelect(AppSection.MAP) }
         MenuCard("Statistiken", "Gefahrene Kilometer, Fahrzeit und persönliche Rekorde") { onSelect(AppSection.STATISTICS) }
         MenuCard("Achievements", "Meilensteine und persönliche Erfolge") { onSelect(AppSection.ACHIEVEMENTS) }
+        OutlinedButton(onClick = onProfiles, modifier = Modifier.fillMaxWidth()) { Text("Benutzer verwalten") }
     }
 }
 
@@ -194,7 +213,6 @@ private fun RecordingScreen(modifier: Modifier, recorder: AndroidSensorRecorder,
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(onClick = heartRate::scan) { Text("Pulsuhr suchen") }; Button(onClick = heartRate::connect) { Text("Verbinden") } }
         }
         if (!recorder.isRecording) Button(onClick = { showStartDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("Kalibrieren & Fahrt starten") }
-        else Button(onClick = { videoRecorder.stop(); recorder.attachVideo(videoRecorder.lastVideoFile?.name, videoRecorder.startOffsetSeconds); recorder.stop() }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Aufnahme stoppen") }
         Button(enabled = !recorder.isRecording && recorder.sampleCount > 0, onClick = { recorder.attachVideo(videoRecorder.lastVideoFile?.name, videoRecorder.startOffsetSeconds); recorder.saveSession() }, modifier = Modifier.fillMaxWidth()) { Text("RidePackage speichern") }
     }
 }
