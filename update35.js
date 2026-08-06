@@ -11,7 +11,8 @@
   }
   function sourceId(deviceId,channelId){return `${deviceId}/${channelId}`}
   function ingest(metric,deviceId,channelId,value,quality=1,timestamp=performance.now()){
-    latest.set(sourceId(deviceId,channelId),{metric,value,quality,timestamp,deviceId,channelId});
+    const normalizedQuality=Math.max(0,Math.min(1,Number(quality)||0));
+    latest.set(sourceId(deviceId,channelId),{metric,value,quality:normalizedQuality,timestamp,deviceId,channelId});
     const resolved=resolve(metric,timestamp);
     window.dispatchEvent(new CustomEvent('ridetracker:routed-telemetry',{detail:resolved}));
     return resolved;
@@ -51,6 +52,15 @@
     const d=event.detail||{};
     if(Number.isFinite(d.speedKmh)) ingest('speedKmh','phone-gps','speed',d.speedKmh,Number(d.quality??1),Number(d.timestampMs??performance.now()));
     if(Number.isFinite(d.gForce)) ingest('gForce','phone-motion','motion',d.gForce,Number(d.quality??1),Number(d.timestampMs??performance.now()));
+  });
+  window.addEventListener('ridetracker:external-telemetry',event=>{
+    const packet=event.detail||{};
+    const deviceId=String(packet.deviceId||'external-device');
+    const timestamp=Number(packet.timestampMs??performance.now());
+    for(const channel of Array.isArray(packet.channels)?packet.channels:[]){
+      if(!channel||typeof channel.metric!=='string'||!Number.isFinite(Number(channel.value))) continue;
+      ingest(channel.metric,deviceId,String(channel.channelId||channel.metric),Number(channel.value),Number(channel.quality??packet.quality??1),timestamp);
+    }
   });
 
   window.RideTrackerRecordingSourceRouter={ingest,resolve,latest:()=>Object.fromEntries(latest),switchLog:()=>switches.slice()};
