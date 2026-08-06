@@ -31,8 +31,14 @@ final class TelemetrySourceRouter: ObservableObject {
     private var active: [String: String] = [:]
     var policies: [TelemetrySourcePolicy] = []
 
+    func reset() {
+        latest.removeAll(keepingCapacity: true)
+        active.removeAll(keepingCapacity: true)
+        switches.removeAll(keepingCapacity: true)
+    }
+
     func ingest<Value>(metric: String, sourceID: String, value: Value, quality: Double = 1, timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime) {
-        latest[sourceID] = (metric, value, quality, timestamp)
+        latest[sourceID] = (metric, value, min(max(quality, 0), 1), timestamp)
     }
 
     func resolve<Value>(_ metric: String, at now: TimeInterval = ProcessInfo.processInfo.systemUptime, as type: Value.Type = Value.self) -> RoutedTelemetrySample<Value>? {
