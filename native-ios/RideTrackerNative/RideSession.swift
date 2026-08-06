@@ -6,6 +6,7 @@ struct RideSessionVideo: Codable { let sessionID: String; let filename: String?;
 struct RideSessionSummary: Codable { let durationSeconds: TimeInterval; let sampleCount: Int; let distanceMeters: Double; let acceptedLocations: Int; let rejectedLocations: Int; let qualityScore: Int; let finalPhase: String }
 struct RideSessionNotes: Codable { let privateNote: String; let communityComment: String }
 struct RideSessionHeartRate: Codable { let source: String?; let sampleCount: Int; let averageBpm: Double? }
+struct RideSessionOwner: Codable { let profileID: String; let displayName: String }
 
 struct RideSessionDocument: Codable, Identifiable {
     let schemaVersion: String
@@ -14,6 +15,7 @@ struct RideSessionDocument: Codable, Identifiable {
     let startedAt: Date
     let endedAt: Date
     let timebase: String
+    let owner: RideSessionOwner
     let calibration: RideSessionCalibration
     let video: RideSessionVideo
     let events: [RideSessionEvent]
