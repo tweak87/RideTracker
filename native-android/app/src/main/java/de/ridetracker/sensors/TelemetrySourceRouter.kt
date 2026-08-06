@@ -33,8 +33,14 @@ class TelemetrySourceRouter {
     val switches=mutableListOf<TelemetrySourceSwitch>()
     var policies:List<TelemetrySourcePolicy> = emptyList()
 
+    fun reset() {
+        latest.clear()
+        active.clear()
+        switches.clear()
+    }
+
     fun ingest(metric:String,sourceId:String,value:Any,quality:Double=1.0,timestampMs:Long=SystemClock.elapsedRealtime()) {
-        latest[sourceId]=Stored(metric,value,quality,timestampMs)
+        latest[sourceId]=Stored(metric,value,quality.coerceIn(0.0,1.0),timestampMs)
     }
 
     inline fun <reified T> resolve(metric:String,nowMs:Long=SystemClock.elapsedRealtime()):RoutedTelemetrySample<T>? = resolve(metric,nowMs,T::class.java)
