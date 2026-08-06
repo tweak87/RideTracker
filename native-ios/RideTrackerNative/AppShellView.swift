@@ -43,7 +43,7 @@ struct AppShellView: View {
                 .tag(NativeSection.map).tabItem { Label("Karte", systemImage: NativeSection.map.icon) }
             NativeSettingsView()
                 .tag(NativeSection.settings).tabItem { Label("Einstellungen", systemImage: NativeSection.settings.icon) }
-            NativeHUDSettingsView()
+            NativeHUDFullscreenLauncher()
                 .tag(NativeSection.hud).tabItem { Label("HUD", systemImage: NativeSection.hud.icon) }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -77,7 +77,7 @@ private struct NativeDashboard: View {
                     NativeMenuCard("Meine Fahrten", "Gespeicherte RidePackages öffnen", "list.bullet.rectangle.fill") { section = .rides }
                     NativeMenuCard("Parks & Strecken", "GPS-Fahrten und Startpositionen", "map.fill") { section = .map }
                     NativeMenuCard("Einstellungen", "Kalibrierung, Sensoren und Berechtigungen", "gearshape.fill") { section = .settings }
-                    NativeMenuCard("HUD-Konfiguration", "Größe, Transparenz und Elemente", "rectangle.3.group.fill") { section = .hud }
+                    NativeMenuCard("HUD-Konfiguration", "Vollbild-Editor für Hoch- und Querformat", "rectangle.3.group.fill") { section = .hud }
                     Button("Benutzer verwalten", action: showProfiles).buttonStyle(.bordered).frame(maxWidth: .infinity)
                 }.padding()
             }.navigationTitle("Übersicht")
