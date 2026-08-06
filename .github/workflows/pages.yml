@@ -24,8 +24,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Validate JavaScript syntax
+        run: node --check update13.js
+
       - name: Add RideTracker modules
-        run: sed -i 's#</body>#<script src="update6.js"></script><script src="update7.js"></script><script src="update8.js"></script><script type="module" src="shared/ride-engine/browser-adapter.js"></script><script type="module" src="update11.js"></script><script type="module" src="update12.js"></script></body>#' index.html
+        run: sed -i 's#</body>#<script src="update6.js"></script><script src="update7.js"></script><script src="update8.js"></script><script type="module" src="shared/ride-engine/browser-adapter.js"></script><script type="module" src="update11.js"></script><script type="module" src="update12.js"></script><script src="update13.js"></script></body>#' index.html
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
