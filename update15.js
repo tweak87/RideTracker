@@ -14,7 +14,7 @@
   }, true);
 
   async function getRides() {
-    return new Promise((resolve, reject) => {
+    const rides = await new Promise((resolve, reject) => {
       const request = indexedDB.open('RideTrackerLibrary', 1);
       request.onsuccess = () => {
         const db = request.result;
@@ -24,6 +24,8 @@
       };
       request.onerror = () => reject(request.error);
     });
+    const active = window.RideTrackerProfiles?.activeId?.() || 'local-default';
+    return rides.filter(r => (r.ownerProfileId || 'local-default') === active);
   }
 
   const num = value => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -31,9 +33,7 @@
     const parks = new Set(rides.map(r => r.parkName).filter(Boolean));
     const tracks = new Set(rides.map(r => `${r.parkName || ''}|${r.rideName || ''}`).filter(v => v !== '|'));
     return {
-      rides: rides.length,
-      parks: parks.size,
-      tracks: tracks.size,
+      rides: rides.length, parks: parks.size, tracks: tracks.size,
       distance: rides.reduce((sum, r) => sum + num(r.distanceMeters), 0),
       duration: rides.reduce((sum, r) => sum + num(r.durationSeconds), 0),
       bestQuality: rides.reduce((best, r) => Math.max(best, num(r.qualityScore)), 0),
@@ -45,22 +45,24 @@
   function ensureStyle() {
     if (document.getElementById('rtStatsStyle')) return;
     const style = document.createElement('style'); style.id = 'rtStatsStyle';
-    style.textContent = `.rt-metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.rt-metric{padding:16px;border:1px solid #29435f;border-radius:16px;background:#0c192a}.rt-metric span{display:block;color:#96aac1;font-size:12px}.rt-metric b{display:block;margin-top:5px;font-size:24px}.rt-achievements{display:grid;gap:10px}.rt-achievement{padding:14px;border:1px solid #29435f;border-radius:15px;background:#0c192a;opacity:.55}.rt-achievement.done{opacity:1;border-color:#4bbd87}.rt-achievement strong{display:block}.rt-achievement span{color:#96aac1;font-size:13px}`;
+    style.textContent = `.rt-metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.rt-metric{padding:16px;border:1px solid #29435f;border-radius:16px;background:#0c192a}.rt-metric span{display:block;color:#96aac1;font-size:12px}.rt-metric b{display:block;margin-top:5px;font-size:24px}.rt-achievements{display:grid;gap:10px}.rt-achievement{padding:14px;border:1px solid #29435f;border-radius:15px;background:#0c192a;opacity:.55}.rt-achievement.done{opacity:1;border-color:#4bbd87}.rt-achievement strong{display:block}.rt-achievement span{color:#96aac1;font-size:13px}.rt-stats-actions{display:flex;justify-content:flex-end;margin-top:16px}`;
     document.head.appendChild(style);
   }
 
   function closeView() { document.querySelector('.rt-stats-view')?.remove(); }
   function createView(title) {
     closeView();
+    const profile = window.RideTrackerProfiles?.activeProfile?.();
     const section = document.createElement('section'); section.className = 'rt-view rt-stats-view';
-    section.innerHTML = `<div class="rt-shell"><header class="rt-head"><div><h2>${title}</h2><div class="rt-meta">Aus lokal gespeicherten Fahrten berechnet</div></div><button class="rt-back">Zurück</button></header><div class="rt-stats-content"></div></div>`;
+    section.innerHTML = `<div class="rt-shell"><header class="rt-head"><div><h2>${title}</h2><div class="rt-meta">${profile ? `Benutzer: ${profile.name}` : 'Aus lokal gespeicherten Fahrten berechnet'}</div></div><button class="rt-back">Zurück</button></header><div class="rt-stats-content"></div></div>`;
     section.querySelector('.rt-back').onclick = closeView; document.body.appendChild(section); return section.querySelector('.rt-stats-content');
   }
 
   async function showStats() {
     const content = createView('Statistiken'), s = aggregate(await getRides());
     const hours = Math.floor(s.duration / 3600), minutes = Math.floor((s.duration % 3600) / 60);
-    content.innerHTML = `<div class="rt-metric-grid"><div class="rt-metric"><span>Fahrten</span><b>${s.rides}</b></div><div class="rt-metric"><span>Gesamtstrecke</span><b>${(s.distance/1000).toFixed(2)} km</b></div><div class="rt-metric"><span>Fahrzeit</span><b>${hours} h ${minutes} min</b></div><div class="rt-metric"><span>Parks</span><b>${s.parks}</b></div><div class="rt-metric"><span>Bahnen</span><b>${s.tracks}</b></div><div class="rt-metric"><span>Max. Tempo</span><b>${s.maxSpeed.toFixed(1)} km/h</b></div><div class="rt-metric"><span>Max. Gesamt-G</span><b>${s.maxG.toFixed(2)} g</b></div><div class="rt-metric"><span>Beste Qualität</span><b>${Math.round(s.bestQuality)}/100</b></div></div>`;
+    content.innerHTML = `<div class="rt-metric-grid"><div class="rt-metric"><span>Fahrten</span><b>${s.rides}</b></div><div class="rt-metric"><span>Gesamtstrecke</span><b>${(s.distance/1000).toFixed(2)} km</b></div><div class="rt-metric"><span>Fahrzeit</span><b>${hours} h ${minutes} min</b></div><div class="rt-metric"><span>Parks</span><b>${s.parks}</b></div><div class="rt-metric"><span>Bahnen</span><b>${s.tracks}</b></div><div class="rt-metric"><span>Max. Tempo</span><b>${s.maxSpeed.toFixed(1)} km/h</b></div><div class="rt-metric"><span>Max. Gesamt-G</span><b>${s.maxG.toFixed(2)} g</b></div><div class="rt-metric"><span>Beste Qualität</span><b>${Math.round(s.bestQuality)}/100</b></div></div><div class="rt-stats-actions"><button id="rtStatsReset">Statistiken zurücksetzen</button></div>`;
+    content.querySelector('#rtStatsReset').onclick = () => window.RideTrackerProfiles?.resetActiveStatistics?.();
   }
 
   async function showAchievements() {
