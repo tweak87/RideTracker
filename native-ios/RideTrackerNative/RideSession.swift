@@ -58,6 +58,7 @@ enum RideSessionStore {
         let filename = "RideTracker-\(formatter.string(from: session.startedAt))-\(session.id.uuidString.prefix(8)).ride.json"
         let url = directory.appendingPathComponent(filename)
         try data.write(to: url, options: .atomic)
+        _ = try RidePackageStore.save(session: session, telemetryURL: url)
         return url
     }
 }
