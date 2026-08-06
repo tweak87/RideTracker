@@ -42,7 +42,7 @@ jobs:
           node scripts/prepare-pages.mjs
           VERSION="${GITHUB_SHA}"
           sed -i "s#</body>#<script src=\"update6.js?v=${VERSION}\"></script><script src=\"update7.js?v=${VERSION}\"></script><script src=\"update8.js?v=${VERSION}\"></script><script type=\"module\" src=\"shared/ride-engine/browser-adapter.js?v=${VERSION}\"></script><script type=\"module\" src=\"update11.js?v=${VERSION}\"></script><script type=\"module\" src=\"update12.js?v=${VERSION}\"></script><script src=\"update13.js?v=${VERSION}\"></script><script src=\"update14.js?v=${VERSION}\"></script><script src=\"update16.js?v=${VERSION}\"></script><script src=\"update15.js?v=${VERSION}\"></script><script src=\"update17.js?v=${VERSION}\"></script><script src=\"update18.js?v=${VERSION}\"></script><script src=\"update19.js?v=${VERSION}\"></script><script src=\"update23.js?v=${VERSION}\"></script><script src=\"update24.js?v=${VERSION}\"></script><script src=\"update25.js?v=${VERSION}\"></script><script src=\"update26.js?v=${VERSION}\"></script><script src=\"update27.js?v=${VERSION}\"></script><script src=\"update28.js?v=${VERSION}\"></script><script src=\"update29.js?v=${VERSION}\"></script></body>#" index.html
-          sed -i '/<head>/a <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">' index.html
+          sed -i 's#<head>#<head><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">#' index.html
           touch .nojekyll
 
       - name: Verify canonical HUD artifact
@@ -61,6 +61,8 @@ jobs:
           ! grep -q '>HUD konfigurieren<' dist/index.html
           grep -q 'id="rtLegacyTelemetryBridge"' dist/index.html
           grep -q 'id="hudLong"' dist/index.html
+          grep -q '<head><meta http-equiv="Cache-Control"' dist/index.html
+          ! grep -q '<style>[[:space:]]*<meta' dist/index.html
 
       - name: Publish dist to gh-pages branch
         env:
