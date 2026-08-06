@@ -39,6 +39,10 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     var forwardEdge by mutableStateOf(ForwardEdge.TOP)
     var sessionId by mutableStateOf(UUID.randomUUID().toString()); private set
     var recordingStartNs by mutableStateOf(0L); private set
+    var privateNote by mutableStateOf("")
+    var communityComment by mutableStateOf("")
+    var latestHeartRateBpm by mutableStateOf<Int?>(null); private set
+    var heartRateSource by mutableStateOf<String?>(null); private set
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val locationClient = LocationServices.getFusedLocationProviderClient(context)
@@ -67,58 +71,44 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
 
     init { accelerometer?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) } }
 
-    fun calibrateNow() {
+    fun calibrateNow(): Boolean {
         val calibration = CalibrationMath.build(calibrationBuffer.takeLast(150), forwardEdge)
-        if (calibration == null) status = "Kalibrierung fehlgeschlagen: Gerät ruhig halten"
-        else { rideEngine.calibration = calibration; status = "Kalibriert · ${forwardEdge.title}"; updateQuality() }
+        return if (calibration == null) { status = "Kalibrierung fehlgeschlagen: Gerät ruhig halten"; false }
+        else { rideEngine.calibration = calibration; status = "Kalibriert · ${forwardEdge.title}"; updateQuality(); true }
     }
+
+    fun setHeartRate(bpm: Int?, source: String?) { latestHeartRateBpm = bpm; heartRateSource = source }
 
     @SuppressLint("MissingPermission")
     fun start() {
         if (isRecording) return
+        val calibration = CalibrationMath.build(calibrationBuffer.takeLast(150), forwardEdge)
         reset()
-        sessionId = UUID.randomUUID().toString()
-        recordingStartNs = SystemClock.elapsedRealtimeNanos()
-        startedAtInstant = Instant.now()
-        isRecording = true
+        if (calibration != null) rideEngine.calibration = calibration
+        sessionId = UUID.randomUUID().toString(); recordingStartNs = SystemClock.elapsedRealtimeNanos(); startedAtInstant = Instant.now(); isRecording = true
         status = "Aufnahme läuft · Session ${sessionId.take(8)}"
-        locationClient.requestLocationUpdates(
-            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500L).setMinUpdateIntervalMillis(200L).build(),
-            locationCallback, null,
-        )
+        locationClient.requestLocationUpdates(LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500L).setMinUpdateIntervalMillis(200L).build(), locationCallback, null)
         gyroscope?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
         pressure?.also { hasBarometer = true; sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
     }
 
-    fun attachVideo(filename: String?, startOffsetSeconds: Double) {
-        videoFilename = filename
-        videoStartOffsetSeconds = startOffsetSeconds
-    }
+    fun attachVideo(filename: String?, startOffsetSeconds: Double) { videoFilename = filename; videoStartOffsetSeconds = startOffsetSeconds }
 
     fun stop() {
         if (!isRecording) return
-        isRecording = false
-        locationClient.removeLocationUpdates(locationCallback)
-        gyroscope?.let { sensorManager.unregisterListener(this, it) }
-        pressure?.let { sensorManager.unregisterListener(this, it) }
-        updateQuality()
-        status = "Beendet: $sampleCount Samples"
+        isRecording = false; locationClient.removeLocationUpdates(locationCallback)
+        gyroscope?.let { sensorManager.unregisterListener(this, it) }; pressure?.let { sensorManager.unregisterListener(this, it) }
+        updateQuality(); status = "Beendet: $sampleCount Samples"
     }
 
     fun saveSession(): File {
         val duration = sessionSamples.lastOrNull()?.timestamp ?: 0.0
         val document = RideSessionDocument(
-            id = sessionId,
-            startedAt = startedAtInstant,
-            endedAt = Instant.now(),
-            events = sessionEvents.toList(),
-            samples = sessionSamples.toList(),
+            id = sessionId, startedAt = startedAtInstant, endedAt = Instant.now(), events = sessionEvents.toList(), samples = sessionSamples.toList(),
             summary = RideSessionSummary(duration, sampleCount, distanceMeters, acceptedLocations, rejectedLocations, qualityScore, ridePhase),
-            calibrationMode = "manual",
-            forwardEdge = forwardEdge.name.lowercase(),
-            calibration = rideEngine.calibration,
-            videoFilename = videoFilename,
-            videoStartOffsetSeconds = videoStartOffsetSeconds,
+            calibrationMode = "manual", forwardEdge = forwardEdge.name.lowercase(), calibration = rideEngine.calibration,
+            videoFilename = videoFilename, videoStartOffsetSeconds = videoStartOffsetSeconds,
+            privateNote = privateNote, communityComment = communityComment, heartRateSource = heartRateSource,
         )
         return document.save(context).also { lastSavedPath = it.absolutePath; status = "Session gespeichert: ${it.name}" }
     }
@@ -133,28 +123,16 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
 
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            val vector = Vector3(
-                event.values[0].toDouble() / SensorManager.GRAVITY_EARTH,
-                event.values[1].toDouble() / SensorManager.GRAVITY_EARTH,
-                event.values[2].toDouble() / SensorManager.GRAVITY_EARTH,
-            )
-            calibrationBuffer.addLast(vector)
-            while (calibrationBuffer.size > 250) calibrationBuffer.removeFirst()
-            calibrationSampleCount = calibrationBuffer.size
+            val vector = Vector3(event.values[0].toDouble() / SensorManager.GRAVITY_EARTH, event.values[1].toDouble() / SensorManager.GRAVITY_EARTH, event.values[2].toDouble() / SensorManager.GRAVITY_EARTH)
+            calibrationBuffer.addLast(vector); while (calibrationBuffer.size > 250) calibrationBuffer.removeFirst(); calibrationSampleCount = calibrationBuffer.size
             if (!isRecording) return
             val t = (event.timestamp - recordingStartNs) / 1_000_000_000.0
-            val processed = rideEngine.processMotion(MotionInput(t, vector.x, vector.y, vector.z))
-            sampleCount += 1
+            val processed = rideEngine.processMotion(MotionInput(t, vector.x, vector.y, vector.z)); sampleCount += 1
             ridePhase = phaseDetector.update(t, latestSpeedMs, processed.longitudinalG, climbRate, processed.totalG)
             if (ridePhase != previousPhase) { sessionEvents += RideSessionEvent(t, ridePhase); previousPhase = ridePhase }
             val loc = latestLocation
-            sessionSamples += RideSessionSample(
-                t, processed.normalG, processed.lateralG, processed.longitudinalG, processed.totalG,
-                if (hasBarometer) relativeAltitudeM else null, latestSpeedMs,
-                loc?.latitude, loc?.longitude, loc?.accuracy?.toDouble(), ridePhase, qualityScore,
-            )
-            if (sampleCount % 50 == 0) updateQuality()
-            return
+            sessionSamples += RideSessionSample(t, processed.normalG, processed.lateralG, processed.longitudinalG, processed.totalG, if (hasBarometer) relativeAltitudeM else null, latestSpeedMs, loc?.latitude, loc?.longitude, loc?.accuracy?.toDouble(), ridePhase, qualityScore, heartRateBpm = latestHeartRateBpm)
+            if (sampleCount % 50 == 0) updateQuality(); return
         }
         if (!isRecording) return
         val t = (event.timestamp - recordingStartNs) / 1_000_000_000.0
@@ -170,24 +148,12 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
 
     private fun handleLocation(location: Location) {
         if (!isRecording) return
-        val point = LocationInput(
-            t = (location.elapsedRealtimeNanos - recordingStartNs) / 1_000_000_000.0,
-            latitude = location.latitude,
-            longitude = location.longitude,
-            accuracy = location.accuracy.toDouble(),
-            speed = if (location.hasSpeed()) location.speed.toDouble() else null,
-        )
+        val point = LocationInput(t = (location.elapsedRealtimeNanos - recordingStartNs) / 1_000_000_000.0, latitude = location.latitude, longitude = location.longitude, accuracy = location.accuracy.toDouble(), speed = if (location.hasSpeed()) location.speed.toDouble() else null)
         val result = rideEngine.processLocation(point)
         if (!result.accepted) { rejectedLocations += 1; return }
-        acceptedLocations += 1
-        distanceMeters = rideEngine.distanceM
-        latestLocation = location
-        latestSpeedMs = if (location.hasSpeed()) location.speed.toDouble().coerceAtLeast(0.0) else 0.0
-        speedKmh = latestSpeedMs * 3.6
-        updateQuality()
+        acceptedLocations += 1; distanceMeters = rideEngine.distanceM; latestLocation = location
+        latestSpeedMs = if (location.hasSpeed()) location.speed.toDouble().coerceAtLeast(0.0) else 0.0; speedKmh = latestSpeedMs * 3.6; updateQuality()
     }
 
-    private fun updateQuality() {
-        qualityScore = QualityScore.calculate(sampleCount, acceptedLocations, rejectedLocations, 0, rideEngine.calibration != null, hasBarometer)
-    }
+    private fun updateQuality() { qualityScore = QualityScore.calculate(sampleCount, acceptedLocations, rejectedLocations, 0, rideEngine.calibration != null, hasBarometer) }
 }
