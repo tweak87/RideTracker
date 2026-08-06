@@ -16,9 +16,9 @@ struct NativeLiveHUDOverlay: View {
             let portrait = proxy.size.height > proxy.size.width
             let elements = load(portrait: portrait)
             ZStack {
-                ForEach(Array(elements.enumerated()), id: \.offset) { _, element in
+                ForEach(Array(elements.enumerated()), id: \.offset) { index, element in
                     if element.visible {
-                        panel(element, size: proxy.size)
+                        panel(element, index: index, size: proxy.size)
                     }
                 }
             }
@@ -26,8 +26,7 @@ struct NativeLiveHUDOverlay: View {
         .allowsHitTesting(false)
     }
 
-    @ViewBuilder private func panel(_ element: LiveHudElement, size: CGSize) -> some View {
-        let index = load(portrait: size.height > size.width).firstIndex(where: { $0.x == element.x && $0.y == element.y }) ?? 0
+    @ViewBuilder private func panel(_ element: LiveHudElement, index: Int, size: CGSize) -> some View {
         let labels = ["PULS","G-KRÄFTE","G-ACHSEN","GESCHWINDIGKEIT","VIBRATION","FAHRDYNAMIK"]
         let latest = recorder.samples.last
         let values = [
@@ -54,9 +53,9 @@ struct NativeLiveHUDOverlay: View {
         let json = portrait ? portraitJSON : landscapeJSON
         if let data = json.data(using: .utf8), let profile = try? JSONDecoder().decode(LiveHudProfile.self, from: data) { return profile.elements }
         return portrait ? [
-            .init(x:.04,y:.04,width:.42,height:.15),.init(x:.54,y:.04,width:.42,height:.15),.init(x:.18,y:.22,width:.64,height:.30),.init(x:.07,y:.54,width:.86,height:.10),.init(x:.05,y:.69,width:.43,height:.25),.init(x:.52,y:.69,width:.43,height:.25)
+            .init(x:0.04,y:0.04,width:0.42,height:0.15),.init(x:0.54,y:0.04,width:0.42,height:0.15),.init(x:0.18,y:0.22,width:0.64,height:0.30),.init(x:0.07,y:0.54,width:0.86,height:0.10),.init(x:0.05,y:0.69,width:0.43,height:0.25),.init(x:0.52,y:0.69,width:0.43,height:0.25)
         ] : [
-            .init(x:.02,y:.62,width:.29,height:.31),.init(x:.42,y:.48,width:.17,height:.30),.init(x:.33,y:.84,width:.34,height:.11),.init(x:.70,y:.61,width:.28,height:.33),.init(x:.80,y:.06,width:.18,height:.24),.init(x:.03,y:.06,width:.24,height:.18)
+            .init(x:0.02,y:0.62,width:0.29,height:0.31),.init(x:0.42,y:0.48,width:0.17,height:0.30),.init(x:0.33,y:0.84,width:0.34,height:0.11),.init(x:0.70,y:0.61,width:0.28,height:0.33),.init(x:0.80,y:0.06,width:0.18,height:0.24),.init(x:0.03,y:0.06,width:0.24,height:0.18)
         ]
     }
 }
