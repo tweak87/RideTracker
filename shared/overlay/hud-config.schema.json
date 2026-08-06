@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ridetracker.app/schemas/hud-config-1.0.json",
+  "title": "RideTracker HUD configuration",
+  "type": "object",
+  "required": ["version", "profiles", "watermark"],
+  "properties": {
+    "version": { "const": "1.0.0" },
+    "profiles": {
+      "type": "object",
+      "required": ["landscape", "portrait"],
+      "properties": {
+        "landscape": { "$ref": "#/$defs/profile" },
+        "portrait": { "$ref": "#/$defs/profile" }
+      }
+    },
+    "watermark": {
+      "type": "object",
+      "required": ["enabled", "x", "y", "width", "opacity"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "dataUrl": { "type": ["string", "null"] },
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "width": { "type": "number", "minimum": 0.03, "maximum": 0.8 },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "required": ["panelOpacity", "globalOpacity", "fontScale", "elements"],
+      "properties": {
+        "panelOpacity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "globalOpacity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "fontScale": { "type": "number", "minimum": 0.5, "maximum": 2.5 },
+        "fontFamily": { "type": "string" },
+        "elements": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["visible", "x", "y", "width", "height", "scale"],
+            "properties": {
+              "visible": { "type": "boolean" },
+              "x": { "type": "number", "minimum": 0, "maximum": 1 },
+              "y": { "type": "number", "minimum": 0, "maximum": 1 },
+              "width": { "type": "number", "minimum": 0.02, "maximum": 1 },
+              "height": { "type": "number", "minimum": 0.02, "maximum": 1 },
+              "scale": { "type": "number", "minimum": 0.25, "maximum": 3 },
+              "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+              "fontScale": { "type": "number", "minimum": 0.5, "maximum": 2.5 }
+            }
+          }
+        }
+      }
+    }
+  }
+}
