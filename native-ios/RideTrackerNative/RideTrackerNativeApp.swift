@@ -7,7 +7,7 @@ struct RideTrackerNativeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ProfileRootView()
+            AppShellView()
                 .environmentObject(recorder)
                 .environmentObject(profiles)
         }
