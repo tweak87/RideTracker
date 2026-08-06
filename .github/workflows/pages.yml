@@ -26,33 +26,20 @@ jobs:
 
       - name: Validate JavaScript syntax
         run: |
-          node --check update13.js
-          node --check update14.js
-          node --check update15.js
-          node --check update16.js
-          node --check update17.js
-          node --check update18.js
-          node --check update19.js
-          node --check update20.js
-          node --check update21.js
-          node --check update22.js
-          node --check update23.js
-          node --check update24.js
-          node --check update25.js
-          node --check update26.js
-          node --check update27.js
-          node --check update28.js
-          node --check update29.js
-          node --check update30.js
-          node --check update31.js
-          node --check shared/overlay/overlay-core.js
+          for file in update{13..31}.js shared/overlay/overlay-core.js; do node --check "$file"; done
 
       - name: Add RideTracker modules
-        run: sed -i 's#</body>#<script src="update6.js"></script><script src="update7.js"></script><script src="update8.js"></script><script type="module" src="shared/ride-engine/browser-adapter.js"></script><script type="module" src="update11.js"></script><script type="module" src="update12.js"></script><script src="update13.js"></script><script src="update14.js"></script><script src="update16.js"></script><script src="update15.js"></script><script src="update17.js"></script><script src="update18.js"></script><script src="update19.js"></script><script type="module" src="update20.js"></script><script type="module" src="update21.js"></script><script src="update22.js"></script><script src="update23.js"></script><script src="update24.js"></script><script src="update25.js"></script><script src="update26.js"></script><script src="update27.js"></script><script src="update28.js"></script><script src="update29.js"></script><script src="update30.js"></script><script src="update31.js"></script></body>#' index.html
-
-      - name: Verify native recording views stay focused
         run: |
+          VERSION="${GITHUB_SHA}"
+          sed -i "s#</body>#<script src=\"update6.js?v=${VERSION}\"></script><script src=\"update7.js?v=${VERSION}\"></script><script src=\"update8.js?v=${VERSION}\"></script><script type=\"module\" src=\"shared/ride-engine/browser-adapter.js?v=${VERSION}\"></script><script type=\"module\" src=\"update11.js?v=${VERSION}\"></script><script type=\"module\" src=\"update12.js?v=${VERSION}\"></script><script src=\"update13.js?v=${VERSION}\"></script><script src=\"update14.js?v=${VERSION}\"></script><script src=\"update16.js?v=${VERSION}\"></script><script src=\"update15.js?v=${VERSION}\"></script><script src=\"update17.js?v=${VERSION}\"></script><script src=\"update18.js?v=${VERSION}\"></script><script src=\"update19.js?v=${VERSION}\"></script><script type=\"module\" src=\"update20.js?v=${VERSION}\"></script><script type=\"module\" src=\"update21.js?v=${VERSION}\"></script><script src=\"update22.js?v=${VERSION}\"></script><script src=\"update23.js?v=${VERSION}\"></script><script src=\"update24.js?v=${VERSION}\"></script><script src=\"update25.js?v=${VERSION}\"></script><script src=\"update26.js?v=${VERSION}\"></script><script src=\"update27.js?v=${VERSION}\"></script><script src=\"update28.js?v=${VERSION}\"></script><script src=\"update29.js?v=${VERSION}\"></script><script src=\"update30.js?v=${VERSION}\"></script><script src=\"update31.js?v=${VERSION}\"></script></body>#" index.html
+          sed -i '/<head>/a <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">' index.html
+
+      - name: Verify legacy HUD is retired
+        run: |
+          ! grep -q 'toolbar.innerHTML' update20.js
+          ! grep -q 'canvas.id = .rtSharedOverlay.' update20.js
           ! grep -R -E 'Modus: Telemetrie|HUD: (Klein|Mittel|Groß)|HUD verschieben|Positionen zurücksetzen|Streckenkonstruktion' native-ios/RideTrackerNative/ContentView.swift native-android/app/src/main/java/de/ridetracker/FunctionalRideTrackerApp.kt
+          grep -q 'update31.js?v=' index.html
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
