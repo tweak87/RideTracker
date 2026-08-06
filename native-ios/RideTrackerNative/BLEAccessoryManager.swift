@@ -25,6 +25,8 @@ final class BLEAccessoryManager: NSObject, ObservableObject {
         let longitude: Double?
         let altitude: Double?
         let horizontalAccuracy: Double?
+        let speedMS: Double?
+        let quality: Double?
     }
 
     @Published private(set) var state: ConnectionState = .idle
