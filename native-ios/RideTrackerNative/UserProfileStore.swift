@@ -6,7 +6,6 @@ struct LocalUserProfile: Codable, Identifiable, Hashable {
     let createdAt: Date
 }
 
-@MainActor
 final class UserProfileStore: ObservableObject {
     @Published private(set) var profiles: [LocalUserProfile]
     @Published private(set) var activeProfileID: UUID
