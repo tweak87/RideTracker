@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const requiredFiles = [
-  'update24.js','update25.js','update29.js','update33.js','update34.js','update35.js','update36.js','update37.js','update38.js',
+  'update24.js','update25.js','update29.js','update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js',
   'core/storage/web-database-service.js','core/adapters/web-plugin-runtimes.mjs'
 ];
 for (const file of requiredFiles) {
@@ -18,6 +18,7 @@ const u35 = text('update35.js');
 const u36 = text('update36.js');
 const u37 = text('update37.js');
 const u38 = text('update38.js');
+const u39 = text('update39.js');
 const db = text('core/storage/web-database-service.js');
 const plugins = text('core/adapters/web-plugin-runtimes.mjs');
 
@@ -43,6 +44,21 @@ for (const store of ['videos','ridePackages','settings','cache']) requireToken(d
 requireToken(db, 'selfTest()', 'Web database must run a startup self-test');
 requireToken(db, 'nativeOpen', 'Web database compatibility bridge missing');
 
+// BLE heart rate and external GNSS must enter through the plugin runtime before source routing.
+requireToken(plugins, "ridetracker:heart-rate", 'BLE heart-rate plugin ingress missing');
+requireToken(plugins, "ridetracker:external-telemetry", 'External GNSS plugin ingress missing');
+requireToken(plugins, "ridetracker:plugin-telemetry", 'Plugin telemetry output missing');
+requireToken(u35, "ridetracker:plugin-telemetry", 'Source router must consume plugin telemetry');
+failIf(u35.includes("window.addEventListener('ridetracker:heart-rate'"), 'Source router must not consume BLE heart rate directly anymore');
+
+// Recording fullscreen must keep controls inside the video container and allow leaving fullscreen without stopping.
+requireToken(u39, 'RideTrackerRecordingFullscreen', 'Recording fullscreen API missing');
+requireToken(u39, 'rtRecordingStopButton', 'Fullscreen REC stop control missing');
+requireToken(u39, 'rtRecordingExitButton', 'Fullscreen exit control missing');
+requireToken(u39, 'object-fit:cover', 'Fullscreen camera image must use cover');
+requireToken(u39, 'object-position:50% 50%', 'Fullscreen camera image must be centered');
+requireToken(u39, 'Deliberately do not stop the recording here.', 'Fullscreen exit must remain independent from recording stop');
+
 // Core user-facing modules must still expose their public APIs.
 [
   [u24, 'RideTrackerSettings', 'settings'],
@@ -52,6 +68,7 @@ requireToken(db, 'nativeOpen', 'Web database compatibility bridge missing');
   [u36, 'RideTrackerCameraSources', 'camera sources'],
   [u37, 'RideTrackerRideLibrary', 'ride library'],
   [u38, 'RideTrackerNavigation', 'navigation'],
+  [u39, 'RideTrackerRecordingFullscreen', 'recording fullscreen'],
   [plugins, 'RideTrackerWebPlugins', 'web plugin runtimes']
 ].forEach(([source, token, label]) => requireToken(source, token, `Missing ${label} API`));
 
@@ -68,6 +85,9 @@ if (fs.existsSync('index.html')) {
   if (dbIndex >= 0 || ridesIndex >= 0) {
     failIf(dbIndex < 0 || ridesIndex < 0 || dbIndex > ridesIndex, 'Database service must load before the ride library');
   }
+  const pluginIndex = html.indexOf('core/adapters/web-plugin-runtimes.mjs?v=');
+  const fullscreenIndex = html.indexOf('update39.js?v=');
+  if (fullscreenIndex >= 0) failIf(pluginIndex < 0 || pluginIndex > fullscreenIndex, 'Plugin runtime must load before recording fullscreen controls');
 }
 
 console.log('Web startup audit passed.');
