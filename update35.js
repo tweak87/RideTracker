@@ -44,18 +44,27 @@
     return chosen?{metric,valid:true,...chosen}:{metric,valid:false,value:null,sourceId:null,ageMs:null};
   }
 
-  window.addEventListener('ridetracker:heart-rate',event=>{
+  // BLE heart-rate and external GNSS are now normalized by the Web PluginHost runtime.
+  window.addEventListener('ridetracker:plugin-telemetry',event=>{
     const d=event.detail||{};
-    ingest('heartRateBpm','ble-heart','heartRate',Number(d.bpm),1,performance.now());
+    if(!['ble-heart-rate','external-gnss'].includes(String(d.pluginId||''))) return;
+    if(typeof d.metric!=='string'||!Number.isFinite(Number(d.value))) return;
+    ingest(d.metric,String(d.deviceId||d.pluginId),String(d.channelId||d.metric),Number(d.value),Number(d.quality??1),Number(d.timestampMs??performance.now()));
   });
+
   window.addEventListener('ridetracker:internal-telemetry',event=>{
     const d=event.detail||{};
     if(Number.isFinite(d.speedKmh)) ingest('speedKmh','phone-gps','speed',d.speedKmh,Number(d.quality??1),Number(d.timestampMs??performance.now()));
     if(Number.isFinite(d.gForce)) ingest('gForce','phone-motion','motion',d.gForce,Number(d.quality??1),Number(d.timestampMs??performance.now()));
   });
+
+  // Non-GNSS external devices (for example external IMUs) remain on the legacy ingress for now.
   window.addEventListener('ridetracker:external-telemetry',event=>{
     const packet=event.detail||{};
+    const pluginId=String(packet.pluginId||'');
     const deviceId=String(packet.deviceId||'external-device');
+    const lower=deviceId.toLowerCase();
+    if(pluginId==='external-gnss'||lower.includes('gnss')||lower.includes('gps-receiver')) return;
     const timestamp=Number(packet.timestampMs??performance.now());
     for(const channel of Array.isArray(packet.channels)?packet.channels:[]){
       if(!channel||typeof channel.metric!=='string'||!Number.isFinite(Number(channel.value))) continue;
