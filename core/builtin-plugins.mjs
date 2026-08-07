@@ -1,12 +1,18 @@
 export const BuiltinCapabilities = Object.freeze({
-  MOTION: 'sensor.motion',
-  GPS: 'sensor.gps',
-  BAROMETER: 'sensor.barometer',
-  HEART_RATE: 'sensor.heartRate',
-  IMU: 'sensor.imu',
-  GNSS: 'sensor.gnss',
-  CAMERA: 'camera.video',
+  MOTION_ACCELERATION: 'motion.acceleration',
+  MOTION_GYROSCOPE: 'motion.gyroscope',
+  MOTION_ORIENTATION: 'motion.orientation',
+  LOCATION_POSITION: 'location.position',
+  LOCATION_SPEED: 'location.speed',
+  LOCATION_ALTITUDE: 'location.altitude',
+  HEART_RATE_BPM: 'heart-rate.bpm',
+  CAMERA_PREVIEW: 'camera.preview',
+  CAMERA_RECORDING: 'camera.recording',
   MICROPHONE: 'audio.microphone',
+  CALIBRATION_MOTION: 'calibration.motion',
+  CALIBRATION_LOCATION: 'calibration.location',
+  CALIBRATION_CAMERA: 'calibration.camera',
+  HUD_WIDGET_SOURCE: 'hud.widget-source',
 });
 
 const plugin = (id, name, capabilities, settingsSchema = {}, calibrationSchema = null) => ({
@@ -19,7 +25,17 @@ const plugin = (id, name, capabilities, settingsSchema = {}, calibrationSchema =
 });
 
 export const builtinPlugins = Object.freeze([
-  plugin('internal-sensors', 'Interne Smartphone-Sensoren', [BuiltinCapabilities.MOTION, BuiltinCapabilities.GPS, BuiltinCapabilities.BAROMETER], {
+  plugin('internal-sensors', 'Interne Smartphone-Sensoren', [
+    BuiltinCapabilities.MOTION_ACCELERATION,
+    BuiltinCapabilities.MOTION_GYROSCOPE,
+    BuiltinCapabilities.MOTION_ORIENTATION,
+    BuiltinCapabilities.LOCATION_POSITION,
+    BuiltinCapabilities.LOCATION_SPEED,
+    BuiltinCapabilities.LOCATION_ALTITUDE,
+    BuiltinCapabilities.CALIBRATION_MOTION,
+    BuiltinCapabilities.CALIBRATION_LOCATION,
+    BuiltinCapabilities.HUD_WIDGET_SOURCE,
+  ], {
     sampleRateHz: { type: 'number', min: 20, max: 400, default: 100 },
     gpsAccuracy: { type: 'enum', values: ['balanced', 'navigation'], default: 'navigation' },
   }, {
@@ -27,13 +43,22 @@ export const builtinPlugins = Object.freeze([
     forwardEdge: { type: 'enum', values: ['top', 'bottom', 'left', 'right'], default: 'top' },
     biasCorrection: { type: 'boolean', default: true },
   }),
-  plugin('ble-heart-rate', 'Bluetooth Herzfrequenz', [BuiltinCapabilities.HEART_RATE], {
+  plugin('ble-heart-rate', 'Bluetooth Herzfrequenz', [
+    BuiltinCapabilities.HEART_RATE_BPM,
+    BuiltinCapabilities.HUD_WIDGET_SOURCE,
+  ], {
     autoReconnect: { type: 'boolean', default: true },
     staleAfterMs: { type: 'number', min: 1000, max: 15000, default: 3000 },
   }, {
     validateSignal: { type: 'boolean', default: true },
   }),
-  plugin('external-imu', 'Externe IMU', [BuiltinCapabilities.IMU, BuiltinCapabilities.MOTION], {
+  plugin('external-imu', 'Externe IMU', [
+    BuiltinCapabilities.MOTION_ACCELERATION,
+    BuiltinCapabilities.MOTION_GYROSCOPE,
+    BuiltinCapabilities.MOTION_ORIENTATION,
+    BuiltinCapabilities.CALIBRATION_MOTION,
+    BuiltinCapabilities.HUD_WIDGET_SOURCE,
+  ], {
     transport: { type: 'enum', values: ['bluetooth-le', 'usb', 'network'], default: 'bluetooth-le' },
     sampleRateHz: { type: 'number', min: 50, max: 1000, default: 200 },
     vibrationHighPassHz: { type: 'number', min: 1, max: 50, default: 8 },
@@ -41,7 +66,13 @@ export const builtinPlugins = Object.freeze([
     zeroBias: { type: 'boolean', default: true },
     orientationMatrix: { type: 'matrix3', required: true },
   }),
-  plugin('external-gnss', 'Externer GNSS-Empfänger', [BuiltinCapabilities.GNSS, BuiltinCapabilities.GPS], {
+  plugin('external-gnss', 'Externer GNSS-Empfänger', [
+    BuiltinCapabilities.LOCATION_POSITION,
+    BuiltinCapabilities.LOCATION_SPEED,
+    BuiltinCapabilities.LOCATION_ALTITUDE,
+    BuiltinCapabilities.CALIBRATION_LOCATION,
+    BuiltinCapabilities.HUD_WIDGET_SOURCE,
+  ], {
     transport: { type: 'enum', values: ['bluetooth-le', 'usb', 'network'], default: 'bluetooth-le' },
     minimumQuality: { type: 'number', min: 0, max: 1, default: 0.75 },
     maxAgeMs: { type: 'number', min: 100, max: 10000, default: 2000 },
@@ -50,7 +81,12 @@ export const builtinPlugins = Object.freeze([
     referenceAltitude: { type: 'number', nullable: true },
     clockOffsetMs: { type: 'number', default: 0 },
   }),
-  plugin('camera-source', 'Kameraquelle', [BuiltinCapabilities.CAMERA, BuiltinCapabilities.MICROPHONE], {
+  plugin('camera-source', 'Kameraquelle', [
+    BuiltinCapabilities.CAMERA_PREVIEW,
+    BuiltinCapabilities.CAMERA_RECORDING,
+    BuiltinCapabilities.MICROPHONE,
+    BuiltinCapabilities.CALIBRATION_CAMERA,
+  ], {
     sourceId: { type: 'string', nullable: true },
     fallbackSourceIds: { type: 'array', items: 'string', default: [] },
     resolution: { type: 'enum', values: ['720p', '1080p', '4k'], default: '1080p' },
