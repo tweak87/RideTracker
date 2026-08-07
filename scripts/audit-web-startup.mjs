@@ -3,7 +3,7 @@ import fs from 'node:fs';
 const activeUpdates = [
   'update11.js','update12.js','update13.js','update14.js','update15.js','update16.js','update17.js','update18.js','update19.js',
   'update23.js','update24.js','update25.js','update26.js','update27.js','update28.js','update29.js',
-  'update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js','update40.js','update41.js','update42.js','update43.js','update44.js','update45.js'
+  'update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js','update40.js','update41.js','update42.js','update43.js','update44.js','update45.js','update46.js'
 ];
 const requiredFiles = [
   ...activeUpdates,
@@ -27,6 +27,7 @@ const u42 = src['update42.js'];
 const u43 = src['update43.js'];
 const u44 = src['update44.js'];
 const u45 = src['update45.js'];
+const u46 = src['update46.js'];
 const db = src['core/storage/web-database-service.js'];
 const plugins = src['core/adapters/web-plugin-runtimes.mjs'];
 
@@ -115,15 +116,25 @@ requireToken(u40, 'unifiedRideStart', 'Legacy unified start must route to canoni
 
 requireToken(plugins, 'ridetracker:plugin-telemetry', 'Web plugin runtime must emit normalized plugin telemetry');
 requireToken(plugins, "return 'external-imu'", 'External IMU packets must be classified by plugin runtime');
+requireToken(plugins, 'ensureCameraPreview', 'Camera preview must be exposed through the camera plugin runtime');
+requireToken(plugins, "operation === 'ensurePreview'", 'Camera plugin runtime must expose ensurePreview operation');
+requireToken(plugins, 'recordingActive', 'Camera plugin runtime must track recording lifecycle');
 requireToken(u35, 'ridetracker:plugin-telemetry', 'Source router must consume normalized plugin telemetry');
 failIf(u35.includes("addEventListener('ridetracker:heart-rate'"), 'BLE heart rate must no longer bypass plugin runtime');
+
+requireToken(u46, 'RideTrackerFrontendNavigation', 'Frontend navigation consolidation API missing');
+requireToken(u46, "#rideDashboard{display:none!important}", 'Legacy dashboard must stay hidden');
+requireToken(u46, 'enterRecord({ newRide: true })', 'Neue Fahrt must enter recording preparation directly');
+requireToken(u46, '#rtVideoStateBadge[data-mode="live"]{display:none!important}', 'LIVE badge must be hidden outside actual recording/preview states');
+requireToken(u46, "state.route === 'record'", 'Video state badge must be scoped to recording route');
+requireToken(u46, 'syncCameraPlugin', 'Frontend must bridge recording UX to plugin camera state');
 
 const publicApis = [
   ['update24.js','RideTrackerSettings','settings'],['update33.js','RideTrackerDeviceCenter','device center'],['update34.js','RideTrackerSourceRouting','source routing'],
   ['update35.js','RideTrackerRecordingSourceRouter','source router'],['update36.js','RideTrackerCameraSources','camera sources'],['update37.js','RideTrackerRideLibrary','ride library'],
   ['update38.js','RideTrackerNavigation','navigation'],['update39.js','RideTrackerRecordingFullscreen','recording fullscreen'],['update40.js','RideTrackerRecordingActions','recording actions'],
   ['update41.js','RideTrackerCalibrationManager','calibration manager'],['update42.js','RideTrackerSensorCalibration','sensor calibration'],['update43.js','RideTrackerPostRecording','post-recording preview'],
-  ['update44.js','RideTrackerRideMediaStorage','ride media storage'],['update45.js','RideTrackerRecordingSession','recording session']
+  ['update44.js','RideTrackerRideMediaStorage','ride media storage'],['update45.js','RideTrackerRecordingSession','recording session'],['update46.js','RideTrackerFrontendNavigation','frontend navigation']
 ];
 for (const [file, token, label] of publicApis) requireToken(src[file], token, `Missing ${label} API`);
 requireToken(plugins, 'RideTrackerWebPlugins', 'Missing web plugin runtimes API');
@@ -147,7 +158,8 @@ if (fs.existsSync('index.html')) {
     session: html.indexOf('update45.js?v='),
     calibration: html.indexOf('update41.js?v='),
     sensorCalibration: html.indexOf('update42.js?v='),
-    actions: html.indexOf('update40.js?v=')
+    actions: html.indexOf('update40.js?v='),
+    frontend: html.indexOf('update46.js?v=')
   };
   const built = Object.values(positions).some(value => value >= 0);
   if (built) {
@@ -160,6 +172,8 @@ if (fs.existsSync('index.html')) {
     failIf(positions.fullscreen > positions.calibration || positions.calibration > positions.sensorCalibration || positions.sensorCalibration > positions.actions,
       'Recording startup order must be fullscreen -> calibration -> sensor calibration -> actions');
     failIf(positions.session > positions.actions, 'Recording session controller must load before canonical actions');
+    failIf(positions.actions < 0 || positions.frontend < 0 || positions.actions > positions.frontend,
+      'Frontend consolidation must load after canonical recording actions');
   }
 }
 
