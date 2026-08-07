@@ -4,6 +4,7 @@ import android.os.SystemClock
 import de.ridetracker.video.CameraSourceManager
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.Instant
 
 data class CoreTelemetrySample(
     val timestampMs:Long,
@@ -31,25 +32,49 @@ data class CoreNativeDeviceSnapshot(
     val enabled:Boolean,
 )
 
+data class CoreNativeSourceRoutingSnapshot(
+    val metric:String,
+    val primarySource:String,
+    val fallbackSources:List<String>,
+    val minimumQuality:Double,
+    val maxAgeMs:Long,
+    val interpolation:String="hold",
+    val widgetId:String?=null,
+)
+
 data class CoreNativeCameraSnapshot(
     val primaryId:String?,
     val fallbackIds:List<String>,
     val sources:List<de.ridetracker.video.CameraSourceDescriptor>,
 )
 
-data class CoreNativeConfigurationSnapshot(
-    val coreVersion:String,
-    val capturedAtEpochMs:Long,
-    val platform:String,
-    val devices:List<CoreNativeDeviceSnapshot>,
-    val camera:CoreNativeCameraSnapshot,
-    val calibrationMode:String,
+data class CoreNativeHUDSnapshot(
+    val version:String="1.0.0",
+    val activeProfile:String?=null,
+    val profiles:Map<String,JSONObject> = emptyMap(),
+)
+
+data class CoreNativeCalibrationSnapshot(
+    val mode:String,
     val forwardEdge:String,
 )
 
+data class CoreNativeConfigurationSnapshot(
+    val schemaVersion:String,
+    val coreVersion:String,
+    val capturedAt:String,
+    val platform:String,
+    val devices:List<CoreNativeDeviceSnapshot>,
+    val sourceRouting:List<CoreNativeSourceRoutingSnapshot>,
+    val camera:CoreNativeCameraSnapshot,
+    val hud:CoreNativeHUDSnapshot,
+    val calibration:CoreNativeCalibrationSnapshot,
+)
+
 fun CoreNativeConfigurationSnapshot.toJson():JSONObject = JSONObject().apply {
+    put("schemaVersion",schemaVersion)
     put("coreVersion",coreVersion)
-    put("capturedAtEpochMs",capturedAtEpochMs)
+    put("capturedAt",capturedAt)
     put("platform",platform)
     put("devices",JSONArray().apply {
         devices.forEach { device -> put(JSONObject()
@@ -57,6 +82,16 @@ fun CoreNativeConfigurationSnapshot.toJson():JSONObject = JSONObject().apply {
             .put("name",device.name)
             .put("type",device.type)
             .put("enabled",device.enabled)) }
+    })
+    put("sourceRouting",JSONArray().apply {
+        sourceRouting.forEach { route -> put(JSONObject()
+            .put("metric",route.metric)
+            .put("primarySource",route.primarySource)
+            .put("fallbackSources",JSONArray(route.fallbackSources))
+            .put("minimumQuality",route.minimumQuality.coerceIn(0.0,1.0))
+            .put("maxAgeMs",route.maxAgeMs.coerceAtLeast(0))
+            .put("interpolation",route.interpolation)
+            .put("widgetId",route.widgetId ?: JSONObject.NULL)) }
     })
     put("camera",JSONObject().apply {
         if(camera.primaryId==null) put("primaryId",JSONObject.NULL) else put("primaryId",camera.primaryId)
@@ -70,13 +105,23 @@ fun CoreNativeConfigurationSnapshot.toJson():JSONObject = JSONObject().apply {
                 .put("available",source.available)) }
         })
     })
+    put("hud",JSONObject().apply {
+        put("version",hud.version)
+        put("activeProfile",hud.activeProfile ?: JSONObject.NULL)
+        put("profiles",JSONObject().apply { hud.profiles.forEach { (key,value) -> put(key,value) } })
+        put("watermark",JSONObject.NULL)
+    })
     put("calibration",JSONObject()
-        .put("mode",calibrationMode)
-        .put("forwardEdge",forwardEdge))
+        .put("mode",calibration.mode)
+        .put("forwardEdge",calibration.forwardEdge)
+        .put("deviceCalibration",JSONObject.NULL))
 }
 
 class RideTrackerCoreAdapter {
-    companion object { const val CORE_VERSION="2.0.0-alpha.1" }
+    companion object {
+        const val CORE_VERSION="2.0.0-alpha.1"
+        const val SNAPSHOT_SCHEMA_VERSION="1.0.0"
+    }
 
     private val latestTelemetry=linkedMapOf<String,CoreTelemetrySample>()
     private val events=mutableListOf<CoreRuntimeEvent>()
@@ -133,25 +178,29 @@ class RideTrackerCoreAdapter {
 
     fun configurationSnapshot(
         cameraSources:CameraSourceManager,
+        sourceRouting:List<CoreNativeSourceRoutingSnapshot>,
         forwardEdge:String,
         connectedHeartRateName:String?,
+        hud:CoreNativeHUDSnapshot = CoreNativeHUDSnapshot(),
     ):CoreNativeConfigurationSnapshot {
         val devices=buildList {
             add(CoreNativeDeviceSnapshot("android-phone","Android Smartphone","internal",true))
             if(!connectedHeartRateName.isNullOrBlank()) add(CoreNativeDeviceSnapshot("ble-heart",connectedHeartRateName,"bluetooth-le",true))
         }
         return CoreNativeConfigurationSnapshot(
+            schemaVersion=SNAPSHOT_SCHEMA_VERSION,
             coreVersion=CORE_VERSION,
-            capturedAtEpochMs=System.currentTimeMillis(),
+            capturedAt=Instant.now().toString(),
             platform="android",
             devices=devices,
+            sourceRouting=sourceRouting,
             camera=CoreNativeCameraSnapshot(
                 primaryId=cameraSources.primarySourceId,
                 fallbackIds=cameraSources.fallbackSourceIds,
                 sources=cameraSources.refresh(),
             ),
-            calibrationMode="manual",
-            forwardEdge=forwardEdge,
+            hud=hud,
+            calibration=CoreNativeCalibrationSnapshot("manual",forwardEdge),
         )
     }
 
