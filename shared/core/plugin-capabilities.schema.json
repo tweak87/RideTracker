@@ -21,6 +21,7 @@
           "heart-rate.bpm",
           "camera.preview",
           "camera.recording",
+          "audio.microphone",
           "video.import",
           "video.export",
           "telemetry.import",
