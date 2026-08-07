@@ -1,5 +1,6 @@
 package de.ridetracker.core
 
+import de.ridetracker.video.CameraSourceDescriptor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -33,5 +34,22 @@ class CoreRuntimeManagersTest {
 
         manager.clear()
         assertTrue(manager.snapshot().isEmpty())
+    }
+
+    @Test
+    fun cameraManagerKeepsValidPrimaryAndFallbackOrder() {
+        val manager = CoreCameraManager()
+        val back = CameraSourceDescriptor("0", "Back", "back", "internal", true)
+        val front = CameraSourceDescriptor("1", "Front", "front", "internal", true)
+        manager.sync(
+            availableSources = listOf(back, front),
+            primaryId = "0",
+            fallbackIds = listOf("1", "0", "missing", "1"),
+        )
+
+        assertEquals("0", manager.primaryId)
+        assertEquals(listOf("1"), manager.fallbackIds)
+        assertEquals(listOf("0", "1"), manager.ordered().map { it.id })
+        assertEquals(listOf("0", "1"), manager.snapshot().sources.map { it.id })
     }
 }
