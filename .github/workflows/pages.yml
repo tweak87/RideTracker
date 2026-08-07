@@ -64,7 +64,8 @@ jobs:
           grep -q 'RideTrackerRecordingSourceRouter' dist/update35.js
           grep -q 'RideTrackerCameraSources' dist/update36.js
           grep -q 'RideTrackerDatabase' dist/core/storage/web-database-service.js
-          grep -q 'DB_VERSION = 5' dist/core/storage/web-database-service.js
+          grep -q 'MIN_SCHEMA_VERSION = 6' dist/core/storage/web-database-service.js
+          grep -q 'inspectAndRepair' dist/core/storage/web-database-service.js
           grep -q 'RideTrackerRideLibrary' dist/update37.js
           grep -q 'recoverIfNeeded' dist/update38.js
           grep -q 'RideTrackerRecordingFullscreen' dist/update39.js
@@ -73,7 +74,6 @@ jobs:
           grep -q 'RideTrackerPostRecording' dist/update43.js
           grep -q 'Vorschau wird vorbereitet' dist/update43.js
           grep -q 'RideTrackerRideMediaStorage' dist/update44.js
-          grep -q 'RideTrackerDatabase' dist/update44.js
           grep -q 'RideTrackerRecordingSession' dist/update45.js
           grep -q 'confirmReplaceBeforeStart' dist/update45.js
           grep -q 'VORSCHAU' dist/update45.js
@@ -81,6 +81,9 @@ jobs:
           grep -q 'RideTrackerSensorCalibration' dist/update42.js
           grep -q 'selectedSensors' dist/update42.js
           grep -q 'RideTrackerRecordingActions' dist/update40.js
+          grep -q 'ensureInitialized' dist/update40.js
+          grep -q 'recoverCamera' dist/update40.js
+          grep -q 'videoRecorderActive' dist/update40.js
           grep -q 'minimizeAndStartVideo' dist/update40.js
           grep -q 'RideTrackerCoreRuntime' dist/core/adapters/web-runtime-adapter.mjs
           grep -q 'RideTrackerWebPlugins' dist/core/adapters/web-plugin-runtimes.mjs
