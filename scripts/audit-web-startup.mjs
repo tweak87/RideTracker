@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const requiredFiles = [
-  'update24.js','update25.js','update29.js','update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js','update40.js','update41.js','update42.js',
+  'update24.js','update25.js','update29.js','update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js','update40.js','update41.js','update42.js','update43.js',
   'core/storage/web-database-service.js','core/adapters/web-plugin-runtimes.mjs'
 ];
 for (const file of requiredFiles) {
@@ -22,6 +22,7 @@ const u39 = text('update39.js');
 const u40 = text('update40.js');
 const u41 = text('update41.js');
 const u42 = text('update42.js');
+const u43 = text('update43.js');
 const db = text('core/storage/web-database-service.js');
 const plugins = text('core/adapters/web-plugin-runtimes.mjs');
 
@@ -57,6 +58,13 @@ requireToken(u39, 'rtRecordingElapsed', 'Recording elapsed timer missing');
 requireToken(u39, 'Vollbild verlassen', 'Fullscreen minimize action missing');
 requireToken(u39, 'z-index:2147483646', 'Recording controls must stay above HUD layers');
 requireToken(u25, 'if (window.RideTrackerRecordingFullscreen) return;', 'Legacy fullscreen triggers must defer to update39');
+
+requireToken(u43, 'waitForReplay', 'Post-recording preview must wait for Safari replay blob creation');
+requireToken(u43, 'leaveRecordingFullscreen', 'Post-recording preview must leave recording fullscreen');
+requireToken(u43, 'Vorschau wird vorbereitet', 'Preview preparation feedback missing');
+requireToken(u43, 'ridetracker:preview-ready', 'Preview-ready event missing');
+requireToken(u43, 'RideTrackerPostRecording', 'Post-recording public API missing');
+requireToken(u43, 'unhandledrejection', 'Runtime promise diagnostics missing');
 
 requireToken(u41, 'rideTracker.calibration.v1', 'Persistent calibration storage key missing');
 requireToken(u41, 'applyStored', 'Stored calibration restore path missing');
@@ -98,6 +106,7 @@ failIf(u35.includes("addEventListener('ridetracker:heart-rate'"), 'BLE heart rat
   [u40, 'RideTrackerRecordingActions', 'recording actions'],
   [u41, 'RideTrackerCalibrationManager', 'calibration manager'],
   [u42, 'RideTrackerSensorCalibration', 'sensor calibration'],
+  [u43, 'RideTrackerPostRecording', 'post-recording preview'],
   [plugins, 'RideTrackerWebPlugins', 'web plugin runtimes']
 ].forEach(([source, token, label]) => requireToken(source, token, `Missing ${label} API`));
 
@@ -114,6 +123,7 @@ if (fs.existsSync('index.html')) {
   const ridesIndex = html.indexOf('update37.js?v=');
   const pluginIndex = html.indexOf('core/adapters/web-plugin-runtimes.mjs?v=');
   const fullscreenIndex = html.indexOf('update39.js?v=');
+  const postRecordingIndex = html.indexOf('update43.js?v=');
   const calibrationIndex = html.indexOf('update41.js?v=');
   const sensorCalibrationIndex = html.indexOf('update42.js?v=');
   const actionsIndex = html.indexOf('update40.js?v=');
@@ -123,6 +133,8 @@ if (fs.existsSync('index.html')) {
       'Database repair service must load before ride engine and every update module');
     failIf(ridesIndex < 0 || dbIndex > ridesIndex, 'Database service must load before the ride library');
     if (pluginIndex >= 0 || fullscreenIndex >= 0) failIf(pluginIndex < 0 || fullscreenIndex < 0 || pluginIndex > fullscreenIndex, 'Plugin runtime must load before recording fullscreen controller');
+    failIf(fullscreenIndex < 0 || postRecordingIndex < 0 || fullscreenIndex > postRecordingIndex,
+      'Post-recording controller must load after fullscreen controller');
     if (fullscreenIndex >= 0 || calibrationIndex >= 0 || sensorCalibrationIndex >= 0 || actionsIndex >= 0) {
       failIf(fullscreenIndex < 0 || calibrationIndex < 0 || sensorCalibrationIndex < 0 || actionsIndex < 0 || fullscreenIndex > calibrationIndex || calibrationIndex > sensorCalibrationIndex || sensorCalibrationIndex > actionsIndex,
         'Recording startup order must be fullscreen -> calibration persistence -> sensor calibration -> actions');
