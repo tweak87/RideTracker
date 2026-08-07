@@ -184,7 +184,5 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
         updateQuality()
     }
 
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-
     private fun updateQuality() { qualityScore = QualityScore.calculate(sampleCount, acceptedLocations, rejectedLocations, 0, rideEngine.calibration != null, hasBarometer) }
 }
