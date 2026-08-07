@@ -4,6 +4,7 @@ import {
   createTelemetrySample, createRideSession, createRidePackage,
   validateRidePackage,
 } from './ridetracker-core.mjs';
+import { builtinPlugins, registerBuiltinPlugins, createPluginInstance } from './builtin-plugins.mjs';
 
 const bus = new EventBus();
 let seen = null;
@@ -24,7 +25,14 @@ core.cameras.upsert({ id: 'rear', name: 'Rear camera', available: true });
 core.cameras.select('rear');
 core.overlay.saveLayout({ id: 'landscape', orientation: 'landscape', widgets: [] });
 core.overlay.activate('landscape');
-core.plugins.register({ id: 'internal-sensors', name: 'Internal sensors', version: '1.0.0', capabilities: ['sensor.motion', 'sensor.gps'] });
+registerBuiltinPlugins(core.plugins);
+assert.equal(core.plugins.list().length, builtinPlugins.length);
+assert.equal(core.plugins.list('sensor.heartRate').some(p => p.id === 'ble-heart-rate'), true);
+
+const imuInstance = createPluginInstance('external-imu');
+assert.equal(imuInstance.settings.sampleRateHz, 200);
+assert.equal(imuInstance.settings.transport, 'bluetooth-le');
+assert.equal(imuInstance.calibration.zeroBias, true);
 
 const sample = createTelemetrySample({ timestampMs: 123.4, deviceId: 'phone', channelId: 'gps-speed', metric: 'speedKmh', value: 87.2, unit: 'km/h', quality: 0.93 });
 core.sensors.ingest(sample);
@@ -41,6 +49,7 @@ assert.equal(snap.coreVersion.startsWith('2.'), true);
 assert.equal(snap.devices.length, 1);
 assert.equal(snap.cameras.primaryId, 'rear');
 assert.equal(snap.hud.id, 'landscape');
+assert.equal(snap.plugins.length, builtinPlugins.length);
 
 const pkg = createRidePackage({ ...stopped, configurationSnapshot: snap });
 assert.equal(validateRidePackage(pkg), true);
