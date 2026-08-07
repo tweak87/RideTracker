@@ -117,13 +117,16 @@ if (fs.existsSync('index.html')) {
   const calibrationIndex = html.indexOf('update41.js?v=');
   const sensorCalibrationIndex = html.indexOf('update42.js?v=');
   const actionsIndex = html.indexOf('update40.js?v=');
-  failIf(dbIndex < 0 || rideEngineIndex < 0 || firstUpdateIndex < 0 || dbIndex > rideEngineIndex || dbIndex > firstUpdateIndex,
-    'Database repair service must load before ride engine and every update module');
-  if (dbIndex >= 0 || ridesIndex >= 0) failIf(dbIndex < 0 || ridesIndex < 0 || dbIndex > ridesIndex, 'Database service must load before the ride library');
-  if (pluginIndex >= 0 || fullscreenIndex >= 0) failIf(pluginIndex < 0 || fullscreenIndex < 0 || pluginIndex > fullscreenIndex, 'Plugin runtime must load before recording fullscreen controller');
-  if (fullscreenIndex >= 0 || calibrationIndex >= 0 || sensorCalibrationIndex >= 0 || actionsIndex >= 0) {
-    failIf(fullscreenIndex < 0 || calibrationIndex < 0 || sensorCalibrationIndex < 0 || actionsIndex < 0 || fullscreenIndex > calibrationIndex || calibrationIndex > sensorCalibrationIndex || sensorCalibrationIndex > actionsIndex,
-      'Recording startup order must be fullscreen -> calibration persistence -> sensor calibration -> actions');
+  const builtIndex = dbIndex >= 0 || rideEngineIndex >= 0 || firstUpdateIndex >= 0;
+  if (builtIndex) {
+    failIf(dbIndex < 0 || rideEngineIndex < 0 || firstUpdateIndex < 0 || dbIndex > rideEngineIndex || dbIndex > firstUpdateIndex,
+      'Database repair service must load before ride engine and every update module');
+    failIf(ridesIndex < 0 || dbIndex > ridesIndex, 'Database service must load before the ride library');
+    if (pluginIndex >= 0 || fullscreenIndex >= 0) failIf(pluginIndex < 0 || fullscreenIndex < 0 || pluginIndex > fullscreenIndex, 'Plugin runtime must load before recording fullscreen controller');
+    if (fullscreenIndex >= 0 || calibrationIndex >= 0 || sensorCalibrationIndex >= 0 || actionsIndex >= 0) {
+      failIf(fullscreenIndex < 0 || calibrationIndex < 0 || sensorCalibrationIndex < 0 || actionsIndex < 0 || fullscreenIndex > calibrationIndex || calibrationIndex > sensorCalibrationIndex || sensorCalibrationIndex > actionsIndex,
+        'Recording startup order must be fullscreen -> calibration persistence -> sensor calibration -> actions');
+    }
   }
 }
 
