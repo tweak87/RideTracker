@@ -2,9 +2,7 @@
   'use strict';
 
   const DB_NAME = 'RideTrackerMedia';
-  // Version 5 intentionally forces one more repair pass for Safari clients that
-  // may already have reached v4 while a legacy module still owned the upgrade event.
-  const DB_VERSION = 5;
+  const MIN_SCHEMA_VERSION = 6;
   const STORES = Object.freeze({
     videos: 'videos',
     ridePackages: 'ridePackages',
@@ -14,13 +12,11 @@
 
   const nativeOpen = indexedDB.open.bind(indexedDB);
   let openPromise = null;
+  let activeVersion = 0;
 
-  // Compatibility bridge for older RideTracker modules that still request an old
-  // RideTrackerMedia version. They transparently request the current schema.
-  indexedDB.open = function(name, version) {
-    if (name === DB_NAME && (!version || Number(version) < DB_VERSION)) return nativeOpen(name, DB_VERSION);
-    return version === undefined ? nativeOpen(name) : nativeOpen(name, version);
-  };
+  function missingStores(db) {
+    return Object.values(STORES).filter(store => !db.objectStoreNames.contains(store));
+  }
 
   function upgrade(db) {
     for (const store of Object.values(STORES)) {
@@ -28,37 +24,60 @@
     }
   }
 
-  function open() {
-    if (openPromise) return openPromise;
-    openPromise = new Promise((resolve, reject) => {
-      const request = nativeOpen(DB_NAME, DB_VERSION);
-      request.onupgradeneeded = () => upgrade(request.result);
-      request.onerror = () => {
-        openPromise = null;
-        reject(request.error || new Error('IndexedDB open failed'));
-      };
+  function rawOpen(version, repair = false) {
+    return new Promise((resolve, reject) => {
+      const request = version == null ? nativeOpen(DB_NAME) : nativeOpen(DB_NAME, version);
+      if (repair) request.onupgradeneeded = () => upgrade(request.result);
+      request.onerror = () => reject(request.error || new Error('IndexedDB open failed'));
       request.onblocked = () => console.warn('[RideTracker DB] Upgrade blocked by another tab.');
-      request.onsuccess = () => {
-        const db = request.result;
-        db.onversionchange = () => {
-          db.close();
-          openPromise = null;
-        };
-        const actualStores = [...db.objectStoreNames];
-        const missing = Object.values(STORES).filter(store => !db.objectStoreNames.contains(store));
-        if (missing.length) {
-          db.close();
-          openPromise = null;
-          reject(new Error(`RideTracker IndexedDB schema incomplete after v${DB_VERSION} repair: missing ${missing.join(', ')}; present ${actualStores.join(', ')}`));
-          return;
-        }
-        resolve(db);
-      };
+      request.onsuccess = () => resolve(request.result);
     });
+  }
+
+  function attachLifecycle(db) {
+    activeVersion = db.version;
+    db.onversionchange = () => {
+      db.close();
+      openPromise = null;
+    };
+    return db;
+  }
+
+  async function inspectAndRepair() {
+    let db = await rawOpen(null, false);
+    let missing = missingStores(db);
+    const needsVersionUpgrade = db.version < MIN_SCHEMA_VERSION;
+
+    if (!missing.length && !needsVersionUpgrade) return attachLifecycle(db);
+
+    const previousVersion = db.version;
+    db.close();
+    const repairVersion = Math.max(MIN_SCHEMA_VERSION, previousVersion + 1);
+    db = await rawOpen(repairVersion, true);
+    missing = missingStores(db);
+    if (missing.length) {
+      const present = [...db.objectStoreNames];
+      db.close();
+      throw new Error(`RideTracker IndexedDB repair failed at v${repairVersion}: missing ${missing.join(', ')}; present ${present.join(', ')}`);
+    }
+
+    window.dispatchEvent(new CustomEvent('ridetracker:database-repaired', {
+      detail: { fromVersion: previousVersion, toVersion: db.version, stores: [...db.objectStoreNames] }
+    }));
+    return attachLifecycle(db);
+  }
+
+  function open() {
+    if (!openPromise) {
+      openPromise = inspectAndRepair().catch(error => {
+        openPromise = null;
+        throw error;
+      });
+    }
     return openPromise;
   }
 
-  async function withStore(store, mode, operation) {
+  async function withStore(store, mode, operation, retry = true) {
     if (!Object.values(STORES).includes(store)) throw new Error(`Unknown RideTracker store: ${store}`);
     const db = await open();
     return new Promise((resolve, reject) => {
@@ -66,7 +85,12 @@
       try {
         tx = db.transaction(store, mode);
       } catch (error) {
-        openPromise = null;
+        if (retry) {
+          try { db.close(); } catch (_) {}
+          openPromise = null;
+          void withStore(store, mode, operation, false).then(resolve, reject);
+          return;
+        }
         reject(new Error(`RideTracker transaction failed for store ${store}; available stores: ${[...db.objectStoreNames].join(', ')}; ${error?.message || error}`));
         return;
       }
@@ -91,7 +115,8 @@
 
   const api = {
     name: DB_NAME,
-    version: DB_VERSION,
+    minimumSchemaVersion: MIN_SCHEMA_VERSION,
+    get version() { return activeVersion || MIN_SCHEMA_VERSION; },
     stores: STORES,
     open,
     put: (store, key, value) => withStore(store, 'readwrite', s => s.put(value, key)),
@@ -100,20 +125,25 @@
     getAll: store => withStore(store, 'readonly', s => s.getAll()),
     async selfTest() {
       const db = await open();
-      const stores = Object.values(STORES);
-      const missing = stores.filter(store => !db.objectStoreNames.contains(store));
-      if (missing.length) throw new Error(`Missing IndexedDB stores: ${missing.join(', ')}`);
+      const missing = missingStores(db);
+      if (missing.length) throw new Error(`Missing IndexedDB stores after repair: ${missing.join(', ')}`);
       const key = `selftest-${Date.now()}`;
       await api.put(STORES.cache, key, { ok: true, timestamp: Date.now() });
       const value = await api.get(STORES.cache, key);
       await api.delete(STORES.cache, key);
       if (!value?.ok) throw new Error('IndexedDB read/write self-test failed');
-      return { ok: true, name: DB_NAME, version: DB_VERSION, stores };
+      return { ok: true, name: DB_NAME, version: db.version, stores: [...db.objectStoreNames] };
     },
   };
 
   window.RideTrackerDatabase = api;
-  api.selfTest()
-    .then(result => window.dispatchEvent(new CustomEvent('ridetracker:database-ready', { detail: result })))
-    .catch(error => window.dispatchEvent(new CustomEvent('ridetracker:database-error', { detail: { message: String(error?.message || error) } })));
+  api.ready = api.selfTest()
+    .then(result => {
+      window.dispatchEvent(new CustomEvent('ridetracker:database-ready', { detail: result }));
+      return result;
+    })
+    .catch(error => {
+      window.dispatchEvent(new CustomEvent('ridetracker:database-error', { detail: { message: String(error?.message || error) } }));
+      throw error;
+    });
 })();
