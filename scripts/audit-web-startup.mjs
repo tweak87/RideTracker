@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 
 const requiredFiles = [
-  'update24.js','update25.js','update29.js','update33.js','update34.js','update35.js','update36.js','update37.js','update38.js'
+  'update24.js','update25.js','update29.js','update33.js','update34.js','update35.js','update36.js','update37.js','update38.js',
+  'core/storage/web-database-service.js','core/adapters/web-plugin-runtimes.mjs'
 ];
 for (const file of requiredFiles) {
   if (!fs.existsSync(file)) throw new Error(`Missing active web module: ${file}`);
@@ -17,6 +18,8 @@ const u35 = text('update35.js');
 const u36 = text('update36.js');
 const u37 = text('update37.js');
 const u38 = text('update38.js');
+const db = text('core/storage/web-database-service.js');
+const plugins = text('core/adapters/web-plugin-runtimes.mjs');
 
 const failIf = (condition, message) => { if (condition) throw new Error(message); };
 const requireToken = (source, token, message) => failIf(!source.includes(token), message);
@@ -34,6 +37,12 @@ failIf(/button\.textContent\s*=\s*['\"]Hauptmenü['\"];\s*button\.onclick/.test(
 requireToken(u29, 'dashboardVisible', 'update29.js must suspend HUD work behind the dashboard');
 requireToken(u29, 'idleTimer', 'update29.js must use an idle cadence while hidden');
 
+// IndexedDB schema must be versioned, migration-safe and self-tested.
+requireToken(db, "DB_VERSION = 3", 'Web database must use the current schema version');
+for (const store of ['videos','ridePackages','settings','cache']) requireToken(db, store, `Web database missing store: ${store}`);
+requireToken(db, 'selfTest()', 'Web database must run a startup self-test');
+requireToken(db, 'nativeOpen', 'Web database compatibility bridge missing');
+
 // Core user-facing modules must still expose their public APIs.
 [
   [u24, 'RideTrackerSettings', 'settings'],
@@ -42,7 +51,8 @@ requireToken(u29, 'idleTimer', 'update29.js must use an idle cadence while hidde
   [u35, 'RideTrackerRecordingSourceRouter', 'recording source router'],
   [u36, 'RideTrackerCameraSources', 'camera sources'],
   [u37, 'RideTrackerRideLibrary', 'ride library'],
-  [u38, 'RideTrackerNavigation', 'navigation']
+  [u38, 'RideTrackerNavigation', 'navigation'],
+  [plugins, 'RideTrackerWebPlugins', 'web plugin runtimes']
 ].forEach(([source, token, label]) => requireToken(source, token, `Missing ${label} API`));
 
 if (fs.existsSync('index.html')) {
@@ -52,6 +62,11 @@ if (fs.existsSync('index.html')) {
     for (const route of ['Neue Fahrt','Meine Fahrten','Karte','Statistiken','Achievements','Profil','HUD-Konfiguration','Geräte & Sensoren','Import & Replay','Einstellungen']) {
       requireToken(html, route, `Inline dashboard/navigation missing route: ${route}`);
     }
+  }
+  const dbIndex = html.indexOf('core/storage/web-database-service.js?v=');
+  const ridesIndex = html.indexOf('update37.js?v=');
+  if (dbIndex >= 0 || ridesIndex >= 0) {
+    failIf(dbIndex < 0 || ridesIndex < 0 || dbIndex > ridesIndex, 'Database service must load before the ride library');
   }
 }
 
