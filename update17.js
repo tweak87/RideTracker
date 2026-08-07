@@ -1,37 +1,54 @@
 (() => {
   'use strict';
 
+  const META_KEY = 'rideTracker.savedRides.v2';
   const activeProfileId = () => window.RideTrackerProfiles?.activeId?.() || 'local-default';
-  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+  const database = () => window.RideTrackerDatabase;
 
-  function openDB() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open('RideTrackerLibrary', 1);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
+  const readMeta = () => {
+    try { const rides = JSON.parse(localStorage.getItem(META_KEY) || '[]'); return Array.isArray(rides) ? rides : []; }
+    catch { return []; }
+  };
+  const writeMeta = rides => localStorage.setItem(META_KEY, JSON.stringify(rides));
 
   async function ridesForActiveUser() {
-    const db = await openDB();
-    const rides = await new Promise((resolve, reject) => {
-      const request = db.transaction('rides', 'readonly').objectStore('rides').getAll();
-      request.onsuccess = () => resolve((request.result || []).filter(r => (r.ownerProfileId || 'local-default') === activeProfileId()));
-      request.onerror = () => reject(request.error);
-    });
-    db.close();
-    return rides;
+    const db = database();
+    if (!db) return [];
+    const packages = await db.getAll(db.stores.ridePackages);
+    const metadata = readMeta();
+    const metaById = new Map(metadata.map(ride => [ride.id, ride]));
+    return (Array.isArray(packages) ? packages : [])
+      .filter(ride => (ride.ownerProfileId || metaById.get(ride.id)?.ownerProfileId || 'local-default') === activeProfileId())
+      .map(ride => {
+        const meta = metaById.get(ride.id) || {};
+        return {
+          ...ride,
+          title: meta.title || ride.rideName,
+          parkName: meta.park || ride.parkName,
+          rideName: meta.track || meta.title || ride.rideName,
+          rating: Number(meta.rating ?? ride.rating ?? 0),
+          notes: meta.notes ?? ride.notes ?? '',
+          comment: meta.comment ?? ride.comment ?? ''
+        };
+      });
   }
 
-  async function saveRide(ride) {
-    const db = await openDB();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction('rides', 'readwrite');
-      tx.objectStore('rides').put(ride);
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-    db.close();
+  async function saveRideMedia(ride) {
+    if (!ride?.id) return;
+    const db = database();
+    if (!db) throw new Error('RideTrackerDatabase ist noch nicht bereit.');
+    ride.updatedAt = new Date().toISOString();
+    await db.put(db.stores.ridePackages, ride.id, ride);
+
+    const metadata = readMeta();
+    const meta = metadata.find(item => item.id === ride.id);
+    if (meta) {
+      meta.rating = Number(ride.rating || 0);
+      meta.updatedAt = ride.updatedAt;
+      writeMeta(metadata);
+    }
+    window.dispatchEvent(new CustomEvent('ridetracker:ride-saved', { detail: { rideId: ride.id, isNew: false } }));
   }
 
   function installStyles() {
@@ -90,16 +107,16 @@
     section.innerHTML = `<div class="rt-shell"><header class="rt-head"><div><h2>Bilder & Bewertungen</h2><div class="rt-meta">Persönliche Bahnbilder und Bewertungen</div></div><button class="rt-back">Zurück</button></header><div class="rt-ride-media-list"></div></div>`;
     section.querySelector('.rt-back').onclick = () => section.remove();
     const host = section.querySelector('.rt-ride-media-list');
-    if (!rides.length) host.innerHTML = '<p>Noch keine Fahrt gespeichert. Nach der ersten Fahrt kannst du hier die Bahn bewerten und ein Bild hinterlegen.</p>';
+    if (!rides.length) host.innerHTML = '<p>Noch keine Fahrt bewusst gespeichert. Nach dem Speichern kannst du hier die Bahn bewerten und ein Bild hinterlegen.</p>';
     rides.sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).forEach(ride => {
       const title = ride.rideName || ride.document?.context?.rideName || 'Unbenannte Bahn';
       const park = ride.parkName || ride.document?.context?.parkName || 'Park nicht erkannt';
       const rating = Number(ride.rating || 0);
       const card = document.createElement('article'); card.className = 'rt-ride-media-card';
       card.innerHTML = `${ride.photoDataUrl ? `<img class="rt-ride-photo" alt="${escapeHtml(title)}" src="${ride.photoDataUrl}">` : '<div class="rt-ride-photo empty">Noch kein Bild</div>'}<div><strong>${escapeHtml(title)}</strong><div class="rt-meta">${escapeHtml(park)}</div><div class="rt-stars">${[1,2,3,4,5].map(v=>`<button class="${v<=rating?'on':''}" data-rating="${v}" aria-label="${v} Sterne">★</button>`).join('')}</div><div class="rt-media-actions"><label>Bild auswählen<input type="file" accept="image/*"></label><button class="rt-remove-photo">Bild entfernen</button></div></div>`;
-      card.querySelectorAll('[data-rating]').forEach(button => button.onclick = async () => { ride.rating = Number(button.dataset.rating); ride.document = ride.document || {}; ride.document.userRating = ride.rating; await saveRide(ride); showRideMedia(); });
-      card.querySelector('input').onchange = async event => { try { ride.photoDataUrl = await fileAsDataURL(event.target.files?.[0]); await saveRide(ride); showRideMedia(); } catch (error) { alert(error.message); } };
-      card.querySelector('.rt-remove-photo').onclick = async () => { delete ride.photoDataUrl; await saveRide(ride); showRideMedia(); };
+      card.querySelectorAll('[data-rating]').forEach(button => button.onclick = async () => { ride.rating = Number(button.dataset.rating); ride.document = ride.document || {}; ride.document.userRating = ride.rating; await saveRideMedia(ride); showRideMedia(); });
+      card.querySelector('input').onchange = async event => { try { ride.photoDataUrl = await fileAsDataURL(event.target.files?.[0]); await saveRideMedia(ride); showRideMedia(); } catch (error) { alert(error.message); } };
+      card.querySelector('.rt-remove-photo').onclick = async () => { delete ride.photoDataUrl; await saveRideMedia(ride); showRideMedia(); };
       host.appendChild(card);
     });
     document.body.appendChild(section);
@@ -117,5 +134,5 @@
   }
 
   installStyles(); installRecordingBanner(); addMenuEntry();
-  window.RideTrackerRideMedia = { showRideMedia };
+  window.RideTrackerRideMedia = { showRideMedia, ridesForActiveUser };
 })();
