@@ -38,37 +38,14 @@ final class DeviceRegistryStore: ObservableObject {
     private let bindingKey = "rideTracker.metricBindings.v1"
 
     init() {
-        if let data = UserDefaults.standard.data(forKey: deviceKey),
-           let value = try? JSONDecoder().decode([RTDeviceDescriptor].self, from: data) {
-            devices = value
-        } else {
-            devices = Self.defaults
-        }
-        if let data = UserDefaults.standard.data(forKey: bindingKey),
-           let value = try? JSONDecoder().decode([RTMetricBinding].self, from: data) {
-            bindings = value
-        } else {
-            bindings = Self.defaultBindings
-        }
+        if let data = UserDefaults.standard.data(forKey: deviceKey), let value = try? JSONDecoder().decode([RTDeviceDescriptor].self, from: data) { devices = value } else { devices = Self.defaults }
+        if let data = UserDefaults.standard.data(forKey: bindingKey), let value = try? JSONDecoder().decode([RTMetricBinding].self, from: data) { bindings = value } else { bindings = Self.defaultBindings }
     }
 
-    func saveDevices() {
-        if let data = try? JSONEncoder().encode(devices) { UserDefaults.standard.set(data, forKey: deviceKey) }
-    }
-    func saveBindings() {
-        if let data = try? JSONEncoder().encode(bindings) { UserDefaults.standard.set(data, forKey: bindingKey) }
-    }
-    func addCustom() {
-        devices.append(.init(id: UUID().uuidString, name: "Neues Gerät", type: "custom", transport: "bluetooth-le", enabled: false, autoReconnect: true, channels: [.init(id: "value", metric: "customValue", unit: "", enabled: true, sampleRateHz: 1)]))
-    }
-    func sources(for metric: String) -> [String] {
-        devices.flatMap { device in
-            device.channels.compactMap { channel in
-                let matches = channel.metric == metric || (metric == "gForce" && channel.metric == "acceleration")
-                return matches ? "\(device.id)/\(channel.id)" : nil
-            }
-        }
-    }
+    func saveDevices() { if let data = try? JSONEncoder().encode(devices) { UserDefaults.standard.set(data, forKey: deviceKey) } }
+    func saveBindings() { if let data = try? JSONEncoder().encode(bindings) { UserDefaults.standard.set(data, forKey: bindingKey) } }
+    func addCustom() { devices.append(.init(id: UUID().uuidString, name: "Neues Gerät", type: "custom", transport: "bluetooth-le", enabled: false, autoReconnect: true, channels: [.init(id: "value", metric: "customValue", unit: "", enabled: true, sampleRateHz: 1)])) }
+    func sources(for metric: String) -> [String] { devices.flatMap { device in device.channels.compactMap { channel in let matches = channel.metric == metric || (metric == "gForce" && channel.metric == "acceleration"); return matches ? "\(device.id)/\(channel.id)" : nil } } }
 
     static let defaults: [RTDeviceDescriptor] = [
         .init(id:"phone-motion",name:"iPhone Bewegung",type:"phone",transport:"internal",enabled:true,autoReconnect:true,channels:[.init(id:"motion",metric:"gForce",unit:"g",enabled:true,sampleRateHz:100)]),
@@ -92,6 +69,7 @@ final class DeviceRegistryStore: ObservableObject {
 struct DeviceCenterView: View {
     @StateObject private var store = DeviceRegistryStore()
     @StateObject private var accessory = BLEAccessoryManager()
+    @State private var showConnector = false
 
     var body: some View {
         NavigationStack {
@@ -100,22 +78,12 @@ struct DeviceCenterView: View {
                     LabeledContent("BLE", value: accessory.state.rawValue)
                     if let name = accessory.connectedName { LabeledContent("Gerät", value: name) }
                     if let bpm = accessory.latestHeartRate { LabeledContent("Puls", value: "\(bpm) BPM") }
-                    HStack {
-                        Button("Pulssensor suchen") { accessory.scanHeartRate() }
-                        Button("Erstes Gerät verbinden") { accessory.connectFirst() }
-                            .disabled(accessory.discoveredNames.isEmpty)
-                    }
+                    Button("Externen Sensor verbinden") { showConnector = true }
                 }
-                Section {
-                    NavigationLink("Quellen & Prioritäten") {
-                        SourceRoutingView(store: store)
-                    }
-                }
+                Section { NavigationLink("Quellen & Prioritäten") { SourceRoutingView(store: store) } }
                 Section("Geräte") {
                     ForEach($store.devices) { $device in
-                        NavigationLink {
-                            DeviceDetailView(device: $device)
-                        } label: {
+                        NavigationLink { DeviceDetailView(device: $device) } label: {
                             VStack(alignment: .leading) {
                                 Text(device.name).font(.headline)
                                 Text("\(device.transport) · \(device.channels.count) Kanäle").font(.caption).foregroundStyle(.secondary)
@@ -126,6 +94,46 @@ struct DeviceCenterView: View {
             }
             .navigationTitle("Geräte & Sensoren")
             .toolbar { Button(action: store.addCustom) { Image(systemName: "plus") } }
+            .sheet(isPresented: $showConnector) { ExternalSensorConnectionSheet(accessory: accessory) }
+        }
+    }
+}
+
+private struct ExternalSensorConnectionSheet: View {
+    @ObservedObject var accessory: BLEAccessoryManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var mode = 0
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Sensortyp") {
+                    Picker("Profil", selection: $mode) {
+                        Text("Pulsmesser / Uhr").tag(0)
+                        Text("RideTracker IMU / GNSS").tag(1)
+                    }.pickerStyle(.segmented)
+                    Text(mode == 0 ? "Sucht Standard-BLE-Herzfrequenzsensoren. Uhren müssen den Herzfrequenz-Broadcast unterstützen." : "Sucht das RideTracker-Telemetrieprofil für externe IMU-/GNSS-Sensoren.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button("Sensoren suchen") { mode == 0 ? accessory.scanHeartRate() : accessory.scan() }
+                }
+                Section("Gefundene Geräte") {
+                    if accessory.discoveredNames.isEmpty { Text(accessory.state == .scanning ? "Suche läuft …" : "Noch keine Geräte gefunden").foregroundStyle(.secondary) }
+                    ForEach(accessory.discoveredNames, id: \.self) { name in
+                        HStack {
+                            Text(name)
+                            Spacer()
+                            Button("Verbinden") { accessory.connect(named: name) }.buttonStyle(.borderedProminent)
+                        }
+                    }
+                }
+                Section("Status") {
+                    LabeledContent("Bluetooth", value: accessory.state.rawValue)
+                    if let connectedName = accessory.connectedName { LabeledContent("Verbunden", value: connectedName) }
+                    if let bpm = accessory.latestHeartRate { LabeledContent("Puls", value: "\(bpm) BPM") }
+                }
+            }
+            .navigationTitle("Sensor verbinden")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { accessory.stopScan(); dismiss() } } }
         }
     }
 }
@@ -140,17 +148,10 @@ private struct SourceRoutingView: View {
                         Text("Keine").tag("")
                         ForEach(store.sources(for: binding.metric), id: \.self) { Text($0).tag($0) }
                     }
-                    TextField("Ersatzquellen, kommagetrennt", text: Binding(
-                        get: { binding.fallbackSources.joined(separator: ", ") },
-                        set: { binding.fallbackSources = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }
-                    ))
+                    TextField("Ersatzquellen, kommagetrennt", text: Binding(get: { binding.fallbackSources.joined(separator: ", ") }, set: { binding.fallbackSources = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }))
                     HStack { Text("Mindestqualität"); Slider(value: $binding.minimumQuality, in: 0...1, step: 0.05); Text(binding.minimumQuality.formatted(.number.precision(.fractionLength(2)))) }
                     Stepper("Maximales Alter: \(binding.maxAgeMs) ms", value: $binding.maxAgeMs, in: 0...10000, step: 250)
-                    Picker("Interpolation", selection: $binding.interpolation) {
-                        Text("Keine").tag("none")
-                        Text("Letzten Wert halten").tag("hold")
-                        Text("Linear").tag("linear")
-                    }
+                    Picker("Interpolation", selection: $binding.interpolation) { Text("Keine").tag("none"); Text("Letzten Wert halten").tag("hold"); Text("Linear").tag("linear") }
                 }
             }
         }.navigationTitle("Quellenrouting")
@@ -171,13 +172,7 @@ private struct DeviceDetailView: View {
             ForEach($device.channels) { $channel in
                 Section(channel.metric) {
                     Toggle("Kanal aktiv", isOn: $channel.enabled)
-                    HStack {
-                        Text("Messrate")
-                        Spacer()
-                        TextField("Hz", value: $channel.sampleRateHz, format: .number)
-                            .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                        Text("Hz")
-                    }
+                    HStack { Text("Messrate"); Spacer(); TextField("Hz", value: $channel.sampleRateHz, format: .number).keyboardType(.decimalPad).multilineTextAlignment(.trailing); Text("Hz") }
                     LabeledContent("Einheit", value: channel.unit)
                     Button(channel.calibratedAt == nil ? "Separat kalibrieren" : "Neu kalibrieren") { channel.calibratedAt = Date() }
                     if let date = channel.calibratedAt { Text("Kalibriert: \(date.formatted())").font(.caption).foregroundStyle(.secondary) }
