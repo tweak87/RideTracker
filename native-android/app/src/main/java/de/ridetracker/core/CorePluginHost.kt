@@ -15,6 +15,8 @@ enum class PluginCapability(val id: String) {
     VIDEO_EXPORT("video.export"),
     TELEMETRY_IMPORT("telemetry.import"),
     TELEMETRY_EXPORT("telemetry.export"),
+    DEVICE_DISCOVERY("device.discovery"),
+    DEVICE_CONNECTION("device.connection"),
     CALIBRATION_MOTION("calibration.motion"),
     CALIBRATION_LOCATION("calibration.location"),
     CALIBRATION_CAMERA("calibration.camera"),
@@ -66,7 +68,12 @@ class CorePluginHost {
         register(CorePluginDefinition(
             id = "ble-heart-rate",
             name = "Bluetooth Herzfrequenz",
-            capabilities = setOf(PluginCapability.HEART_RATE_BPM, PluginCapability.HUD_WIDGET_SOURCE),
+            capabilities = setOf(
+                PluginCapability.HEART_RATE_BPM,
+                PluginCapability.DEVICE_DISCOVERY,
+                PluginCapability.DEVICE_CONNECTION,
+                PluginCapability.HUD_WIDGET_SOURCE,
+            ),
         ))
         register(CorePluginDefinition(
             id = "external-imu",
@@ -75,6 +82,8 @@ class CorePluginHost {
                 PluginCapability.MOTION_ACCELERATION,
                 PluginCapability.MOTION_GYROSCOPE,
                 PluginCapability.MOTION_ORIENTATION,
+                PluginCapability.DEVICE_DISCOVERY,
+                PluginCapability.DEVICE_CONNECTION,
                 PluginCapability.CALIBRATION_MOTION,
                 PluginCapability.HUD_WIDGET_SOURCE,
             ),
@@ -86,6 +95,8 @@ class CorePluginHost {
                 PluginCapability.LOCATION_POSITION,
                 PluginCapability.LOCATION_SPEED,
                 PluginCapability.LOCATION_ALTITUDE,
+                PluginCapability.DEVICE_DISCOVERY,
+                PluginCapability.DEVICE_CONNECTION,
                 PluginCapability.CALIBRATION_LOCATION,
                 PluginCapability.HUD_WIDGET_SOURCE,
             ),
