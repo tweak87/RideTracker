@@ -65,11 +65,9 @@
     const recordTarget = host.querySelector('[data-record-settings]');
     const diagnosticsTarget = host.querySelector('[data-diagnostics-settings]');
 
-    // Die Setup-Karte mit Kalibrierung, Startprofil und Gerätekante gehört ausschließlich in Einstellungen.
     const setupCard = document.getElementById('calMode')?.closest('.card');
     if (setupCard && setupCard.parentElement !== recordTarget) recordTarget.appendChild(setupCard);
 
-    // HUD-Schnelloptionen aus der Video-Karte herauslösen; der vollständige HUD-Editor bleibt separat.
     const configGrid = videoCard.querySelector('.configGrid');
     if (configGrid && !document.getElementById('rtQuickHudSettings')) {
       const quick = document.createElement('div');
@@ -80,7 +78,6 @@
       recordTarget.appendChild(quick);
     }
 
-    // Karten-, Routen-, Profil- und Sensoroptionen aus späteren Updates ebenfalls aus der Aufnahme entfernen.
     const settingSelectors = [
       '#parkMapCard', '#routeSettingsCard', '#trackSettingsCard', '#sessionImportCard',
       '[data-section="route-settings"]', '[data-section="map-settings"]',
@@ -92,7 +89,6 @@
       if (card && card !== videoCard && card.parentElement !== recordTarget) recordTarget.appendChild(card);
     }
 
-    // Diagramme, Zusammenfassung und Diagnose stehen außerhalb des Aufnahmebildschirms zur Verfügung.
     qa('main>section.grid>.card').forEach(card => {
       if (card === videoCard || card === setupCard) return;
       if (card.querySelector('#normalVal,#positiveAvg,#latVal,#speed')) return;
@@ -119,7 +115,6 @@
     requestAnimationFrame(moveSettingsOutOfRecording);
   }
 
-  // Die bisherigen Einstellungs-Unterpunkte dürfen nicht mehr zurück in die Aufnahme scrollen.
   document.addEventListener('click', event => {
     const settingRoute = event.target.closest?.('[data-route="Einstellungen"],.rt-dashboard-settings');
     if (settingRoute) {
@@ -136,7 +131,6 @@
     }
   }, true);
 
-  // Einstellungskarten, die bisher openRecordSettings() aufriefen, bleiben innerhalb der Einstellungsseite.
   document.addEventListener('click', event => {
     const card = event.target.closest?.('[data-setting="record"],[data-setting="sensors"]');
     if (!card) return;
@@ -170,7 +164,6 @@
         document.body.classList.add('rt-app-fullscreen-active');
       }
     } catch (_) {
-      // iPhone Safari erlaubt häufig nur Video-Vollbild oder ein App-Vollbild-Fallback.
       if (video?.webkitEnterFullscreen) {
         try { video.webkitEnterFullscreen(); return; } catch (_) {}
       }
@@ -204,16 +197,13 @@
     if (!document.webkitFullscreenElement) document.body.classList.remove('rt-app-fullscreen-active');
   });
 
-  // Jede explizite Auswahl „Mit Video starten“ aktiviert unmittelbar Vollbild.
   document.addEventListener('click', event => {
     const button = event.target.closest?.('button');
     const label = (button?.textContent || '').trim().toLowerCase();
     if (!button || !label.includes('mit video starten')) return;
-    // Der Vollbildaufruf erfolgt noch im direkten User-Gesture-Handler.
     enterFullscreen();
   }, true);
 
-  // Fallback für ältere Oberflächen: Wird Start bei eingeschaltetem Video gedrückt, ebenfalls Vollbild aktivieren.
   document.addEventListener('click', event => {
     const button = event.target.closest?.('#start,#unifiedRideStart');
     if (!button) return;
@@ -222,20 +212,26 @@
     if (videoEnabled) enterFullscreen();
   }, true);
 
-  // Bei Drehung werden Canvas und Videofläche neu berechnet; die Overlay-Renderer reagieren auf Resize.
+  // Update orientation state only. Native resize/orientation events already notify renderers;
+  // never dispatch another resize event from inside a resize handler.
   const refreshOrientation = () => {
     const wrap = document.getElementById('videoWrap');
     if (!wrap) return;
     wrap.dataset.orientation = matchMedia('(orientation: portrait)').matches ? 'portrait' : 'landscape';
-    window.dispatchEvent(new Event('resize'));
   };
-  addEventListener('orientationchange', () => setTimeout(refreshOrientation, 120));
+  addEventListener('orientationchange', () => setTimeout(refreshOrientation, 120), { passive: true });
   screen.orientation?.addEventListener?.('change', refreshOrientation);
-  addEventListener('resize', refreshOrientation);
+  addEventListener('resize', refreshOrientation, { passive: true });
 
+  let mutationScheduled = false;
   const observer = new MutationObserver(() => {
-    moveSettingsOutOfRecording();
-    addExitButton();
+    if (mutationScheduled) return;
+    mutationScheduled = true;
+    requestAnimationFrame(() => {
+      mutationScheduled = false;
+      moveSettingsOutOfRecording();
+      addExitButton();
+    });
   });
   observer.observe(document.body, { childList: true, subtree: true });
   moveSettingsOutOfRecording();
