@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const requiredFiles = [
-  'update24.js','update25.js','update29.js','update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js','update40.js','update41.js',
+  'update24.js','update25.js','update29.js','update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js','update40.js','update41.js','update42.js',
   'core/storage/web-database-service.js','core/adapters/web-plugin-runtimes.mjs'
 ];
 for (const file of requiredFiles) {
@@ -21,13 +21,13 @@ const u38 = text('update38.js');
 const u39 = text('update39.js');
 const u40 = text('update40.js');
 const u41 = text('update41.js');
+const u42 = text('update42.js');
 const db = text('core/storage/web-database-service.js');
 const plugins = text('core/adapters/web-plugin-runtimes.mjs');
 
 const failIf = (condition, message) => { if (condition) throw new Error(message); };
 const requireToken = (source, token, message) => failIf(!source.includes(token), message);
 
-// Known boot blockers: event recursion and self-triggering mutation observers.
 failIf(u25.includes("dispatchEvent(new Event('resize'))") || u25.includes('dispatchEvent(new Event("resize"))'),
   'update25.js must never dispatch resize from its resize/orientation handler');
 requireToken(u25, 'mutationScheduled', 'update25.js MutationObserver must be throttled');
@@ -36,18 +36,15 @@ requireToken(u37, 'observerScheduled', 'update37.js MutationObserver must be thr
 failIf(/button\.textContent\s*=\s*['\"]Hauptmenü['\"];\s*button\.onclick/.test(u37) && !u37.includes("if(button.textContent!=='Hauptmenü')"),
   'update37.js must not rewrite tool button text on every mutation callback');
 
-// The HUD must not burn a full render loop while the start dashboard covers the camera.
 requireToken(u29, 'dashboardVisible', 'update29.js must suspend HUD work behind the dashboard');
 requireToken(u29, 'idleTimer', 'update29.js must use an idle cadence while hidden');
 
-// IndexedDB schema must be versioned, migration-safe and self-tested.
-requireToken(db, "DB_VERSION = 4", 'Web database must use repaired schema version 4');
+requireToken(db, "DB_VERSION = 5", 'Web database must use forced repair schema version 5');
 for (const store of ['videos','ridePackages','settings','cache']) requireToken(db, store, `Web database missing store: ${store}`);
 requireToken(db, 'selfTest()', 'Web database must run a startup self-test');
 requireToken(db, 'nativeOpen', 'Web database compatibility bridge missing');
-requireToken(db, 'schema incomplete after v${DB_VERSION} repair', 'Web database must detect incomplete repaired schemas');
+requireToken(db, 'available stores:', 'Database errors must report available stores');
 
-// Recording fullscreen must use the live camera preview, never the replay player.
 requireToken(u39, 'hasLiveCameraStream', 'Recording fullscreen must verify a live camera MediaStream');
 requireToken(u39, 'waitForLivePreview', 'Recording fullscreen must wait for the live preview');
 requireToken(u39, "recorded.classList.add('hidden')", 'Replay video must be hidden during recording');
@@ -57,34 +54,34 @@ requireToken(u39, 'object-position:50% 50%', 'Fullscreen live preview must be ce
 requireToken(u39, 'Deliberately do not stop the recording here', 'Leaving fullscreen must not stop recording');
 requireToken(u25, 'if (window.RideTrackerRecordingFullscreen) return;', 'Legacy fullscreen triggers must defer to update39');
 
-// Persistent calibration must be reusable and must gate all canonical recording starts.
 requireToken(u41, 'rideTracker.calibration.v1', 'Persistent calibration storage key missing');
 requireToken(u41, 'applyStored', 'Stored calibration restore path missing');
 requireToken(u41, 'record.forwardEdge !== selectedForward()', 'Stored calibration must validate selected forward edge');
 requireToken(u41, 'ensureForStart', 'Calibration manager must expose a start gate');
-requireToken(u41, 'Jetzt kalibrieren', 'One-time calibration prompt missing');
-requireToken(u41, 'Neu kalibrieren', 'Explicit recalibration action missing');
-requireToken(u41, 'ridetracker:calibration-restored', 'Calibration restore event missing');
 requireToken(u40, 'calibrationManager.ensureForStart()', 'Canonical recording start must consult calibration manager');
 
-// Canonical recording actions: every simplified/minimize action must reach the real #start handler.
+requireToken(u42, 'selectedSensors', 'Sensor-aware calibration must inspect selected sensors');
+requireToken(u42, 'device?.enabled !== false', 'Calibration must ignore disabled devices');
+requireToken(u42, 'channel?.enabled !== false', 'Calibration must ignore disabled channels');
+requireToken(u42, 'Nicht verfügbar', 'Unavailable selected sensors must be shown but not required');
+requireToken(u42, 'Telefon ruhig in finaler Position halten', 'Phone motion calibration instructions missing');
+requireToken(u42, 'Keine stabile Kalibrierung erkannt', 'Calibration timeout feedback missing');
+requireToken(u42, 'RideTrackerSensorCalibration', 'Sensor calibration public API missing');
+requireToken(u42, 'manager.ensureForStart = ensureForStart', 'Sensor-aware gate must replace generic calibration gate');
+
 requireToken(u40, 'canonicalStart', 'Recording actions must provide a canonical start path');
 requireToken(u40, 'start.click()', 'Canonical recording action must invoke the base #start handler');
 requireToken(u40, 'setVideoEnabled(video)', 'Canonical recording action must explicitly set video mode');
 requireToken(u40, 'minimizeAndStartVideo', 'Minimize-and-video action API missing');
 requireToken(u40, '/minim/.test(label)', 'Existing minimize/video buttons must be routed to canonical recording actions');
 requireToken(u40, 'rtRecordingQuickStart', 'Simplified recording quick-start UI missing');
-requireToken(u40, 'Fahrt mit Video starten', 'Quick-start video action missing');
-requireToken(u40, 'Fahrt ohne Video starten', 'Quick-start no-video action missing');
 
-// Plugin migration: BLE/GNSS/IMU must enter via normalized plugin telemetry.
 requireToken(plugins, 'ridetracker:plugin-telemetry', 'Web plugin runtime must emit normalized plugin telemetry');
 requireToken(plugins, "return 'external-imu'", 'External IMU packets must be classified by the plugin runtime');
 requireToken(u35, 'ridetracker:plugin-telemetry', 'Source router must consume normalized plugin telemetry');
 requireToken(u35, "'external-imu'", 'Source router must accept external IMU plugin telemetry');
 failIf(u35.includes("addEventListener('ridetracker:heart-rate'"), 'BLE heart rate must no longer bypass plugin runtime');
 
-// Core user-facing modules must still expose their public APIs.
 [
   [u24, 'RideTrackerSettings', 'settings'],
   [u33, 'RideTrackerDeviceCenter', 'device center'],
@@ -96,6 +93,7 @@ failIf(u35.includes("addEventListener('ridetracker:heart-rate'"), 'BLE heart rat
   [u39, 'RideTrackerRecordingFullscreen', 'recording fullscreen'],
   [u40, 'RideTrackerRecordingActions', 'recording actions'],
   [u41, 'RideTrackerCalibrationManager', 'calibration manager'],
+  [u42, 'RideTrackerSensorCalibration', 'sensor calibration'],
   [plugins, 'RideTrackerWebPlugins', 'web plugin runtimes']
 ].forEach(([source, token, label]) => requireToken(source, token, `Missing ${label} API`));
 
@@ -111,16 +109,13 @@ if (fs.existsSync('index.html')) {
   const pluginIndex = html.indexOf('core/adapters/web-plugin-runtimes.mjs?v=');
   const fullscreenIndex = html.indexOf('update39.js?v=');
   const calibrationIndex = html.indexOf('update41.js?v=');
+  const sensorCalibrationIndex = html.indexOf('update42.js?v=');
   const actionsIndex = html.indexOf('update40.js?v=');
-  if (dbIndex >= 0 || ridesIndex >= 0) {
-    failIf(dbIndex < 0 || ridesIndex < 0 || dbIndex > ridesIndex, 'Database service must load before the ride library');
-  }
-  if (pluginIndex >= 0 || fullscreenIndex >= 0) {
-    failIf(pluginIndex < 0 || fullscreenIndex < 0 || pluginIndex > fullscreenIndex, 'Plugin runtime must load before recording fullscreen controller');
-  }
-  if (fullscreenIndex >= 0 || calibrationIndex >= 0 || actionsIndex >= 0) {
-    failIf(fullscreenIndex < 0 || calibrationIndex < 0 || actionsIndex < 0 || fullscreenIndex > calibrationIndex || calibrationIndex > actionsIndex,
-      'Recording startup order must be fullscreen -> calibration -> actions');
+  if (dbIndex >= 0 || ridesIndex >= 0) failIf(dbIndex < 0 || ridesIndex < 0 || dbIndex > ridesIndex, 'Database service must load before the ride library');
+  if (pluginIndex >= 0 || fullscreenIndex >= 0) failIf(pluginIndex < 0 || fullscreenIndex < 0 || pluginIndex > fullscreenIndex, 'Plugin runtime must load before recording fullscreen controller');
+  if (fullscreenIndex >= 0 || calibrationIndex >= 0 || sensorCalibrationIndex >= 0 || actionsIndex >= 0) {
+    failIf(fullscreenIndex < 0 || calibrationIndex < 0 || sensorCalibrationIndex < 0 || actionsIndex < 0 || fullscreenIndex > calibrationIndex || calibrationIndex > sensorCalibrationIndex || sensorCalibrationIndex > actionsIndex,
+      'Recording startup order must be fullscreen -> calibration persistence -> sensor calibration -> actions');
   }
 }
 
