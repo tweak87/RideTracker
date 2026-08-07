@@ -19,6 +19,7 @@ import com.google.android.gms.location.Priority
 import de.ridetracker.core.CoreNativeSourceRoutingSnapshot
 import de.ridetracker.core.RideTrackerCoreAdapter
 import de.ridetracker.engine.*
+import de.ridetracker.hud.AndroidHudConfigurationStore
 import de.ridetracker.session.*
 import de.ridetracker.video.CameraSourceManager
 import java.io.File
@@ -139,6 +140,7 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
             sourceRouting = routingSnapshot,
             forwardEdge = forwardEdge.name.lowercase(),
             connectedHeartRateName = heartRateSource,
+            hud = AndroidHudConfigurationStore.snapshot(context),
         )
         val document = RideSessionDocument(
             id = sessionId, startedAt = startedAtInstant, endedAt = Instant.now(), events = sessionEvents.toList() + sourceEvents, samples = sessionSamples.toList(),
