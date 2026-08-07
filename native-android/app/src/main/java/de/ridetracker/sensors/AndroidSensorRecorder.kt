@@ -19,6 +19,7 @@ import com.google.android.gms.location.Priority
 import de.ridetracker.core.RideTrackerCoreAdapter
 import de.ridetracker.engine.*
 import de.ridetracker.session.*
+import de.ridetracker.video.CameraSourceManager
 import java.io.File
 import java.time.Instant
 import java.util.UUID
@@ -123,12 +124,18 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
             coreAdapter.sourceSwitched(it.metric, it.to, it.timestampMs)
             RideSessionEvent(relativeSeconds, "source-switch:${it.metric}:${it.from ?: "none"}->${it.to ?: "none"}:${it.reason}")
         }
+        val configurationSnapshot = coreAdapter.configurationSnapshot(
+            cameraSources = CameraSourceManager(context),
+            forwardEdge = forwardEdge.name.lowercase(),
+            connectedHeartRateName = heartRateSource,
+        )
         val document = RideSessionDocument(
             id = sessionId, startedAt = startedAtInstant, endedAt = Instant.now(), events = sessionEvents.toList() + sourceEvents, samples = sessionSamples.toList(),
             summary = RideSessionSummary(duration, sampleCount, distanceMeters, acceptedLocations, rejectedLocations, qualityScore, ridePhase),
             calibrationMode = "manual", forwardEdge = forwardEdge.name.lowercase(), calibration = rideEngine.calibration,
             videoFilename = videoFilename, videoStartOffsetSeconds = videoStartOffsetSeconds,
             privateNote = privateNote, communityComment = communityComment, heartRateSource = sourceRouter.resolve<Int>("heartRateBpm")?.sourceId ?: heartRateSource,
+            configurationSnapshot = configurationSnapshot,
         )
         return document.save(context).also { lastSavedPath = it.absolutePath; status = "Session gespeichert: ${it.name}" }
     }
