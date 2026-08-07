@@ -7,11 +7,43 @@
 
   function replayElement() { return byId('replay'); }
   function previewElement() { return byId('preview'); }
+  function nearestAt(list, t) {
+    if (!Array.isArray(list) || !list.length) return null;
+    let lo = 0, hi = list.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (Number(list[mid]?.t ?? list[mid]?.timestamp ?? 0) < t) lo = mid + 1; else hi = mid;
+    }
+    if (lo > 0) {
+      const a = Number(list[lo - 1]?.t ?? list[lo - 1]?.timestamp ?? 0);
+      const b = Number(list[lo]?.t ?? list[lo]?.timestamp ?? 0);
+      if (Math.abs(a - t) <= Math.abs(b - t)) lo--;
+    }
+    return list[lo] || null;
+  }
   function currentTelemetry() {
     try {
-      if (typeof S !== 'undefined' && Array.isArray(S.samples)) return { samples: S.samples.slice() };
-    } catch (_) {}
-    return { samples: [] };
+      if (typeof S === 'undefined') return { samples: [] };
+      const motion = Array.isArray(S.motion) && S.motion.length
+        ? S.motion
+        : (Array.isArray(S.samples) ? S.samples.filter(sample => sample?.type === 'motion') : []);
+      const speeds = Array.isArray(S.speed) ? S.speed : [];
+      const samples = motion.map((sample, index) => {
+        const timestamp = Number(sample.t ?? sample.timestamp ?? index / 50);
+        const speed = nearestAt(speeds, timestamp);
+        return {
+          timestamp,
+          normalG: Number(sample.normal ?? sample.normalG ?? sample.n ?? 0),
+          lateralG: Number(sample.lateral ?? sample.lateralG ?? sample.l ?? 0),
+          longitudinalG: Number(sample.longitudinal ?? sample.longitudinalG ?? sample.q ?? 0),
+          totalG: Number(sample.total ?? sample.totalG ?? 0),
+          speedKmh: Number(speed?.v ?? 0)
+        };
+      });
+      return { samples };
+    } catch (_) {
+      return { samples: [] };
+    }
   }
   function attachReplayHud(replay) {
     return window.RideTrackerHudReplay?.attach?.(replay, currentTelemetry(), { host: byId('videoWrap') }) || false;
