@@ -25,6 +25,7 @@ jobs:
             update6.js update7.js update8.js update11.js update12.js \
             update13.js update14.js update15.js update16.js update17.js update18.js update19.js \
             update23.js update24.js update25.js update26.js update27.js update28.js update29.js update33.js update34.js update35.js update36.js update37.js \
+            core/ridetracker-core.mjs core/builtin-plugins.mjs core/adapters/web-runtime-adapter.mjs \
             shared/overlay/overlay-core.js scripts/prepare-pages.mjs; do
             node --check "$file"
           done
@@ -36,6 +37,7 @@ jobs:
           cp index.html update6.js update7.js update8.js update11.js update12.js \
             update13.js update14.js update15.js update16.js update17.js update18.js update19.js \
             update23.js update24.js update25.js update26.js update27.js update28.js update29.js update33.js update34.js update35.js update36.js update37.js dist/
+          cp -R core dist/core
           cp -R shared/ride-engine dist/shared/
           cp -R shared/overlay dist/shared/
           cp -R shared/devices dist/shared/
@@ -43,11 +45,11 @@ jobs:
           cd dist
           node scripts/prepare-pages.mjs
           VERSION="${GITHUB_SHA}"
-          sed -i "s#</body>#<script src=\"update6.js?v=${VERSION}\"></script><script src=\"update7.js?v=${VERSION}\"></script><script src=\"update8.js?v=${VERSION}\"></script><script type=\"module\" src=\"shared/ride-engine/browser-adapter.js?v=${VERSION}\"></script><script type=\"module\" src=\"update11.js?v=${VERSION}\"></script><script type=\"module\" src=\"update12.js?v=${VERSION}\"></script><script src=\"update13.js?v=${VERSION}\"></script><script src=\"update14.js?v=${VERSION}\"></script><script src=\"update16.js?v=${VERSION}\"></script><script src=\"update15.js?v=${VERSION}\"></script><script src=\"update17.js?v=${VERSION}\"></script><script src=\"update18.js?v=${VERSION}\"></script><script src=\"update19.js?v=${VERSION}\"></script><script src=\"update23.js?v=${VERSION}\"></script><script src=\"update24.js?v=${VERSION}\"></script><script src=\"update25.js?v=${VERSION}\"></script><script src=\"update26.js?v=${VERSION}\"></script><script src=\"update27.js?v=${VERSION}\"></script><script src=\"update28.js?v=${VERSION}\"></script><script src=\"update29.js?v=${VERSION}\"></script><script src=\"update33.js?v=${VERSION}\"></script><script src=\"update34.js?v=${VERSION}\"></script><script src=\"update35.js?v=${VERSION}\"></script><script src=\"update36.js?v=${VERSION}\"></script><script src=\"update37.js?v=${VERSION}\"></script></body>#" index.html
+          sed -i "s#</body>#<script src=\"update6.js?v=${VERSION}\"></script><script src=\"update7.js?v=${VERSION}\"></script><script src=\"update8.js?v=${VERSION}\"></script><script type=\"module\" src=\"shared/ride-engine/browser-adapter.js?v=${VERSION}\"></script><script type=\"module\" src=\"update11.js?v=${VERSION}\"></script><script type=\"module\" src=\"update12.js?v=${VERSION}\"></script><script src=\"update13.js?v=${VERSION}\"></script><script src=\"update14.js?v=${VERSION}\"></script><script src=\"update16.js?v=${VERSION}\"></script><script src=\"update15.js?v=${VERSION}\"></script><script src=\"update17.js?v=${VERSION}\"></script><script src=\"update18.js?v=${VERSION}\"></script><script src=\"update19.js?v=${VERSION}\"></script><script src=\"update23.js?v=${VERSION}\"></script><script src=\"update24.js?v=${VERSION}\"></script><script src=\"update25.js?v=${VERSION}\"></script><script src=\"update26.js?v=${VERSION}\"></script><script src=\"update27.js?v=${VERSION}\"></script><script src=\"update28.js?v=${VERSION}\"></script><script src=\"update29.js?v=${VERSION}\"></script><script src=\"update33.js?v=${VERSION}\"></script><script src=\"update34.js?v=${VERSION}\"></script><script src=\"update35.js?v=${VERSION}\"></script><script src=\"update36.js?v=${VERSION}\"></script><script src=\"update37.js?v=${VERSION}\"></script><script type=\"module\" src=\"core/adapters/web-runtime-adapter.mjs?v=${VERSION}\"></script></body>#" index.html
           sed -i 's#<head>#<head><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">#' index.html
           touch .nojekyll
 
-      - name: Verify canonical HUD device and ride artifact
+      - name: Verify canonical HUD device ride and core artifact
         run: |
           grep -q 'RideTrackerStandaloneHudEditor' dist/update28.js
           grep -q 'rtConfiguredLiveHud' dist/update29.js
@@ -56,7 +58,10 @@ jobs:
           grep -q 'RideTrackerRecordingSourceRouter' dist/update35.js
           grep -q 'RideTrackerCameraSources' dist/update36.js
           grep -q 'RideTrackerRideLibrary' dist/update37.js
-          grep -q 'update37.js?v=' dist/index.html
+          grep -q 'RideTrackerCoreRuntime' dist/core/adapters/web-runtime-adapter.mjs
+          grep -q 'core/adapters/web-runtime-adapter.mjs?v=' dist/index.html
+          test -f dist/core/ridetracker-core.mjs
+          test -f dist/core/builtin-plugins.mjs
           test -f dist/shared/devices/device-registry.schema.json
           ! find dist -maxdepth 1 \( -name 'update20.js' -o -name 'update21.js' -o -name 'update22.js' -o -name 'update30.js' -o -name 'update31.js' -o -name 'update32.js' \) | grep -q .
           ! grep -q 'id="rtHudConfigView"' dist/update23.js
