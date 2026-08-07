@@ -2,7 +2,9 @@
   'use strict';
 
   const DB_NAME = 'RideTrackerMedia';
-  const DB_VERSION = 3;
+  // Version 4 intentionally repairs clients that were already promoted to v3
+  // while only the legacy "videos" store had been created.
+  const DB_VERSION = 4;
   const STORES = Object.freeze({
     videos: 'videos',
     ridePackages: 'ridePackages',
@@ -14,7 +16,7 @@
   let openPromise = null;
 
   // Compatibility bridge for older RideTracker modules that still request DB version 1.
-  // It preserves existing data while ensuring all callers use the current schema.
+  // Existing callers transparently use the current schema without losing stored videos.
   indexedDB.open = function(name, version) {
     if (name === DB_NAME && (!version || Number(version) < DB_VERSION)) {
       return nativeOpen(name, DB_VERSION);
@@ -33,16 +35,22 @@
     openPromise = new Promise((resolve, reject) => {
       const request = nativeOpen(DB_NAME, DB_VERSION);
       request.onupgradeneeded = () => upgrade(request.result);
-      request.onerror = () => { openPromise = null; reject(request.error || new Error('IndexedDB open failed')); };
+      request.onerror = () => {
+        openPromise = null;
+        reject(request.error || new Error('IndexedDB open failed'));
+      };
       request.onblocked = () => console.warn('[RideTracker DB] Upgrade blocked by another tab.');
       request.onsuccess = () => {
         const db = request.result;
-        db.onversionchange = () => { db.close(); openPromise = null; };
+        db.onversionchange = () => {
+          db.close();
+          openPromise = null;
+        };
         const missing = Object.values(STORES).filter(store => !db.objectStoreNames.contains(store));
         if (missing.length) {
           db.close();
           openPromise = null;
-          reject(new Error(`RideTracker IndexedDB schema incomplete: ${missing.join(', ')}`));
+          reject(new Error(`RideTracker IndexedDB schema incomplete after v${DB_VERSION} repair: ${missing.join(', ')}`));
           return;
         }
         resolve(db);
@@ -56,12 +64,21 @@
     const db = await open();
     return new Promise((resolve, reject) => {
       let tx;
-      try { tx = db.transaction(store, mode); }
-      catch (error) { openPromise = null; reject(error); return; }
+      try {
+        tx = db.transaction(store, mode);
+      } catch (error) {
+        openPromise = null;
+        reject(error);
+        return;
+      }
       const objectStore = tx.objectStore(store);
       let request;
-      try { request = operation(objectStore); }
-      catch (error) { reject(error); return; }
+      try {
+        request = operation(objectStore);
+      } catch (error) {
+        reject(error);
+        return;
+      }
       if (request) {
         request.onerror = () => reject(request.error || new Error('IndexedDB request failed'));
         request.onsuccess = () => resolve(request.result);
