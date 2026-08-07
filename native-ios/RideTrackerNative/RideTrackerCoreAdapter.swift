@@ -27,25 +27,66 @@ struct CoreNativeDeviceSnapshot: Codable, Hashable {
     let enabled: Bool
 }
 
+struct CoreNativeSourceRoutingSnapshot: Codable, Hashable {
+    let metric: String
+    let primarySource: String
+    let fallbackSources: [String]
+    let minimumQuality: Double
+    let maxAgeMs: Int
+    let interpolation: String
+    let widgetId: String?
+}
+
 struct CoreNativeCameraSnapshot: Codable, Hashable {
-    let primaryID: String?
-    let fallbackIDs: [String]
+    let primaryId: String?
+    let fallbackIds: [String]
     let sources: [CameraSourceDescriptor]
 }
 
+struct CoreNativeHUDElementSnapshot: Codable, Hashable {
+    let id: String
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
+    let scale: Double
+    let opacity: Double
+    let visible: Bool
+}
+
+struct CoreNativeHUDProfileSnapshot: Codable, Hashable {
+    let elements: [CoreNativeHUDElementSnapshot]
+}
+
+struct CoreNativeHUDSnapshot: Codable, Hashable {
+    let version: String
+    let activeProfile: String?
+    let profiles: [String: CoreNativeHUDProfileSnapshot]
+    let watermark: String?
+}
+
+struct CoreNativeCalibrationSnapshot: Codable, Hashable {
+    let mode: String
+    let forwardEdge: String
+    let deviceCalibration: String?
+}
+
 struct CoreNativeConfigurationSnapshot: Codable, Hashable {
+    let schemaVersion: String
     let coreVersion: String
     let capturedAt: Date
     let platform: String
     let devices: [CoreNativeDeviceSnapshot]
+    let sourceRouting: [CoreNativeSourceRoutingSnapshot]
     let camera: CoreNativeCameraSnapshot
-    let calibrationMode: String
-    let forwardEdge: String
+    let hud: CoreNativeHUDSnapshot
+    let calibration: CoreNativeCalibrationSnapshot
 }
 
 @MainActor
 final class RideTrackerCoreAdapter: ObservableObject {
     static let coreVersion = "2.0.0-alpha.1"
+    static let snapshotSchemaVersion = "1.0.0"
 
     @Published private(set) var latestTelemetry: [String: CoreTelemetrySample] = [:]
     @Published private(set) var events: [CoreRuntimeEvent] = []
@@ -98,6 +139,7 @@ final class RideTrackerCoreAdapter: ObservableObject {
 
     func configurationSnapshot(
         cameraSources: CameraSourceManager,
+        sourcePolicies: [TelemetrySourcePolicy],
         forwardEdge: String,
         connectedAccessoryName: String?
     ) -> CoreNativeConfigurationSnapshot {
@@ -107,19 +149,44 @@ final class RideTrackerCoreAdapter: ObservableObject {
         if let connectedAccessoryName, !connectedAccessoryName.isEmpty {
             devices.append(CoreNativeDeviceSnapshot(id: "ble-heart", name: connectedAccessoryName, type: "bluetooth-le", enabled: true))
         }
+        let routing = sourcePolicies.map {
+            CoreNativeSourceRoutingSnapshot(
+                metric: $0.metric,
+                primarySource: $0.primarySource,
+                fallbackSources: $0.fallbackSources,
+                minimumQuality: min(max($0.minimumQuality, 0), 1),
+                maxAgeMs: max(0, $0.maxAgeMs),
+                interpolation: "hold",
+                widgetId: nil
+            )
+        }
         return CoreNativeConfigurationSnapshot(
+            schemaVersion: Self.snapshotSchemaVersion,
             coreVersion: Self.coreVersion,
             capturedAt: Date(),
             platform: "ios",
             devices: devices,
+            sourceRouting: routing,
             camera: CoreNativeCameraSnapshot(
-                primaryID: cameraSources.primarySourceID,
-                fallbackIDs: cameraSources.fallbackSourceIDs,
+                primaryId: cameraSources.primarySourceID,
+                fallbackIds: cameraSources.fallbackSourceIDs,
                 sources: cameraSources.sources
             ),
-            calibrationMode: "manual",
-            forwardEdge: forwardEdge
+            hud: loadHUDSnapshot(),
+            calibration: CoreNativeCalibrationSnapshot(mode: "manual", forwardEdge: forwardEdge, deviceCalibration: nil)
         )
+    }
+
+    private func loadHUDSnapshot() -> CoreNativeHUDSnapshot {
+        var profiles: [String: CoreNativeHUDProfileSnapshot] = [:]
+        let decoder = JSONDecoder()
+        for (name, key) in [("portrait", "nativeHudPortrait"), ("landscape", "nativeHudLandscape")] {
+            guard let json = UserDefaults.standard.string(forKey: key),
+                  let data = json.data(using: .utf8),
+                  let profile = try? decoder.decode(CoreNativeHUDProfileSnapshot.self, from: data) else { continue }
+            profiles[name] = profile
+        }
+        return CoreNativeHUDSnapshot(version: "1.0.0", activeProfile: nil, profiles: profiles, watermark: nil)
     }
 
     private func appendEvent(
