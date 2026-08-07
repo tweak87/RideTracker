@@ -88,9 +88,21 @@ final class RideTrackerCoreAdapter: ObservableObject {
     static let coreVersion = "2.0.0-alpha.1"
     static let snapshotSchemaVersion = "1.0.0"
 
-    @Published private(set) var latestTelemetry: [String: CoreTelemetrySample] = [:]
+    let devices = CoreDeviceManager()
+    let sensors = CoreSensorManager()
+    let cameras = CoreCameraManager()
+    let recording = CoreRecordingManager()
+
     @Published private(set) var events: [CoreRuntimeEvent] = []
-    @Published private(set) var activeSessionID: String?
+
+    var latestTelemetry: [String: CoreTelemetrySample] {
+        Dictionary(uniqueKeysWithValues: sensors.snapshot().map { ("\($0.deviceID)/\($0.channelID)", $0) })
+    }
+
+    var activeSessionID: String? {
+        guard recording.active else { return nil }
+        return recording.session?.sessionID
+    }
 
     func ingest(
         metric: String,
@@ -104,7 +116,7 @@ final class RideTrackerCoreAdapter: ObservableObject {
         let parts = sourceID.split(separator: "/", maxSplits: 1).map(String.init)
         let deviceID = parts.first ?? "ios-device"
         let channelID = parts.count > 1 ? parts[1] : metric
-        let sample = CoreTelemetrySample(
+        sensors.ingest(CoreTelemetrySample(
             timestampMs: timestamp * 1000,
             deviceID: deviceID,
             channelID: channelID,
@@ -113,18 +125,18 @@ final class RideTrackerCoreAdapter: ObservableObject {
             unit: unit,
             quality: min(max(quality, 0), 1),
             sourceID: sourceID
-        )
-        latestTelemetry["\(deviceID)/\(channelID)"] = sample
+        ))
     }
 
     func recordingStarted(sessionID: String, timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime) {
-        activeSessionID = sessionID
-        appendEvent(type: "recording.started", timestamp: timestamp, sessionID: sessionID)
+        let state = recording.start(sessionID: sessionID, timestampMs: timestamp * 1000)
+        appendEvent(type: "recording.started", timestamp: timestamp, sessionID: state.sessionID)
     }
 
     func recordingStopped(timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime) {
-        appendEvent(type: "recording.stopped", timestamp: timestamp, sessionID: activeSessionID)
-        activeSessionID = nil
+        let sessionID = recording.session?.sessionID
+        recording.stop(timestampMs: timestamp * 1000)
+        appendEvent(type: "recording.stopped", timestamp: timestamp, sessionID: sessionID)
     }
 
     func sourceSwitched(metric: String, sourceID: String?, timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime) {
@@ -132,9 +144,9 @@ final class RideTrackerCoreAdapter: ObservableObject {
     }
 
     func resetRuntime() {
-        latestTelemetry.removeAll(keepingCapacity: true)
+        sensors.clear()
+        recording.reset()
         events.removeAll(keepingCapacity: true)
-        activeSessionID = nil
     }
 
     func configurationSnapshot(
@@ -143,11 +155,10 @@ final class RideTrackerCoreAdapter: ObservableObject {
         forwardEdge: String,
         connectedAccessoryName: String?
     ) -> CoreNativeConfigurationSnapshot {
-        var devices = [
-            CoreNativeDeviceSnapshot(id: "iphone", name: "iPhone", type: "internal", enabled: true)
-        ]
+        devices.clear()
+        devices.upsert(CoreNativeDeviceSnapshot(id: "iphone", name: "iPhone", type: "internal", enabled: true))
         if let connectedAccessoryName, !connectedAccessoryName.isEmpty {
-            devices.append(CoreNativeDeviceSnapshot(id: "ble-heart", name: connectedAccessoryName, type: "bluetooth-le", enabled: true))
+            devices.upsert(CoreNativeDeviceSnapshot(id: "ble-heart", name: connectedAccessoryName, type: "bluetooth-le", enabled: true))
         }
         let routing = sourcePolicies.map {
             CoreNativeSourceRoutingSnapshot(
@@ -160,18 +171,19 @@ final class RideTrackerCoreAdapter: ObservableObject {
                 widgetId: nil
             )
         }
+        cameras.sync(
+            sources: cameraSources.sources,
+            primaryID: cameraSources.primarySourceID,
+            fallbackIDs: cameraSources.fallbackSourceIDs
+        )
         return CoreNativeConfigurationSnapshot(
             schemaVersion: Self.snapshotSchemaVersion,
             coreVersion: Self.coreVersion,
             capturedAt: Date(),
             platform: "ios",
-            devices: devices,
+            devices: devices.list(),
             sourceRouting: routing,
-            camera: CoreNativeCameraSnapshot(
-                primaryId: cameraSources.primarySourceID,
-                fallbackIds: cameraSources.fallbackSourceIDs,
-                sources: cameraSources.sources
-            ),
+            camera: cameras.snapshot(),
             hud: loadHUDSnapshot(),
             calibration: CoreNativeCalibrationSnapshot(mode: "manual", forwardEdge: forwardEdge, deviceCalibration: nil)
         )
