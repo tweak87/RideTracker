@@ -15,6 +15,8 @@ enum PluginCapability: String, CaseIterable, Codable, Hashable {
     case videoExport = "video.export"
     case telemetryImport = "telemetry.import"
     case telemetryExport = "telemetry.export"
+    case deviceDiscovery = "device.discovery"
+    case deviceConnection = "device.connection"
     case calibrationMotion = "calibration.motion"
     case calibrationLocation = "calibration.location"
     case calibrationCamera = "calibration.camera"
@@ -71,17 +73,17 @@ final class CorePluginHost {
         register(CorePluginDefinition(
             id: "ble-heart-rate",
             name: "Bluetooth Herzfrequenz",
-            capabilities: [.heartRateBpm, .hudWidgetSource]
+            capabilities: [.heartRateBpm, .deviceDiscovery, .deviceConnection, .hudWidgetSource]
         ))
         register(CorePluginDefinition(
             id: "external-imu",
             name: "Externe IMU",
-            capabilities: [.motionAcceleration, .motionGyroscope, .motionOrientation, .calibrationMotion, .hudWidgetSource]
+            capabilities: [.motionAcceleration, .motionGyroscope, .motionOrientation, .deviceDiscovery, .deviceConnection, .calibrationMotion, .hudWidgetSource]
         ))
         register(CorePluginDefinition(
             id: "external-gnss",
             name: "Externer GNSS-Empfänger",
-            capabilities: [.locationPosition, .locationSpeed, .locationAltitude, .calibrationLocation, .hudWidgetSource]
+            capabilities: [.locationPosition, .locationSpeed, .locationAltitude, .deviceDiscovery, .deviceConnection, .calibrationLocation, .hudWidgetSource]
         ))
         register(CorePluginDefinition(
             id: "camera-source",
