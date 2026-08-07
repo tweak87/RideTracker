@@ -123,7 +123,9 @@ class RideTrackerCoreAdapter {
         const val SNAPSHOT_SCHEMA_VERSION="1.0.0"
     }
 
-    private val latestTelemetry=linkedMapOf<String,CoreTelemetrySample>()
+    val devices = CoreDeviceManager()
+    val sensors = CoreSensorManager()
+
     private val events=mutableListOf<CoreRuntimeEvent>()
     var activeSessionId:String?=null
         private set
@@ -140,7 +142,7 @@ class RideTrackerCoreAdapter {
         val parts=sourceId.split('/',limit=2)
         val deviceId=parts.firstOrNull().orEmpty().ifBlank{"android-device"}
         val channelId=parts.getOrNull(1)?.ifBlank{metric}?:metric
-        val sample=CoreTelemetrySample(
+        sensors.ingest(CoreTelemetrySample(
             timestampMs=timestampMs,
             deviceId=deviceId,
             channelId=channelId,
@@ -149,8 +151,7 @@ class RideTrackerCoreAdapter {
             unit=unit,
             quality=quality.coerceIn(0.0,1.0),
             sourceId=sourceId,
-        )
-        latestTelemetry["$deviceId/$channelId"]=sample
+        ))
     }
 
     fun recordingStarted(sessionId:String,timestampMs:Long=SystemClock.elapsedRealtime()) {
@@ -168,12 +169,12 @@ class RideTrackerCoreAdapter {
     }
 
     fun resetRuntime() {
-        latestTelemetry.clear()
+        sensors.clear()
         events.clear()
         activeSessionId=null
     }
 
-    fun telemetrySnapshot():List<CoreTelemetrySample> = latestTelemetry.values.toList()
+    fun telemetrySnapshot():List<CoreTelemetrySample> = sensors.snapshot()
     fun eventSnapshot():List<CoreRuntimeEvent> = events.toList()
 
     fun configurationSnapshot(
@@ -183,16 +184,17 @@ class RideTrackerCoreAdapter {
         connectedHeartRateName:String?,
         hud:CoreNativeHUDSnapshot = CoreNativeHUDSnapshot(),
     ):CoreNativeConfigurationSnapshot {
-        val devices=buildList {
-            add(CoreNativeDeviceSnapshot("android-phone","Android Smartphone","internal",true))
-            if(!connectedHeartRateName.isNullOrBlank()) add(CoreNativeDeviceSnapshot("ble-heart",connectedHeartRateName,"bluetooth-le",true))
+        devices.clear()
+        devices.upsert(CoreNativeDeviceSnapshot("android-phone","Android Smartphone","internal",true))
+        if(!connectedHeartRateName.isNullOrBlank()) {
+            devices.upsert(CoreNativeDeviceSnapshot("ble-heart",connectedHeartRateName,"bluetooth-le",true))
         }
         return CoreNativeConfigurationSnapshot(
             schemaVersion=SNAPSHOT_SCHEMA_VERSION,
             coreVersion=CORE_VERSION,
             capturedAt=Instant.now().toString(),
             platform="android",
-            devices=devices,
+            devices=devices.list(),
             sourceRouting=sourceRouting,
             camera=CoreNativeCameraSnapshot(
                 primaryId=cameraSources.primarySourceId,
