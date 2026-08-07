@@ -3,6 +3,7 @@
 
   const PROFILE_KEY = 'RideTrackerProfilesV1';
   const ACTIVE_KEY = 'RideTrackerActiveProfileV1';
+  const META_KEY = 'rideTracker.savedRides.v2';
   const DEFAULT_PROFILE = { id: 'local-default', name: 'Standardnutzer', createdAt: new Date().toISOString() };
 
   const loadProfiles = () => {
@@ -15,70 +16,86 @@
   const activeId = () => localStorage.getItem(ACTIVE_KEY) || loadProfiles()[0].id;
   const activeProfile = () => loadProfiles().find(p => p.id === activeId()) || loadProfiles()[0];
   const setActive = id => { localStorage.setItem(ACTIVE_KEY, id); updateBadge(); };
+  const database = () => window.RideTrackerDatabase;
 
-  function openDB() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open('RideTrackerLibrary', 1);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+  const readMeta = () => {
+    try { const value = JSON.parse(localStorage.getItem(META_KEY) || '[]'); return Array.isArray(value) ? value : []; }
+    catch { return []; }
+  };
+  const writeMeta = rides => localStorage.setItem(META_KEY, JSON.stringify(rides));
+
+  async function allPackages() {
+    const db = database();
+    if (!db) return [];
+    const rides = await db.getAll(db.stores.ridePackages);
+    return Array.isArray(rides) ? rides : [];
   }
 
-  async function allRides() {
-    const db = await openDB();
-    const rides = await new Promise((resolve, reject) => {
-      const r = db.transaction('rides', 'readonly').objectStore('rides').getAll();
-      r.onsuccess = () => resolve(r.result || []); r.onerror = () => reject(r.error);
-    });
-    db.close(); return rides;
+  async function writePackage(ride) {
+    if (!ride?.id) return;
+    const db = database();
+    if (!db) return;
+    await db.put(db.stores.ridePackages, ride.id, ride);
   }
 
-  async function writeRide(ride) {
-    const db = await openDB();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction('rides', 'readwrite'); tx.objectStore('rides').put(ride);
-      tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
-    });
-    db.close();
+  async function assignRideToProfile(rideId, profileId = activeId()) {
+    if (!rideId) return;
+    const profile = loadProfiles().find(p => p.id === profileId) || activeProfile();
+
+    const metadata = readMeta();
+    const metaRide = metadata.find(r => r.id === rideId);
+    if (metaRide) {
+      metaRide.ownerProfileId = profileId;
+      metaRide.ownerProfileName = profile.name;
+      writeMeta(metadata);
+    }
+
+    const db = database();
+    if (!db) return;
+    const ride = await db.get(db.stores.ridePackages, rideId);
+    if (!ride) return;
+    ride.ownerProfileId = profileId;
+    ride.document = ride.document || {};
+    ride.document.ownerProfileId = profileId;
+    ride.document.owner = { profileID: profileId, displayName: profile.name };
+    await writePackage(ride);
   }
 
   async function assignUnownedTo(profileId) {
-    const rides = await allRides();
-    for (const ride of rides) {
-      if (!ride.ownerProfileId) {
-        ride.ownerProfileId = profileId;
-        ride.document = ride.document || {};
-        ride.document.owner = { profileID: profileId, displayName: activeProfile().name };
-        await writeRide(ride);
-      }
+    const packages = await allPackages();
+    for (const ride of packages) {
+      if (!ride.ownerProfileId) await assignRideToProfile(ride.id, profileId);
     }
-  }
-
-  async function assignLatestToActive() {
-    await new Promise(r => setTimeout(r, 700));
-    const rides = (await allRides()).sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-    const latest = rides[0];
-    if (!latest) return;
-    latest.ownerProfileId = activeId();
-    latest.document = latest.document || {};
-    latest.document.owner = { profileID: activeId(), displayName: activeProfile().name };
-    await writeRide(latest);
+    const metadata = readMeta();
+    let changed = false;
+    for (const ride of metadata) {
+      if (!ride.ownerProfileId) { ride.ownerProfileId = profileId; ride.ownerProfileName = activeProfile().name; changed = true; }
+    }
+    if (changed) writeMeta(metadata);
   }
 
   async function resetActiveStatistics() {
     const profile = activeProfile();
-    if (!confirm(`Alle lokal gespeicherten Fahrten und Statistiken von „${profile.name}“ löschen?`)) return;
-    const db = await openDB();
-    const rides = await allRides();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction('rides', 'readwrite');
-      const store = tx.objectStore('rides');
-      rides.filter(r => (r.ownerProfileId || DEFAULT_PROFILE.id) === profile.id).forEach(r => store.delete(r.id));
-      tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
-    });
-    db.close();
+    if (!confirm(`Alle bewusst gespeicherten Fahrten und Statistiken von „${profile.name}“ löschen?`)) return;
+    const db = database();
+    const metadata = readMeta();
+    const ownedIds = new Set(metadata.filter(r => (r.ownerProfileId || DEFAULT_PROFILE.id) === profile.id).map(r => r.id));
+
+    if (db) {
+      const packages = await allPackages();
+      for (const ride of packages) {
+        if ((ride.ownerProfileId || DEFAULT_PROFILE.id) === profile.id) ownedIds.add(ride.id);
+      }
+      for (const id of ownedIds) {
+        await db.delete(db.stores.ridePackages, id);
+        await db.delete(db.stores.videos, id);
+      }
+    }
+
+    writeMeta(metadata.filter(r => !ownedIds.has(r.id)));
+    if (ownedIds.has(window.RideTrackerRideLibrary?.activeRideId?.())) window.RideTrackerRideLibrary?.newRideSession?.();
     document.querySelector('.rt-stats-view')?.remove();
-    alert('Statistiken und Fahrten dieses Benutzers wurden lokal zurückgesetzt.');
+    alert('Statistiken und gespeicherte Fahrten dieses Benutzers wurden lokal zurückgesetzt.');
   }
 
   function style() {
@@ -98,7 +115,7 @@
     document.querySelector('.rt-profile-modal')?.remove();
     const profiles = loadProfiles();
     const modal = document.createElement('div'); modal.className = 'rt-modal rt-profile-modal';
-    modal.innerHTML = `<div class="rt-modal-card"><h3>Benutzer</h3><p>Lokale Profile trennen Fahrten, Statistiken und Achievements auf diesem Gerät.</p><div class="rt-profile-list">${profiles.map(p => `<div class="rt-profile-row ${p.id===activeId()?'active':''}"><span><strong>${escapeHtml(p.name)}</strong><br><small>${p.id===activeId()?'Angemeldet':'Lokal gespeichert'}</small></span><button data-login="${p.id}">${p.id===activeId()?'Aktiv':'Anmelden'}</button></div>`).join('')}</div><div class="rt-profile-create"><input id="rtProfileName" placeholder="Neuer Benutzername"><button id="rtCreateProfile">Anlegen</button></div><div class="rt-modal-actions"><button id="rtResetStats" class="rt-danger">Statistiken & Fahrten zurücksetzen</button><button id="rtCloseProfiles">Schließen</button></div></div>`;
+    modal.innerHTML = `<div class="rt-modal-card"><h3>Benutzer</h3><p>Lokale Profile trennen bewusst gespeicherte Fahrten, Statistiken und Achievements auf diesem Gerät.</p><div class="rt-profile-list">${profiles.map(p => `<div class="rt-profile-row ${p.id===activeId()?'active':''}"><span><strong>${escapeHtml(p.name)}</strong><br><small>${p.id===activeId()?'Angemeldet':'Lokal gespeichert'}</small></span><button data-login="${p.id}">${p.id===activeId()?'Aktiv':'Anmelden'}</button></div>`).join('')}</div><div class="rt-profile-create"><input id="rtProfileName" placeholder="Neuer Benutzername"><button id="rtCreateProfile">Anlegen</button></div><div class="rt-modal-actions"><button id="rtResetStats" class="rt-danger">Statistiken & Fahrten zurücksetzen</button><button id="rtCloseProfiles">Schließen</button></div></div>`;
     modal.querySelectorAll('[data-login]').forEach(b => b.onclick = async () => { setActive(b.dataset.login); modal.remove(); location.reload(); });
     modal.querySelector('#rtCreateProfile').onclick = () => {
       const name = modal.querySelector('#rtProfileName').value.trim(); if (!name) return;
@@ -113,15 +130,14 @@
   function escapeHtml(v) { return String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
   function installHooks() {
-    document.getElementById('stop')?.addEventListener('click', assignLatestToActive, false);
-    document.getElementById('rideSessionImport')?.addEventListener('click', assignLatestToActive, false);
-    document.addEventListener('click', e => {
-      const b = e.target.closest('button');
-      if (b && /Statistiken|Achievements|Meine Fahrten|Karte/.test(b.textContent)) assignUnownedTo(activeId());
-    }, true);
+    window.addEventListener('ridetracker:ride-saved', event => {
+      const rideId = event.detail?.rideId;
+      if (rideId) void assignRideToProfile(rideId, activeId());
+    });
+    window.addEventListener('ridetracker:database-ready', () => void assignUnownedTo(activeId()));
   }
 
   saveProfiles(loadProfiles()); if (!localStorage.getItem(ACTIVE_KEY)) setActive(loadProfiles()[0].id);
-  style(); updateBadge(); installHooks(); assignUnownedTo(activeId());
-  window.RideTrackerProfiles = { activeId, activeProfile, showProfiles, resetActiveStatistics };
+  style(); updateBadge(); installHooks();
+  window.RideTrackerProfiles = { activeId, activeProfile, showProfiles, resetActiveStatistics, assignRideToProfile };
 })();
