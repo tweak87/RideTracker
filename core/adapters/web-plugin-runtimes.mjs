@@ -16,10 +16,12 @@ function capabilityAvailable(capability) {
   return true;
 }
 
-function isExternalGnssPacket(packet = {}) {
+function classifyExternalPacket(packet = {}) {
   const pluginId = String(packet.pluginId || '');
   const deviceId = String(packet.deviceId || '').toLowerCase();
-  return pluginId === 'external-gnss' || deviceId.includes('gnss') || deviceId.includes('gps-receiver');
+  if (pluginId === 'external-gnss' || deviceId.includes('gnss') || deviceId.includes('gps-receiver')) return 'external-gnss';
+  if (pluginId === 'external-imu' || deviceId.includes('imu') || deviceId.includes('accelerometer') || deviceId.includes('gyro')) return 'external-imu';
+  return null;
 }
 
 function attach(target = globalThis.window) {
@@ -60,13 +62,14 @@ function attach(target = globalThis.window) {
 
   const onExternalTelemetry = event => {
     const packet = event.detail || {};
-    if (!isExternalGnssPacket(packet)) return;
-    const deviceId = String(packet.deviceId || 'external-gnss');
+    const runtimePluginId = classifyExternalPacket(packet);
+    if (!runtimePluginId) return;
+    const deviceId = String(packet.deviceId || runtimePluginId);
     const timestampMs = Number(packet.timestampMs ?? performance.now());
     for (const channel of Array.isArray(packet.channels) ? packet.channels : []) {
       if (!channel || typeof channel.metric !== 'string' || !Number.isFinite(Number(channel.value))) continue;
       emitPluginTelemetry({
-        pluginId: 'external-gnss',
+        pluginId: runtimePluginId,
         deviceId,
         channelId: String(channel.channelId || channel.metric),
         metric: channel.metric,
