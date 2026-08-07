@@ -35,6 +35,7 @@ private struct RidePackageManifest: Codable {
     let platform: String
     let telemetry: RidePackageTelemetry
     let media: [RidePackageMedia]
+    let configurationSnapshot: CoreNativeConfigurationSnapshot?
     let privacy: RidePackagePrivacy
     let integrity: RidePackageIntegrity
 }
@@ -74,6 +75,7 @@ enum RidePackageStore {
                 durationSeconds: session.summary.durationSeconds
             ),
             media: media,
+            configurationSnapshot: session.configurationSnapshot,
             privacy: RidePackagePrivacy(visibility: "private", locationPrecision: "exact"),
             integrity: RidePackageIntegrity(algorithm: "sha256", files: hashes)
         )
