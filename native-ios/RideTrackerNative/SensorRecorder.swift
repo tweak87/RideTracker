@@ -193,6 +193,7 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
     func coreConfigurationSnapshot() -> CoreNativeConfigurationSnapshot {
         coreAdapter.configurationSnapshot(
             cameraSources: videoRecorder.cameraSources,
+            sourcePolicies: sourceRouter.policies,
             forwardEdge: forwardEdge.rawValue,
             connectedAccessoryName: accessoryManager.connectedName
         )
