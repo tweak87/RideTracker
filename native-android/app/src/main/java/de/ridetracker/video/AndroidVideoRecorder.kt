@@ -22,7 +22,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import java.io.File
 
-@OptIn(ExperimentalCamera2Interop::class)
+@ExperimentalCamera2Interop
 class AndroidVideoRecorder(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner,
