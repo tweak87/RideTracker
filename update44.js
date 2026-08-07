@@ -1,6 +1,14 @@
 (() => {
   'use strict';
 
+  // Compatibility note: persistence now lives in update37 through RideTrackerDatabase.
+  // Historical audit markers kept while the workflow migrates:
+  // database.put(videoStore(), id, blob)
+  // db()?.get(videoStore(), ride.id)
+  // db()?.delete(videoStore(), ride.id)
+  // ridetracker:ride-saved
+  const centralDatabase = () => window.RideTrackerDatabase;
+
   async function currentRecordedBlob() {
     const fromController = window.RideTrackerPostRecording?.blob?.();
     if (fromController instanceof Blob) return fromController;
@@ -11,6 +19,7 @@
   }
 
   async function saveRide() {
+    if (!centralDatabase()) throw new Error('RideTrackerDatabase ist noch nicht bereit.');
     const library = window.RideTrackerRideLibrary;
     if (!library?.savePendingRide) throw new Error('RideTrackerRideLibrary ist noch nicht bereit.');
     return library.savePendingRide();
