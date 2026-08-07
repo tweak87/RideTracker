@@ -16,6 +16,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult as GoogleLocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import de.ridetracker.core.CoreNativeSourceRoutingSnapshot
 import de.ridetracker.core.RideTrackerCoreAdapter
 import de.ridetracker.engine.*
 import de.ridetracker.session.*
@@ -124,8 +125,18 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
             coreAdapter.sourceSwitched(it.metric, it.to, it.timestampMs)
             RideSessionEvent(relativeSeconds, "source-switch:${it.metric}:${it.from ?: "none"}->${it.to ?: "none"}:${it.reason}")
         }
+        val routingSnapshot = sourceRouter.policies.map { policy ->
+            CoreNativeSourceRoutingSnapshot(
+                metric = policy.metric,
+                primarySource = policy.primarySource,
+                fallbackSources = policy.fallbackSources,
+                minimumQuality = policy.minimumQuality.coerceIn(0.0,1.0),
+                maxAgeMs = policy.maxAgeMs.coerceAtLeast(0),
+            )
+        }
         val configurationSnapshot = coreAdapter.configurationSnapshot(
             cameraSources = CameraSourceManager(context),
+            sourceRouting = routingSnapshot,
             forwardEdge = forwardEdge.name.lowercase(),
             connectedHeartRateName = heartRateSource,
         )
