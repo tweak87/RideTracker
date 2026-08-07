@@ -1,6 +1,8 @@
 package de.ridetracker.session
 
 import android.content.Context
+import de.ridetracker.core.CoreNativeConfigurationSnapshot
+import de.ridetracker.core.toJson
 import de.ridetracker.engine.SeatCalibration
 import org.json.JSONArray
 import org.json.JSONObject
@@ -54,6 +56,7 @@ data class RideSessionDocument(
     val privateNote: String = "",
     val communityComment: String = "",
     val heartRateSource: String? = null,
+    val configurationSnapshot: CoreNativeConfigurationSnapshot? = null,
 ) {
     fun toJson(owner: LocalUserProfile? = null): JSONObject = JSONObject().apply {
         put("schemaVersion", "2.0.0")
@@ -69,6 +72,7 @@ data class RideSessionDocument(
         })
         put("video", JSONObject().apply { put("sessionID", id); putNullable("filename", videoFilename); put("startOffsetSeconds", videoStartOffsetSeconds) })
         put("notes", JSONObject().apply { put("private", privateNote); put("comment", communityComment) })
+        configurationSnapshot?.let { put("configurationSnapshot", it.toJson()) }
         val heartRates = samples.mapNotNull { it.heartRateBpm }
         put("heartRate", JSONObject().apply {
             putNullable("source", heartRateSource); put("sampleCount", heartRates.size)
