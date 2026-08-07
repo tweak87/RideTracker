@@ -125,6 +125,7 @@ class RideTrackerCoreAdapter {
 
     val devices = CoreDeviceManager()
     val sensors = CoreSensorManager()
+    val cameras = CoreCameraManager()
 
     private val events=mutableListOf<CoreRuntimeEvent>()
     var activeSessionId:String?=null
@@ -189,6 +190,11 @@ class RideTrackerCoreAdapter {
         if(!connectedHeartRateName.isNullOrBlank()) {
             devices.upsert(CoreNativeDeviceSnapshot("ble-heart",connectedHeartRateName,"bluetooth-le",true))
         }
+        cameras.sync(
+            availableSources = cameraSources.refresh(),
+            primaryId = cameraSources.primarySourceId,
+            fallbackIds = cameraSources.fallbackSourceIds,
+        )
         return CoreNativeConfigurationSnapshot(
             schemaVersion=SNAPSHOT_SCHEMA_VERSION,
             coreVersion=CORE_VERSION,
@@ -196,11 +202,7 @@ class RideTrackerCoreAdapter {
             platform="android",
             devices=devices.list(),
             sourceRouting=sourceRouting,
-            camera=CoreNativeCameraSnapshot(
-                primaryId=cameraSources.primarySourceId,
-                fallbackIds=cameraSources.fallbackSourceIds,
-                sources=cameraSources.refresh(),
-            ),
+            camera=cameras.snapshot(),
             hud=hud,
             calibration=CoreNativeCalibrationSnapshot("manual",forwardEdge),
         )
