@@ -11,6 +11,8 @@ export const BuiltinCapabilities = Object.freeze({
   MICROPHONE: 'audio.microphone',
   VIDEO_EXPORT: 'video.export',
   TELEMETRY_EXPORT: 'telemetry.export',
+  DEVICE_DISCOVERY: 'device.discovery',
+  DEVICE_CONNECTION: 'device.connection',
   CALIBRATION_MOTION: 'calibration.motion',
   CALIBRATION_LOCATION: 'calibration.location',
   CALIBRATION_CAMERA: 'calibration.camera',
@@ -47,6 +49,8 @@ export const builtinPlugins = Object.freeze([
   }),
   plugin('ble-heart-rate', 'Bluetooth Herzfrequenz', [
     BuiltinCapabilities.HEART_RATE_BPM,
+    BuiltinCapabilities.DEVICE_DISCOVERY,
+    BuiltinCapabilities.DEVICE_CONNECTION,
     BuiltinCapabilities.HUD_WIDGET_SOURCE,
   ], {
     autoReconnect: { type: 'boolean', default: true },
@@ -58,6 +62,8 @@ export const builtinPlugins = Object.freeze([
     BuiltinCapabilities.MOTION_ACCELERATION,
     BuiltinCapabilities.MOTION_GYROSCOPE,
     BuiltinCapabilities.MOTION_ORIENTATION,
+    BuiltinCapabilities.DEVICE_DISCOVERY,
+    BuiltinCapabilities.DEVICE_CONNECTION,
     BuiltinCapabilities.CALIBRATION_MOTION,
     BuiltinCapabilities.HUD_WIDGET_SOURCE,
   ], {
@@ -72,6 +78,8 @@ export const builtinPlugins = Object.freeze([
     BuiltinCapabilities.LOCATION_POSITION,
     BuiltinCapabilities.LOCATION_SPEED,
     BuiltinCapabilities.LOCATION_ALTITUDE,
+    BuiltinCapabilities.DEVICE_DISCOVERY,
+    BuiltinCapabilities.DEVICE_CONNECTION,
     BuiltinCapabilities.CALIBRATION_LOCATION,
     BuiltinCapabilities.HUD_WIDGET_SOURCE,
   ], {
