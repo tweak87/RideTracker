@@ -59,29 +59,54 @@
     };
   }
 
+  function nearestAt(list, t) {
+    if (!Array.isArray(list) || !list.length) return null;
+    let lo = 0, hi = list.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (Number(list[mid]?.t ?? list[mid]?.timestamp ?? 0) < t) lo = mid + 1; else hi = mid;
+    }
+    if (lo > 0) {
+      const a = Number(list[lo - 1]?.t ?? list[lo - 1]?.timestamp ?? 0);
+      const b = Number(list[lo]?.t ?? list[lo]?.timestamp ?? 0);
+      if (Math.abs(a - t) <= Math.abs(b - t)) lo--;
+    }
+    return list[lo] || null;
+  }
+
   function currentWebRide(id = crypto.randomUUID()) {
     try {
-      if (typeof S === 'undefined' || !Array.isArray(S.samples) || !S.samples.length) return null;
-      const samples = S.samples.map((sample, index) => {
-        const gps = S.gps?.[Math.min(index, Math.max(0, (S.gps?.length || 1) - 1))];
+      if (typeof S === 'undefined') return null;
+      const motion = Array.isArray(S.motion) && S.motion.length
+        ? S.motion
+        : (Array.isArray(S.samples) ? S.samples.filter(sample => sample?.type === 'motion') : []);
+      if (!motion.length) return null;
+      const speeds = Array.isArray(S.speed) ? S.speed : [];
+      const gpsPoints = Array.isArray(S.gps) ? S.gps : [];
+      const samples = motion.map((sample, index) => {
+        const timestamp = Number(sample.t ?? sample.timestamp ?? index / 50);
+        const speed = nearestAt(speeds, timestamp);
+        const gps = nearestAt(gpsPoints, timestamp);
         return {
-          timestamp: Number(sample.t ?? sample.timestamp ?? index / 50),
+          timestamp,
           normalG: Number(sample.n ?? sample.normal ?? sample.normalG ?? 0),
           lateralG: Number(sample.l ?? sample.lateral ?? sample.lateralG ?? 0),
           longitudinalG: Number(sample.q ?? sample.longitudinal ?? sample.longitudinalG ?? 0),
-          speedMS: Number(sample.speedMS ?? sample.speed ?? 0),
-          relativeAltitudeM: Number(sample.height ?? sample.alt ?? 0),
-          latitude: Number(gps?.lat ?? gps?.latitude ?? sample.lat ?? NaN),
-          longitude: Number(gps?.lon ?? gps?.longitude ?? sample.lon ?? NaN)
+          totalG: Number(sample.total ?? sample.totalG ?? Math.hypot(Number(sample.normal ?? 0), Number(sample.lateral ?? 0), Number(sample.longitudinal ?? 0))),
+          speedMS: Number(speed?.v ?? 0) / 3.6,
+          relativeAltitudeM: Number(sample.height ?? gps?.alt ?? gps?.altitude ?? 0),
+          latitude: Number(gps?.lat ?? gps?.latitude ?? NaN),
+          longitude: Number(gps?.lon ?? gps?.longitude ?? NaN)
         };
       });
       return normalizeRide({
-        id, schemaVersion: '2.0.0', platform: 'web',
+        id, schemaVersion: '2.1.0', platform: 'web',
         startedAt: S.wall || new Date().toISOString(), samples,
         summary: {
           durationSeconds: Number(S.end || samples.at(-1)?.timestamp || 0),
           sampleCount: samples.length,
           distanceMeters: Number(S.dist || 0),
+          maxSpeedKmh: Number(S.sMax || 0),
           qualityScore: 0
         }
       });
