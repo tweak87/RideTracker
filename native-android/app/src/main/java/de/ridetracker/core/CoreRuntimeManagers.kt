@@ -1,5 +1,7 @@
 package de.ridetracker.core
 
+import de.ridetracker.video.CameraSourceDescriptor
+
 class CoreDeviceManager {
     private val devices = linkedMapOf<String, CoreNativeDeviceSnapshot>()
 
@@ -38,4 +40,47 @@ class CoreSensorManager {
     fun clear() = latest.clear()
 
     private fun key(deviceId: String, channelId: String) = "$deviceId/$channelId"
+}
+
+class CoreCameraManager {
+    private val sources = linkedMapOf<String, CameraSourceDescriptor>()
+    var primaryId: String? = null
+        private set
+    var fallbackIds: List<String> = emptyList()
+        private set
+
+    fun sync(
+        availableSources: List<CameraSourceDescriptor>,
+        primaryId: String?,
+        fallbackIds: List<String>,
+    ) {
+        sources.clear()
+        availableSources.forEach { source ->
+            require(source.id.isNotBlank()) { "camera source id is required" }
+            sources[source.id] = source
+        }
+        this.primaryId = primaryId?.takeIf { sources.containsKey(it) }
+        this.fallbackIds = fallbackIds
+            .filter { it != this.primaryId && sources.containsKey(it) }
+            .distinct()
+    }
+
+    fun get(id: String): CameraSourceDescriptor? = sources[id]
+
+    fun list(): List<CameraSourceDescriptor> = sources.values.toList()
+
+    fun ordered(): List<CameraSourceDescriptor> = (listOfNotNull(primaryId) + fallbackIds)
+        .mapNotNull(::get)
+
+    fun snapshot(): CoreNativeCameraSnapshot = CoreNativeCameraSnapshot(
+        primaryId = primaryId,
+        fallbackIds = fallbackIds,
+        sources = list(),
+    )
+
+    fun clear() {
+        sources.clear()
+        primaryId = null
+        fallbackIds = emptyList()
+    }
 }
