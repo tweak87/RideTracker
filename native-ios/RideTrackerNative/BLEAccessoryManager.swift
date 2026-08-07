@@ -61,7 +61,18 @@ final class BLEAccessoryManager: NSObject, ObservableObject {
 
     func connectFirst() {
         guard let peripheral = peripherals.values.first else { return }
-        state = .connecting; central.stopScan(); central.connect(peripheral)
+        connect(peripheral)
+    }
+
+    func connect(named name: String) {
+        guard let peripheral = peripherals.values.first(where: { ($0.name ?? "BLE-Sensor") == name }) else { return }
+        connect(peripheral)
+    }
+
+    private func connect(_ peripheral: CBPeripheral) {
+        state = .connecting
+        central.stopScan()
+        central.connect(peripheral)
     }
 
     private func decode(_ data: Data) -> AccessorySample? { try? JSONDecoder().decode(AccessorySample.self, from: data) }
