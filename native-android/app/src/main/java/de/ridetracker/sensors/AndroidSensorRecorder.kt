@@ -16,6 +16,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult as GoogleLocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import de.ridetracker.core.RideTrackerCoreAdapter
 import de.ridetracker.engine.*
 import de.ridetracker.session.*
 import java.io.File
@@ -43,6 +44,8 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     var communityComment by mutableStateOf("")
     var latestHeartRateBpm by mutableStateOf<Int?>(null); private set
     var heartRateSource by mutableStateOf<String?>(null); private set
+
+    val coreAdapter = RideTrackerCoreAdapter()
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val locationClient = LocationServices.getFusedLocationProviderClient(context)
@@ -96,6 +99,7 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
         reset()
         if (calibration != null) rideEngine.calibration = calibration
         sessionId = UUID.randomUUID().toString(); recordingStartNs = SystemClock.elapsedRealtimeNanos(); startedAtInstant = Instant.now(); isRecording = true
+        coreAdapter.recordingStarted(sessionId, recordingStartNs / 1_000_000L)
         status = "Aufnahme läuft · Session ${sessionId.take(8)}"
         locationClient.requestLocationUpdates(LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500L).setMinUpdateIntervalMillis(200L).build(), locationCallback, null)
         gyroscope?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
@@ -108,6 +112,7 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
         if (!isRecording) return
         isRecording = false; locationClient.removeLocationUpdates(locationCallback)
         gyroscope?.let { sensorManager.unregisterListener(this, it) }; pressure?.let { sensorManager.unregisterListener(this, it) }
+        coreAdapter.recordingStopped()
         updateQuality(); status = "Beendet: $sampleCount Samples"
     }
 
@@ -115,6 +120,7 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
         val duration = sessionSamples.lastOrNull()?.timestamp ?: 0.0
         val sourceEvents = sourceRouter.switches.map {
             val relativeSeconds = ((it.timestampMs * 1_000_000L - recordingStartNs).coerceAtLeast(0L)) / 1_000_000_000.0
+            coreAdapter.sourceSwitched(it.metric, it.to, it.timestampMs)
             RideSessionEvent(relativeSeconds, "source-switch:${it.metric}:${it.from ?: "none"}->${it.to ?: "none"}:${it.reason}")
         }
         val document = RideSessionDocument(
@@ -132,7 +138,7 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
         qualityScore = 0; acceptedLocations = 0; rejectedLocations = 0; distanceMeters = 0.0
         latestLocation = null; latestSpeedMs = 0.0; latestAltitude = 0.0; lastAltitudeTime = 0.0; climbRate = 0.0
         hasBarometer = pressure != null; lastSavedPath = null; videoFilename = null; videoStartOffsetSeconds = 0.0
-        sessionSamples.clear(); sessionEvents.clear(); sourceRouter.reset(); altitudeFusion.reset(); rideEngine.reset()
+        sessionSamples.clear(); sessionEvents.clear(); sourceRouter.reset(); coreAdapter.resetRuntime(); altitudeFusion.reset(); rideEngine.reset()
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -146,6 +152,8 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
             latestSpeedMs = (routedSpeed?.value ?: 0.0) / 3.6
             speedKmh = routedSpeed?.value ?: 0.0
             val routedHeartRate = sourceRouter.resolve<Int>("heartRateBpm")
+            routedSpeed?.let { coreAdapter.ingest(it.metric, it.sourceId, it.value, "km/h", it.quality, it.timestampMs) }
+            routedHeartRate?.let { coreAdapter.ingest(it.metric, it.sourceId, it.value.toDouble(), "bpm", it.quality, it.timestampMs) }
             ridePhase = phaseDetector.update(t, latestSpeedMs, processed.longitudinalG, climbRate, processed.totalG)
             if (ridePhase != previousPhase) { sessionEvents += RideSessionEvent(t, ridePhase); previousPhase = ridePhase }
             val loc = latestLocation
@@ -175,6 +183,8 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
         sourceRouter.ingest("speedKmh", "phone-gps/speed", valueKmh, quality, location.elapsedRealtimeNanos / 1_000_000L)
         updateQuality()
     }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
     private fun updateQuality() { qualityScore = QualityScore.calculate(sampleCount, acceptedLocations, rejectedLocations, 0, rideEngine.calibration != null, hasBarometer) }
 }
