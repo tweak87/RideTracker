@@ -9,6 +9,7 @@
   document.head.appendChild(style);
 
   let rafId = 0;
+  let idleTimer = 0;
   let installedCanvas = null;
   let observer = null;
 
@@ -47,19 +48,32 @@
     ctx.textAlign='left';
   }
 
+  function dashboardVisible(){
+    const inline=document.getElementById('rtInlineDashboard');
+    if(inline && !inline.hidden && getComputedStyle(inline).display!=='none') return true;
+    const dashboard=document.getElementById('rideDashboard');
+    return !!dashboard && getComputedStyle(dashboard).display!=='none';
+  }
+
   function stopLoop(){
     if(rafId){cancelAnimationFrame(rafId);rafId=0;}
+    if(idleTimer){clearTimeout(idleTimer);idleTimer=0;}
     installedCanvas=null;
   }
 
   function install(){
     const wrap=document.getElementById('videoWrap');if(!wrap)return false;
     let canvas=document.getElementById('rtConfiguredLiveHud');if(!canvas){canvas=document.createElement('canvas');canvas.id='rtConfiguredLiveHud';wrap.appendChild(canvas)}
-    if(installedCanvas===canvas && rafId) return true;
+    if(installedCanvas===canvas && (rafId||idleTimer)) return true;
     stopLoop(); installedCanvas=canvas;
     const ctx=canvas.getContext('2d');
     const render=()=>{
-      if(!canvas.isConnected || canvas!==installedCanvas){rafId=0;return;}
+      rafId=0;
+      if(!canvas.isConnected || canvas!==installedCanvas)return;
+      if(document.hidden || dashboardVisible()){
+        idleTimer=setTimeout(()=>{idleTimer=0;if(canvas===installedCanvas)rafId=requestAnimationFrame(render);},250);
+        return;
+      }
       const rect=wrap.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2),w=Math.max(1,rect.width),h=Math.max(1,rect.height);if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr)}ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
       const video=[...wrap.querySelectorAll('video')].find(x=>x.videoWidth&&x.videoHeight);const aspect=video?.videoWidth&&video?.videoHeight?video.videoWidth/video.videoHeight:w/h;const mode=aspect<1?'portrait':'landscape';
       let cw=w,ch=h,cx=0,cy=0;if(w/h>aspect){cw=h*aspect;cx=(w-cw)/2}else{ch=w/aspect;cy=(h-ch)/2}
@@ -74,5 +88,5 @@
   }
   document.addEventListener('visibilitychange',()=>{if(document.hidden)stopLoop();else install()});
   window.addEventListener('pageshow',install);
-  window.addEventListener('resize',()=>{if(!rafId)install()});
+  window.addEventListener('resize',()=>{if(!rafId&&!idleTimer)install()},{passive:true});
 })();
