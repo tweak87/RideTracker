@@ -4,6 +4,7 @@
   const META_KEY = 'rideTracker.savedRides.v2';
   const DRAFT_KEY = 'rideTracker.unsavedRide.v1';
   const ACTIVE_KEY = 'rideTracker.activeRideId.v1';
+  const CONTINUE_KEY = 'rideTracker.continueExistingRide.v1';
   const state = { dirty: false, pendingBlob: null, activeRideId: sessionStorage.getItem(ACTIVE_KEY) || null };
 
   const readJson = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch (_) { return fallback; } };
@@ -11,6 +12,7 @@
   const writeMeta = value => localStorage.setItem(META_KEY, JSON.stringify(value));
   const db = () => window.RideTrackerDatabase;
   const videoStore = () => db()?.stores?.videos || 'videos';
+  const packageStore = () => db()?.stores?.ridePackages || 'ridePackages';
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
   function setActiveRideId(id) {
@@ -27,6 +29,19 @@
     localStorage.removeItem(DRAFT_KEY);
     window.dispatchEvent(new CustomEvent('ridetracker:new-ride-session'));
   }
+
+  function captureNewRideNavigation(event) {
+    const target = event.target.closest?.('[data-route="Neue Fahrt"],[data-inline-route="record"],.dashAction');
+    if (!target) return;
+    const label = (target.textContent || '').toLowerCase();
+    if (!/neue fahrt|aufzeichnung vorbereiten/.test(label)) return;
+    if (sessionStorage.getItem(CONTINUE_KEY) === '1') {
+      sessionStorage.removeItem(CONTINUE_KEY);
+      return;
+    }
+    newRideSession();
+  }
+  window.addEventListener('click', captureNewRideNavigation, true);
 
   const deviceSnapshot = () => {
     const raw = readJson('rideTracker.devices.v1', []);
@@ -80,6 +95,18 @@
     return database.delete(videoStore(), id);
   }
 
+  async function syncRidePackageMetadata(ride) {
+    const database = db();
+    if (!database || !ride?.id) return;
+    const existing = await database.get(packageStore(), ride.id);
+    if (!existing) return;
+    existing.rideName = ride.track || ride.title || existing.rideName;
+    existing.parkName = ride.park || existing.parkName;
+    existing.updatedAt = ride.updatedAt || new Date().toISOString();
+    existing.document = { ...(existing.document || {}), context: { ...(existing.document?.context || {}), parkName: ride.park || '', rideName: ride.track || ride.title || '' } };
+    await database.put(packageStore(), ride.id, existing);
+  }
+
   const style = document.createElement('style');
   style.textContent = `#rtRideLibrary{position:relative;z-index:420;max-width:1050px;margin:auto;padding:0 12px 30px}#rtRideLibrary[hidden]{display:none!important}.rt-ride-list{display:grid;gap:12px}.rt-ride-card{border:1px solid #29435f;border-radius:18px;background:#0a1727;padding:14px}.rt-ride-card video{width:100%;max-height:430px;background:#000;border-radius:13px}.rt-ride-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.rt-ride-grid label{display:grid;gap:5px;color:#96aac1;font-size:12px}.rt-ride-grid input,.rt-ride-grid textarea,.rt-ride-grid select{width:100%;background:#07111f;color:#f5fbff;border:1px solid #29435f;border-radius:10px;padding:10px}.rt-ride-grid textarea{min-height:82px;resize:vertical}.rt-span{grid-column:1/-1}.rt-ride-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.rt-post-record{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}.rt-post-record button{flex:1;min-width:150px}.rt-config-summary{margin-top:10px;padding:10px;border:1px solid #29435f;border-radius:12px;color:#96aac1;font-size:12px}@media(max-width:640px){.rt-ride-grid{grid-template-columns:1fr}}`;
   document.head.appendChild(style);
@@ -114,6 +141,10 @@
     ride.recordingConfiguration = configurationSnapshot();
     if (blob instanceof Blob) { await putVideo(ride.id, blob); ride.hasVideo = true; }
     writeMeta(rides);
+
+    const packageRide = await window.RideTrackerLibrary?.persistCurrentRide?.(ride.id);
+    if (packageRide) await syncRidePackageMetadata(ride);
+
     state.dirty=false; state.pendingBlob=blob||null; localStorage.removeItem(DRAFT_KEY);
     document.getElementById('rtPostRecordActions')?.setAttribute('hidden','');
     window.dispatchEvent(new CustomEvent('ridetracker:ride-saved',{detail:{rideId:ride.id,isNew}}));
@@ -148,6 +179,9 @@
     const rides=readMeta(); const ride=rides.find(x=>x.id===rideId); if(!ride) return;
     card.querySelectorAll('[data-field]').forEach(input=>ride[input.dataset.field]=input.dataset.field==='rating'?Number(input.value):input.value);
     ride.updatedAt=new Date().toISOString(); writeMeta(rides); setActiveRideId(ride.id);
+    await syncRidePackageMetadata(ride);
+    const saveButton=card.querySelector('[data-action="save"]');
+    if(saveButton){const old=saveButton.textContent;saveButton.textContent='Gespeichert ✓';setTimeout(()=>saveButton.textContent=old,1200);}
     window.dispatchEvent(new CustomEvent('ridetracker:ride-saved',{detail:{rideId:ride.id,isNew:false}}));
   }
 
@@ -162,8 +196,8 @@
       card.innerHTML=`<div class="rt-ride-grid"><label>Titel<input data-field="title" value="${escapeHtml(ride.title)}"></label><label>Park<input data-field="park" value="${escapeHtml(ride.park)}"></label><label>Strecke/Bahn<input data-field="track" value="${escapeHtml(ride.track)}"></label><label>Bewertung<select data-field="rating">${[0,1,2,3,4,5].map(v=>`<option value="${v}" ${Number(ride.rating)===v?'selected':''}>${v?v+' Sterne':'Keine'}</option>`).join('')}</select></label><label class="rt-span">Private Notiz<textarea data-field="notes">${escapeHtml(ride.notes)}</textarea></label><label class="rt-span">Kommentar<textarea data-field="comment">${escapeHtml(ride.comment)}</textarea></label></div><div class="rt-config-summary">Aufnahmekonfiguration ${escapeHtml(config.schemaVersion||'ältere Version')} · ${deviceCount} Geräte · Kamera: ${escapeHtml(cameraName)}</div><div class="rt-video-host"></div><div class="rt-ride-actions"><button type="button" data-action="save">Änderungen speichern</button><button type="button" data-action="play">Video laden</button><button type="button" data-action="continue">Fahrt weiter bearbeiten</button><button type="button" data-action="delete" class="danger">Fahrt löschen</button></div>`;
       card.querySelector('[data-action="save"]').onclick=()=>void updateRideFromCard(ride.id,card);
       card.querySelector('[data-action="play"]').onclick=async()=>{setActiveRideId(ride.id);const host=card.querySelector('.rt-video-host');const blob=await getVideo(ride.id);if(!(blob instanceof Blob)){host.textContent='Für diese Fahrt ist kein Video gespeichert.';return;}host.innerHTML='';const video=document.createElement('video');video.controls=true;video.playsInline=true;video.src=URL.createObjectURL(blob);host.appendChild(video);try{await video.play();}catch(_){}};
-      card.querySelector('[data-action="continue"]').onclick=()=>{setActiveRideId(ride.id);home();document.querySelector('[data-inline-route="record"]')?.click?.();};
-      card.querySelector('[data-action="delete"]').onclick=async()=>{if(!confirm('Fahrt endgültig löschen?'))return;writeMeta(readMeta().filter(x=>x.id!==ride.id));await deleteVideo(ride.id);if(state.activeRideId===ride.id)setActiveRideId(null);await renderLibrary();};
+      card.querySelector('[data-action="continue"]').onclick=()=>{setActiveRideId(ride.id);sessionStorage.setItem(CONTINUE_KEY,'1');home();document.querySelector('[data-inline-route="record"]')?.click?.();};
+      card.querySelector('[data-action="delete"]').onclick=async()=>{if(!confirm('Fahrt endgültig löschen?'))return;writeMeta(readMeta().filter(x=>x.id!==ride.id));await deleteVideo(ride.id);await db()?.delete(packageStore(),ride.id);if(state.activeRideId===ride.id)setActiveRideId(null);await renderLibrary();};
       list.appendChild(card);
       if(focusRideId===ride.id) setTimeout(()=>card.scrollIntoView({block:'center'}),0);
     }
