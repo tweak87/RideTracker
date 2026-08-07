@@ -22,7 +22,7 @@ export function attachWebRuntimeAdapter(target = globalThis.window, storage = gl
 
   const syncDevices = () => {
     const registry = readJson(storage, DEVICE_KEY, {});
-    const devices = Array.isArray(registry.devices) ? registry.devices : [];
+    const devices = Array.isArray(registry) ? registry : (Array.isArray(registry.devices) ? registry.devices : []);
     for (const device of devices) {
       if (!device?.id) continue;
       core.devices.upsert({ ...device, platform: 'web' });
@@ -61,24 +61,37 @@ export function attachWebRuntimeAdapter(target = globalThis.window, storage = gl
     return sample;
   };
 
+  const startRecording = detail => {
+    if (core.recording.active) return core.recording.session;
+    const overrides = { platform: 'web', configurationSnapshot: core.snapshot() };
+    if (detail?.sessionId) overrides.id = detail.sessionId;
+    return core.recording.start(createRideSession(overrides));
+  };
+
+  const stopRecording = () => core.recording.active ? core.recording.stop() : null;
+
   const onTelemetry = event => ingestRoutedTelemetry(event.detail || {});
   const onSourceSwitch = event => core.events.emit(Events.SOURCE_SWITCHED, { ...(event.detail || {}), platform: 'web' });
   const onCameraSources = () => syncCameras();
-  const onRecordingStarted = event => {
-    if (core.recording.active) return;
-    core.recording.start(createRideSession({
-      id: event.detail?.sessionId || undefined,
-      platform: 'web',
-      configurationSnapshot: core.snapshot(),
-    }));
-  };
-  const onRecordingStopped = () => { if (core.recording.active) core.recording.stop(); };
+  const onRecordingStarted = event => startRecording(event.detail || {});
+  const onRecordingStopped = () => stopRecording();
 
   target.addEventListener('ridetracker:routed-telemetry', onTelemetry);
   target.addEventListener('ridetracker:source-switch', onSourceSwitch);
   target.addEventListener('ridetracker:camera-sources', onCameraSources);
   target.addEventListener('ridetracker:recording-started', onRecordingStarted);
   target.addEventListener('ridetracker:recording-stopped', onRecordingStopped);
+
+  const document = target.document;
+  const startButton = document?.getElementById?.('start');
+  const stopButton = document?.getElementById?.('stop');
+  const onStartClick = () => target.setTimeout?.(() => {
+    const stop = document?.getElementById?.('stop');
+    if (stop && stop.disabled === false) startRecording({});
+  }, 0);
+  const onStopClick = () => stopRecording();
+  startButton?.addEventListener('click', onStartClick, true);
+  stopButton?.addEventListener('click', onStopClick, true);
 
   syncDevices();
   syncCameras();
@@ -88,6 +101,8 @@ export function attachWebRuntimeAdapter(target = globalThis.window, storage = gl
     syncDevices,
     syncCameras,
     ingestRoutedTelemetry,
+    startRecording,
+    stopRecording,
     snapshot: () => core.snapshot(),
     detach() {
       target.removeEventListener('ridetracker:routed-telemetry', onTelemetry);
@@ -95,11 +110,14 @@ export function attachWebRuntimeAdapter(target = globalThis.window, storage = gl
       target.removeEventListener('ridetracker:camera-sources', onCameraSources);
       target.removeEventListener('ridetracker:recording-started', onRecordingStarted);
       target.removeEventListener('ridetracker:recording-stopped', onRecordingStopped);
+      startButton?.removeEventListener('click', onStartClick, true);
+      stopButton?.removeEventListener('click', onStopClick, true);
     },
   };
 
   target.RideTrackerCoreRuntime = api;
-  target.dispatchEvent(new CustomEvent('ridetracker:core-ready', { detail: { coreVersion: core.snapshot().coreVersion } }));
+  const CoreEvent = target.CustomEvent || globalThis.CustomEvent;
+  if (CoreEvent) target.dispatchEvent(new CoreEvent('ridetracker:core-ready', { detail: { coreVersion: core.snapshot().coreVersion } }));
   return api;
 }
 
