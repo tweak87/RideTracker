@@ -4,7 +4,7 @@ import {
   createTelemetrySample, createRideSession, createRidePackage,
   validateRidePackage,
 } from './ridetracker-core.mjs';
-import { builtinPlugins, registerBuiltinPlugins, createPluginInstance } from './builtin-plugins.mjs';
+import { builtinPlugins, BuiltinCapabilities, registerBuiltinPlugins, createPluginInstance } from './builtin-plugins.mjs';
 
 const bus = new EventBus();
 let seen = null;
@@ -13,8 +13,8 @@ bus.emit('x', { ok: true });
 assert.equal(seen.payload.ok, true);
 
 const plugins = new PluginHost(bus);
-plugins.register({ id: 'ble-heart', name: 'BLE Heart Rate', version: '1.0.0', capabilities: ['sensor.heartRate'] });
-assert.equal(plugins.list('sensor.heartRate').length, 1);
+plugins.register({ id: 'ble-heart', name: 'BLE Heart Rate', version: '1.0.0', capabilities: [BuiltinCapabilities.HEART_RATE_BPM] });
+assert.equal(plugins.list(BuiltinCapabilities.HEART_RATE_BPM).length, 1);
 assert.throws(() => plugins.register({ id: 'ble-heart', name: 'duplicate', version: '1', capabilities: [] }));
 
 const core = new RideTrackerCore();
@@ -27,7 +27,10 @@ core.overlay.saveLayout({ id: 'landscape', orientation: 'landscape', widgets: []
 core.overlay.activate('landscape');
 registerBuiltinPlugins(core.plugins);
 assert.equal(core.plugins.list().length, builtinPlugins.length);
-assert.equal(core.plugins.list('sensor.heartRate').some(p => p.id === 'ble-heart-rate'), true);
+assert.equal(core.plugins.list(BuiltinCapabilities.HEART_RATE_BPM).some(p => p.id === 'ble-heart-rate'), true);
+assert.equal(core.plugins.list(BuiltinCapabilities.CAMERA_RECORDING).some(p => p.id === 'camera-source'), true);
+assert.equal(core.plugins.list(BuiltinCapabilities.LOCATION_SPEED).some(p => p.id === 'external-gnss'), true);
+assert.equal(core.plugins.list(BuiltinCapabilities.MOTION_ACCELERATION).some(p => p.id === 'external-imu'), true);
 
 const imuInstance = createPluginInstance('external-imu');
 assert.equal(imuInstance.settings.sampleRateHz, 200);
