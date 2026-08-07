@@ -14,18 +14,11 @@
   }, true);
 
   async function getRides() {
-    const rides = await new Promise((resolve, reject) => {
-      const request = indexedDB.open('RideTrackerLibrary', 1);
-      request.onsuccess = () => {
-        const db = request.result;
-        const read = db.transaction('rides', 'readonly').objectStore('rides').getAll();
-        read.onsuccess = () => { resolve(read.result || []); db.close(); };
-        read.onerror = () => reject(read.error);
-      };
-      request.onerror = () => reject(request.error);
-    });
+    const db = window.RideTrackerDatabase;
+    if (!db) return [];
+    const rides = await db.getAll(db.stores.ridePackages);
     const active = window.RideTrackerProfiles?.activeId?.() || 'local-default';
-    return rides.filter(r => (r.ownerProfileId || 'local-default') === active);
+    return (Array.isArray(rides) ? rides : []).filter(r => (r.ownerProfileId || r.document?.ownerProfileId || 'local-default') === active);
   }
 
   const num = value => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -37,8 +30,8 @@
       distance: rides.reduce((sum, r) => sum + num(r.distanceMeters), 0),
       duration: rides.reduce((sum, r) => sum + num(r.durationSeconds), 0),
       bestQuality: rides.reduce((best, r) => Math.max(best, num(r.qualityScore)), 0),
-      maxSpeed: rides.reduce((best, r) => Math.max(best, ...(r.document?.samples || []).map(s => num(s.speedMS) * 3.6)), 0),
-      maxG: rides.reduce((best, r) => Math.max(best, ...(r.document?.samples || []).map(s => num(s.totalG))), 0)
+      maxSpeed: rides.reduce((best, r) => Math.max(best, ...(r.document?.samples || []).map(s => num(s.speedMS ?? s.speed) * 3.6)), 0),
+      maxG: rides.reduce((best, r) => Math.max(best, ...(r.document?.samples || []).map(s => num(s.totalG ?? s.total))), 0)
     };
   }
 
@@ -54,7 +47,7 @@
     closeView();
     const profile = window.RideTrackerProfiles?.activeProfile?.();
     const section = document.createElement('section'); section.className = 'rt-view rt-stats-view';
-    section.innerHTML = `<div class="rt-shell"><header class="rt-head"><div><h2>${title}</h2><div class="rt-meta">${profile ? `Benutzer: ${profile.name}` : 'Aus lokal gespeicherten Fahrten berechnet'}</div></div><button class="rt-back">Zurück</button></header><div class="rt-stats-content"></div></div>`;
+    section.innerHTML = `<div class="rt-shell"><header class="rt-head"><div><h2>${title}</h2><div class="rt-meta">${profile ? `Benutzer: ${profile.name}` : 'Aus bewusst gespeicherten Fahrten berechnet'}</div></div><button class="rt-back">Zurück</button></header><div class="rt-stats-content"></div></div>`;
     section.querySelector('.rt-back').onclick = closeView; document.body.appendChild(section); return section.querySelector('.rt-stats-content');
   }
 
@@ -87,5 +80,5 @@
   }
 
   ensureStyle(); addMenuItems();
-  window.RideTrackerStats = { showStats, showAchievements };
+  window.RideTrackerStats = { showStats, showAchievements, getRides };
 })();
