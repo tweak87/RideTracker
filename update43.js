@@ -7,6 +7,15 @@
 
   function replayElement() { return byId('replay'); }
   function previewElement() { return byId('preview'); }
+  function currentTelemetry() {
+    try {
+      if (typeof S !== 'undefined' && Array.isArray(S.samples)) return { samples: S.samples.slice() };
+    } catch (_) {}
+    return { samples: [] };
+  }
+  function attachReplayHud(replay) {
+    return window.RideTrackerHudReplay?.attach?.(replay, currentTelemetry(), { host: byId('videoWrap') }) || false;
+  }
 
   async function leaveRecordingFullscreen() {
     try { await window.RideTrackerRecordingFullscreen?.exit?.(); } catch (_) {}
@@ -95,8 +104,9 @@
       replay.classList.remove('hidden');
       previewElement()?.classList.add('hidden');
       try { replay.load(); } catch (_) {}
+      attachReplayHud(replay);
       setPreviewReady(true);
-      window.dispatchEvent(new CustomEvent('ridetracker:preview-ready', { detail: { hasBlob: Boolean(state.blob) } }));
+      window.dispatchEvent(new CustomEvent('ridetracker:preview-ready', { detail: { hasBlob: Boolean(state.blob), hudSource: 'replay' } }));
       return true;
     } finally {
       state.preparing = false;
@@ -113,6 +123,7 @@
     replay.controls = true;
     replay.muted = false;
     replay.currentTime = 0;
+    attachReplayHud(replay);
     try {
       await replay.play();
       return true;
@@ -126,6 +137,7 @@
   function resetForRecording() {
     state.blob = null;
     state.ready = false;
+    window.RideTrackerHudReplay?.detach?.();
     const row = ensurePostActions();
     if (row) row.hidden = true;
     const replay = replayElement();
@@ -143,12 +155,8 @@
       const message = String(event?.message || event?.error?.message || 'Unbekannter Fehler');
       console.error('[RideTracker runtime]', { message, source: event?.filename, line: event?.lineno, column: event?.colno, error: event?.error });
     });
-    window.addEventListener('unhandledrejection', event => {
-      console.error('[RideTracker promise]', event?.reason);
-    });
-    window.addEventListener('ridetracker:database-error', event => {
-      console.error('[RideTracker database]', event?.detail);
-    });
+    window.addEventListener('unhandledrejection', event => console.error('[RideTracker promise]', event?.reason));
+    window.addEventListener('ridetracker:database-error', event => console.error('[RideTracker database]', event?.detail));
   }
 
   const install = () => {
@@ -165,6 +173,7 @@
     prepare: preparePreview,
     play: playPreview,
     blob: () => state.blob,
-    ready: () => state.ready
+    ready: () => state.ready,
+    telemetry: currentTelemetry
   };
 })();
