@@ -19,7 +19,7 @@
     const stream = document.getElementById('preview')?.srcObject;
     return stream instanceof MediaStream && stream.getVideoTracks().some(track => track.readyState === 'live');
   };
-  const calibrated = () => button('start')?.disabled === false || /kalibriert/i.test(document.getElementById('calState')?.textContent || '');
+  const calibrated = () => Boolean(window.RideTrackerCalibrationManager?.current?.()) || button('start')?.disabled === false || /kalibriert/i.test(document.getElementById('calState')?.textContent || '');
 
   function setVideoEnabled(enabled) {
     const toggle = button('videoMode');
@@ -32,21 +32,28 @@
     state.busy = true;
     try {
       setVideoEnabled(video);
+      const calibrationManager = window.RideTrackerCalibrationManager;
+      if (calibrationManager && !(await calibrationManager.ensureForStart())) {
+        refresh();
+        return false;
+      }
       const start = button('start');
       if (!start) return false;
       if (start.disabled) {
-        document.getElementById('videoMeta')?.replaceChildren(document.createTextNode('Bitte zuerst initialisieren und kalibrieren. Danach kann die Aufnahme gestartet werden.'));
+        const initialized = /initialisiert/i.test(document.getElementById('initState')?.textContent || '') && !/nicht initialisiert/i.test(document.getElementById('initState')?.textContent || '');
+        const message = initialized
+          ? 'Kalibrierung wird vorbereitet. Danach kann die Aufnahme gestartet werden.'
+          : 'Bitte zuerst einmalig Kamera und Sensoren initialisieren. Eine gespeicherte Kalibrierung wird danach automatisch übernommen.';
+        document.getElementById('videoMeta')?.replaceChildren(document.createTextNode(message));
         return false;
       }
       start.click();
       await new Promise(resolve => setTimeout(resolve, 0));
       if (!recordingActive()) return false;
       if (video && window.RideTrackerRecordingFullscreen?.enter) {
-        // The fullscreen controller waits until the live camera stream really exists.
         await window.RideTrackerRecordingFullscreen.enter();
       }
       if (minimize) {
-        // "Minimieren" means leave the app-owned fullscreen layer while recording continues.
         await window.RideTrackerRecordingFullscreen?.exit?.();
       }
       refresh();
@@ -66,7 +73,7 @@
     const panel = document.createElement('section');
     panel.id = 'rtRecordingQuickStart';
     panel.innerHTML = `
-      <div><strong>Aufnahmebereit</strong><div class="rt-quick-help">Die wichtigsten Schritte bleiben hier sichtbar. Alle erweiterten Einstellungen bleiben weiterhin unter Einstellungen verfügbar.</div></div>
+      <div><strong>Aufnahmebereit</strong><div class="rt-quick-help">Die App verwendet eine passende gespeicherte Kalibrierung automatisch. Falls keine vorhanden ist, wirst du vor dem Start einmalig gefragt.</div></div>
       <div class="rt-quick-status">
         <span class="rt-quick-chip" data-status="camera">Kamera</span>
         <span class="rt-quick-chip" data-status="calibration">Kalibrierung</span>
@@ -80,6 +87,7 @@
     if (card) card.before(panel); else controls.after(panel);
     panel.querySelector('#rtQuickStartVideo').onclick = () => canonicalStart({ video: true });
     panel.querySelector('#rtQuickStartNoVideo').onclick = () => canonicalStart({ video: false });
+    window.RideTrackerCalibrationManager?.refresh?.();
   }
 
   function refresh() {
@@ -104,11 +112,9 @@
     const startNoVideo = panel.querySelector('#rtQuickStartNoVideo');
     if (startVideo) startVideo.disabled = recordingActive();
     if (startNoVideo) startNoVideo.disabled = recordingActive();
+    window.RideTrackerCalibrationManager?.refresh?.();
   }
 
-  // Compatibility for existing/custom UI actions such as
-  // "Minimieren und Video starten". They are routed to the real #start handler,
-  // which is the only path that starts MediaRecorder in the base application.
   document.addEventListener('click', event => {
     const target = event.target.closest?.('button,[role="button"]');
     if (!target || target.id === 'start' || target.id === 'rtQuickStartVideo') return;
@@ -123,6 +129,8 @@
   window.addEventListener('ridetracker:recording-started', refresh);
   window.addEventListener('ridetracker:recording-stopped', refresh);
   window.addEventListener('ridetracker:database-ready', refresh);
+  window.addEventListener('ridetracker:calibration-saved', refresh);
+  window.addEventListener('ridetracker:calibration-restored', refresh);
   const observer = new MutationObserver(() => requestAnimationFrame(refresh));
   const install = () => {
     ensureQuickStart();
