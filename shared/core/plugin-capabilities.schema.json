@@ -28,6 +28,8 @@
           "telemetry.export",
           "device.discovery",
           "device.connection",
+          "sensor.channels",
+          "diagnostics.live",
           "calibration.motion",
           "calibration.location",
           "calibration.camera",
