@@ -9,6 +9,8 @@ export const BuiltinCapabilities = Object.freeze({
   CAMERA_PREVIEW: 'camera.preview',
   CAMERA_RECORDING: 'camera.recording',
   MICROPHONE: 'audio.microphone',
+  VIDEO_EXPORT: 'video.export',
+  TELEMETRY_EXPORT: 'telemetry.export',
   CALIBRATION_MOTION: 'calibration.motion',
   CALIBRATION_LOCATION: 'calibration.location',
   CALIBRATION_CAMERA: 'calibration.camera',
@@ -92,6 +94,13 @@ export const builtinPlugins = Object.freeze([
     resolution: { type: 'enum', values: ['720p', '1080p', '4k'], default: '1080p' },
     frameRate: { type: 'enum', values: [30, 60], default: 60 },
     audioEnabled: { type: 'boolean', default: true },
+  }),
+  plugin('media-export', 'Medienexport', [
+    BuiltinCapabilities.VIDEO_EXPORT,
+    BuiltinCapabilities.TELEMETRY_EXPORT,
+  ], {
+    includeTelemetryByDefault: { type: 'boolean', default: true },
+    telemetryFormat: { type: 'enum', values: ['ride-json'], default: 'ride-json' },
   }),
 ]);
 
