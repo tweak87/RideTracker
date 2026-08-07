@@ -6,6 +6,7 @@ const definitions = [
   { id: 'external-imu', capabilities: ['motion.acceleration','motion.gyroscope','motion.orientation','calibration.motion'] },
   { id: 'external-gnss', capabilities: ['location.position','location.speed','location.altitude','calibration.location'] },
   { id: 'camera-source', capabilities: ['camera.preview','camera.recording','calibration.camera'] },
+  { id: 'media-export', capabilities: ['video.export','telemetry.export'] },
 ];
 
 function capabilityAvailable(capability) {
@@ -150,6 +151,22 @@ function attach(target = globalThis.window) {
     return stream;
   }
 
+  function currentExportVideo() {
+    const blob = target.RideTrackerPostRecording?.blob?.();
+    return blob instanceof Blob ? blob : null;
+  }
+
+  function currentExportTelemetry() {
+    const telemetry = target.RideTrackerPostRecording?.telemetry?.() || { samples: [] };
+    return {
+      schemaVersion: '1.0.0',
+      exportedAt: new Date().toISOString(),
+      rideId: target.RideTrackerRideLibrary?.activeRideId?.() || null,
+      source: 'RideTrackerWeb',
+      samples: Array.isArray(telemetry.samples) ? telemetry.samples : [],
+    };
+  }
+
   const markRecordingStarted = () => {
     const runtime = runtimeState.get('camera-source');
     if (!runtime) return;
@@ -177,11 +194,19 @@ function attach(target = globalThis.window) {
     get: id => cloneRuntime(runtimeState.get(id)),
     byCapability: capability => api.list().filter(runtime => runtime.capabilities.includes(capability)),
     async invoke(pluginId, operation, payload = {}) {
-      if (pluginId !== 'camera-source') throw new Error(`Unsupported web plugin runtime operation for ${pluginId}`);
-      if (operation === 'ensurePreview') return ensureCameraPreview(payload);
-      if (operation === 'previewStream') return livePreviewStream();
-      if (operation === 'state') return api.get('camera-source');
-      throw new Error(`Unsupported camera-source operation: ${operation}`);
+      if (pluginId === 'camera-source') {
+        if (operation === 'ensurePreview') return ensureCameraPreview(payload);
+        if (operation === 'previewStream') return livePreviewStream();
+        if (operation === 'state') return api.get('camera-source');
+        throw new Error(`Unsupported camera-source operation: ${operation}`);
+      }
+      if (pluginId === 'media-export') {
+        if (operation === 'rawVideo') return currentExportVideo();
+        if (operation === 'telemetry') return currentExportTelemetry();
+        if (operation === 'state') return { ...api.get('media-export'), hasVideo: Boolean(currentExportVideo()), telemetrySamples: currentExportTelemetry().samples.length };
+        throw new Error(`Unsupported media-export operation: ${operation}`);
+      }
+      throw new Error(`Unsupported web plugin runtime operation for ${pluginId}`);
     },
     refresh() {
       for (const runtime of runtimeState.values()) runtime.availableCapabilities = runtime.capabilities.filter(capabilityAvailable);
