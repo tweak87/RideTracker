@@ -39,25 +39,26 @@ requireToken(u29, 'dashboardVisible', 'update29.js must suspend HUD work behind 
 requireToken(u29, 'idleTimer', 'update29.js must use an idle cadence while hidden');
 
 // IndexedDB schema must be versioned, migration-safe and self-tested.
-requireToken(db, "DB_VERSION = 3", 'Web database must use the current schema version');
+requireToken(db, "DB_VERSION = 4", 'Web database must use repaired schema version 4');
 for (const store of ['videos','ridePackages','settings','cache']) requireToken(db, store, `Web database missing store: ${store}`);
 requireToken(db, 'selfTest()', 'Web database must run a startup self-test');
 requireToken(db, 'nativeOpen', 'Web database compatibility bridge missing');
+requireToken(db, 'schema incomplete after v${DB_VERSION} repair', 'Web database must detect incomplete repaired schemas');
 
-// BLE heart rate and external GNSS must enter through the plugin runtime before source routing.
-requireToken(plugins, "ridetracker:heart-rate", 'BLE heart-rate plugin ingress missing');
-requireToken(plugins, "ridetracker:external-telemetry", 'External GNSS plugin ingress missing');
-requireToken(plugins, "ridetracker:plugin-telemetry", 'Plugin telemetry output missing');
-requireToken(u35, "ridetracker:plugin-telemetry", 'Source router must consume plugin telemetry');
-failIf(u35.includes("window.addEventListener('ridetracker:heart-rate'"), 'Source router must not consume BLE heart rate directly anymore');
+// Recording fullscreen must use the live camera preview, never the replay player.
+requireToken(u39, 'hasLiveCameraStream', 'Recording fullscreen must verify a live camera MediaStream');
+requireToken(u39, 'waitForLivePreview', 'Recording fullscreen must wait for the live preview');
+requireToken(u39, "recorded.classList.add('hidden')", 'Replay video must be hidden during recording');
+requireToken(u39, "live.removeAttribute('controls')", 'Live preview must not expose player controls');
+requireToken(u39, 'object-fit:cover', 'Fullscreen live preview must be image-filling');
+requireToken(u39, 'object-position:50% 50%', 'Fullscreen live preview must be centered');
+requireToken(u39, 'Deliberately do not stop the recording here', 'Leaving fullscreen must not stop recording');
+requireToken(u25, 'if (window.RideTrackerRecordingFullscreen) return;', 'Legacy fullscreen triggers must defer to update39');
 
-// Recording fullscreen must keep controls inside the video container and allow leaving fullscreen without stopping.
-requireToken(u39, 'RideTrackerRecordingFullscreen', 'Recording fullscreen API missing');
-requireToken(u39, 'rtRecordingStopButton', 'Fullscreen REC stop control missing');
-requireToken(u39, 'rtRecordingExitButton', 'Fullscreen exit control missing');
-requireToken(u39, 'object-fit:cover', 'Fullscreen camera image must use cover');
-requireToken(u39, 'object-position:50% 50%', 'Fullscreen camera image must be centered');
-requireToken(u39, 'Deliberately do not stop the recording here.', 'Fullscreen exit must remain independent from recording stop');
+// Plugin migration: BLE/GNSS must enter via plugin telemetry.
+requireToken(plugins, 'ridetracker:plugin-telemetry', 'Web plugin runtime must emit normalized plugin telemetry');
+requireToken(u35, 'ridetracker:plugin-telemetry', 'Source router must consume normalized plugin telemetry');
+failIf(u35.includes("addEventListener('ridetracker:heart-rate'"), 'BLE heart rate must no longer bypass plugin runtime');
 
 // Core user-facing modules must still expose their public APIs.
 [
@@ -74,7 +75,6 @@ requireToken(u39, 'Deliberately do not stop the recording here.', 'Fullscreen ex
 
 if (fs.existsSync('index.html')) {
   const html = text('index.html');
-  // These checks are effective after prepare-pages.mjs has generated dist/index.html.
   if (html.includes('rtInlineDashboard')) {
     for (const route of ['Neue Fahrt','Meine Fahrten','Karte','Statistiken','Achievements','Profil','HUD-Konfiguration','Geräte & Sensoren','Import & Replay','Einstellungen']) {
       requireToken(html, route, `Inline dashboard/navigation missing route: ${route}`);
@@ -82,12 +82,14 @@ if (fs.existsSync('index.html')) {
   }
   const dbIndex = html.indexOf('core/storage/web-database-service.js?v=');
   const ridesIndex = html.indexOf('update37.js?v=');
+  const pluginIndex = html.indexOf('core/adapters/web-plugin-runtimes.mjs?v=');
+  const fullscreenIndex = html.indexOf('update39.js?v=');
   if (dbIndex >= 0 || ridesIndex >= 0) {
     failIf(dbIndex < 0 || ridesIndex < 0 || dbIndex > ridesIndex, 'Database service must load before the ride library');
   }
-  const pluginIndex = html.indexOf('core/adapters/web-plugin-runtimes.mjs?v=');
-  const fullscreenIndex = html.indexOf('update39.js?v=');
-  if (fullscreenIndex >= 0) failIf(pluginIndex < 0 || pluginIndex > fullscreenIndex, 'Plugin runtime must load before recording fullscreen controls');
+  if (pluginIndex >= 0 || fullscreenIndex >= 0) {
+    failIf(pluginIndex < 0 || fullscreenIndex < 0 || pluginIndex > fullscreenIndex, 'Plugin runtime must load before recording fullscreen controller');
+  }
 }
 
 console.log('Web startup audit passed.');
