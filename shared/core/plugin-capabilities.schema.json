@@ -26,6 +26,8 @@
           "video.export",
           "telemetry.import",
           "telemetry.export",
+          "device.discovery",
+          "device.connection",
           "calibration.motion",
           "calibration.location",
           "calibration.camera",
