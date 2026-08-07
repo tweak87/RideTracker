@@ -10,11 +10,7 @@
   const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
   async function fetchJson(url,timeoutMs=12000){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);try{const response=await fetch(url,{signal:controller.signal,headers:{Accept:'application/json'}});if(!response.ok)throw new Error(`Coasterpedia HTTP ${response.status}`);return response.json();}finally{clearTimeout(timer);}}
-  async function coasterpediaSearch(name,parkName=''){
-    const query=`${name}${parkName?` ${parkName}`:''}`.trim();if(!query)return[];
-    const url=`https://coasterpedia.net/w/api.php?action=query&list=search&srnamespace=0&srlimit=8&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
-    const data=await fetchJson(url);return(data?.query?.search||[]).map(item=>({title:item.title,pageid:item.pageid,snippet:item.snippet}));
-  }
+  async function coasterpediaSearch(name,parkName=''){const query=`${name}${parkName?` ${parkName}`:''}`.trim();if(!query)return[];const url=`https://coasterpedia.net/w/api.php?action=query&list=search&srnamespace=0&srlimit=8&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;const data=await fetchJson(url);return(data?.query?.search||[]).map(item=>({title:item.title,pageid:item.pageid,snippet:item.snippet}));}
   async function coasterpediaWikitext(title){const url=`https://coasterpedia.net/w/api.php?action=query&prop=revisions&rvprop=content&rvslots=main&titles=${encodeURIComponent(title)}&format=json&formatversion=2&origin=*`;const data=await fetchJson(url);return data?.query?.pages?.[0]?.revisions?.[0]?.slots?.main?.content||'';}
   function field(text,name){const escaped=name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),match=text.match(new RegExp(`\\|\\s*${escaped}\\s*=\\s*([^\\n\\r}]*)`,'i'));return match?match[1].replace(/<!--.*?-->/g,'').replace(/\[\[([^|\]]+\|)?([^\]]+)\]\]/g,'$2').replace(/<[^>]+>/g,'').trim():'';}
   function numberField(text,names){for(const name of names){const value=field(text,name),match=value.replace(',','.').match(/[-+]?\d+(?:\.\d+)?/);if(match)return Number(match[0]);}return null;}
@@ -22,7 +18,7 @@
   async function coasterpediaReference(name,parkName=''){
     const results=await coasterpediaSearch(name,parkName);if(!results.length)return null;
     const targetName=norm(name),targetPark=norm(parkName);let best=results[0],bestScore=-1;
-    for(const result of results){const n=norm(result.title);let score=n===targetName?1:n.includes(targetName)||targetName.includes(n)?.85:0;if(targetPark&&norm(result.snippet).includes(targetPark))score+=.25;if(score>bestScore){bestScore=score;best=result;}}
+    for(const result of results){const n=norm(result.title);let score=n===targetName?1:((n.includes(targetName)||targetName.includes(n))?.85||0);if(targetPark&&norm(result.snippet).includes(targetPark))score+=.25;if(score>bestScore){bestScore=score;best=result;}}
     const text=await coasterpediaWikitext(best.title);if(!text)return null;
     const units=field(text,'units').toLowerCase(),imperial=units.includes('imperial')||/united states|usa/i.test(field(text,'country'));
     let speed=numberField(text,['speed']),length=numberField(text,['length','track_length']),height=numberField(text,['height']),drop=numberField(text,['drop']),gForce=numberField(text,['g-force','g_force']);
