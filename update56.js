@@ -18,7 +18,7 @@
   async function coasterpediaReference(name,parkName=''){
     const results=await coasterpediaSearch(name,parkName);if(!results.length)return null;
     const targetName=norm(name),targetPark=norm(parkName);let best=results[0],bestScore=-1;
-    for(const result of results){const n=norm(result.title);let score=n===targetName?1:((n.includes(targetName)||targetName.includes(n))?.85||0);if(targetPark&&norm(result.snippet).includes(targetPark))score+=.25;if(score>bestScore){bestScore=score;best=result;}}
+    for(const result of results){const n=norm(result.title);let score=n===targetName?1:((n.includes(targetName)||targetName.includes(n))?0.85:0);if(targetPark&&norm(result.snippet).includes(targetPark))score+=0.25;if(score>bestScore){bestScore=score;best=result;}}
     const text=await coasterpediaWikitext(best.title);if(!text)return null;
     const units=field(text,'units').toLowerCase(),imperial=units.includes('imperial')||/united states|usa/i.test(field(text,'country'));
     let speed=numberField(text,['speed']),length=numberField(text,['length','track_length']),height=numberField(text,['height']),drop=numberField(text,['drop']),gForce=numberField(text,['g-force','g_force']);
