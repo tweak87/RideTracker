@@ -7,9 +7,13 @@
     #videoWrap.rt-app-fullscreen,
     #videoWrap:fullscreen,
     #videoWrap:-webkit-full-screen{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;min-height:0!important;aspect-ratio:auto!important;margin:0!important;border-radius:0!important;background:#000!important;overflow:hidden!important}
-    #videoWrap.rt-app-fullscreen>video,
-    #videoWrap:fullscreen>video,
-    #videoWrap:-webkit-full-screen>video{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;object-fit:cover!important;object-position:50% 50%!important;background:#000!important}
+    #videoWrap.rt-app-fullscreen>#preview,
+    #videoWrap:fullscreen>#preview,
+    #videoWrap:-webkit-full-screen>#preview{display:block!important;position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;object-fit:cover!important;object-position:50% 50%!important;background:#000!important}
+    #videoWrap.rt-app-fullscreen>#replay,
+    #videoWrap:fullscreen>#replay,
+    #videoWrap:-webkit-full-screen>#replay{display:none!important}
+    #preview::-webkit-media-controls{display:none!important}
     #videoWrap.rt-app-fullscreen #rtConfiguredLiveHud,
     #videoWrap:fullscreen #rtConfiguredLiveHud,
     #videoWrap:-webkit-full-screen #rtConfiguredLiveHud,
@@ -31,9 +35,11 @@
   `;
   document.head.appendChild(style);
 
-  const state={recording:false,startedAt:0,raf:0,lastText:''};
+  const state={recording:false,startedAt:0,raf:0,lastText:'',activationToken:0};
   const wrap=()=>document.getElementById('videoWrap');
   const stopButton=()=>document.getElementById('stop');
+  const preview=()=>document.getElementById('preview');
+  const replay=()=>document.getElementById('replay');
 
   function formatElapsed(ms){
     const total=Math.max(0,Math.floor(ms/1000));
@@ -56,17 +62,45 @@
     return controls;
   }
 
-  function setRecording(active){
-    if(active===state.recording)return;
-    state.recording=active;
-    if(active)state.startedAt=performance.now();
-    const button=document.getElementById('rtRecordingStopButton');
-    if(button)button.dataset.recording=String(active);
-    if(active)tick();
-    else{
-      cancelAnimationFrame(state.raf);state.raf=0;state.lastText='';
-      const elapsed=document.getElementById('rtRecordingElapsed');if(elapsed)elapsed.textContent='00:00';
+  function forceLivePreviewMode(){
+    const live=preview();
+    const recorded=replay();
+    if(recorded){
+      try{recorded.pause()}catch(_){ }
+      recorded.classList.add('hidden');
+      recorded.controls=false;
     }
+    if(live){
+      live.classList.remove('hidden');
+      live.controls=false;
+      live.muted=true;
+      live.autoplay=true;
+      live.playsInline=true;
+      live.setAttribute('playsinline','');
+      live.setAttribute('webkit-playsinline','');
+      live.removeAttribute('controls');
+    }
+    return live;
+  }
+
+  function hasLiveCameraStream(video){
+    const stream=video?.srcObject;
+    if(!(stream instanceof MediaStream))return false;
+    return stream.getVideoTracks().some(track=>track.readyState==='live'&&track.enabled!==false);
+  }
+
+  async function waitForLivePreview(timeoutMs=3500){
+    const started=performance.now();
+    while(performance.now()-started<timeoutMs){
+      if(!state.recording)return null;
+      const video=forceLivePreviewMode();
+      if(video&&hasLiveCameraStream(video)){
+        try{await video.play()}catch(_){ }
+        if(!video.paused)return video;
+      }
+      await new Promise(resolve=>setTimeout(resolve,80));
+    }
+    return null;
   }
 
   function tick(){
@@ -77,6 +111,35 @@
       const elapsed=document.getElementById('rtRecordingElapsed');if(elapsed)elapsed.textContent=text;
     }
     state.raf=requestAnimationFrame(tick);
+  }
+
+  async function activateRecordingView(token){
+    const video=await waitForLivePreview();
+    if(token!==state.activationToken||!state.recording)return;
+    if(video){
+      ensureAppFullscreen();
+      return;
+    }
+    // Keep recording running even if Safari has not produced a preview frame yet.
+    const meta=document.getElementById('videoMeta');
+    if(meta)meta.textContent='Aufnahme läuft. Kameravorschau wird noch initialisiert.';
+  }
+
+  function setRecording(active){
+    if(active===state.recording)return;
+    state.recording=active;
+    state.activationToken+=1;
+    if(active){
+      state.startedAt=performance.now();
+      forceLivePreviewMode();
+      tick();
+      void activateRecordingView(state.activationToken);
+    }else{
+      cancelAnimationFrame(state.raf);state.raf=0;state.lastText='';
+      const elapsed=document.getElementById('rtRecordingElapsed');if(elapsed)elapsed.textContent='00:00';
+    }
+    const button=document.getElementById('rtRecordingStopButton');
+    if(button)button.dataset.recording=String(active);
   }
 
   function syncRecordingState(){
@@ -105,46 +168,50 @@
 
   function ensureAppFullscreen(){
     const host=wrap();
-    if(!host)return;
+    if(!host||!state.recording)return;
+    forceLivePreviewMode();
     host.classList.add('rt-app-fullscreen');
     document.body.classList.add('rt-app-fullscreen-active');
     ensureControls();
   }
 
   function keepSafariVideoInsideApp(){
-    const video=document.getElementById('preview');
+    const video=preview();
     if(!video||video.dataset.rtFullscreen39==='1')return;
     video.dataset.rtFullscreen39='1';
     video.addEventListener('webkitbeginfullscreen',()=>{
       try{video.webkitExitFullscreen?.()}catch(_){ }
-      setTimeout(ensureAppFullscreen,0);
+      setTimeout(()=>{if(state.recording)ensureAppFullscreen()},0);
     });
   }
 
-  // When recording is started with video, guarantee an app-owned fullscreen layer.
-  document.addEventListener('click',event=>{
-    const button=event.target.closest?.('#start,#unifiedRideStart,button');
-    if(!button)return;
-    const label=(button.textContent||'').trim().toLowerCase();
-    const startsVideo=button.id==='start'||button.id==='unifiedRideStart'||label.includes('mit video starten');
-    if(!startsVideo)return;
-    const videoMode=document.getElementById('videoMode');
-    if(videoMode&&/aus/i.test(videoMode.textContent||''))return;
-    ensureAppFullscreen();
-    setTimeout(syncRecordingState,0);
-  },true);
-
-  window.addEventListener('ridetracker:recording-started',()=>{setRecording(true);ensureAppFullscreen()});
+  window.addEventListener('ridetracker:recording-started',()=>setRecording(true));
   window.addEventListener('ridetracker:recording-stopped',()=>setRecording(false));
   document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&!wrap()?.classList.contains('rt-app-fullscreen'))document.body.classList.remove('rt-app-fullscreen-active')});
   document.addEventListener('webkitfullscreenchange',()=>{if(!document.webkitFullscreenElement&&!wrap()?.classList.contains('rt-app-fullscreen'))document.body.classList.remove('rt-app-fullscreen-active')});
 
   const stopObserver=new MutationObserver(syncRecordingState);
   const install=()=>{
-    ensureControls();keepSafariVideoInsideApp();syncRecordingState();
+    ensureControls();
+    keepSafariVideoInsideApp();
+    forceLivePreviewMode();
+    syncRecordingState();
     const stop=stopButton();if(stop)stopObserver.observe(stop,{attributes:true,attributeFilter:['disabled']});
   };
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 
-  window.RideTrackerRecordingFullscreen={enter:ensureAppFullscreen,exit:leaveFullscreen,stop:stopRecording,isRecording:()=>state.recording,elapsedMs:()=>state.recording?performance.now()-state.startedAt:0};
+  window.RideTrackerRecordingFullscreen={
+    enter:async()=>{
+      if(!state.recording)return false;
+      const video=await waitForLivePreview();
+      if(!video)return false;
+      ensureAppFullscreen();
+      return true;
+    },
+    exit:leaveFullscreen,
+    stop:stopRecording,
+    isRecording:()=>state.recording,
+    elapsedMs:()=>state.recording?performance.now()-state.startedAt:0,
+    ensureLivePreview:forceLivePreviewMode
+  };
 })();
