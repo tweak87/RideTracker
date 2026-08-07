@@ -1,12 +1,12 @@
 import fs from 'node:fs';
 
 const required = [
-  'update28.js','update29.js','update37.js','update46.js','update47.js','update49.js',
+  'update28.js','update29.js','update37.js','update46.js','update47.js','update49.js','update50.js',
   'core/adapters/web-plugin-ui.mjs','shared/core/plugin-diagnostics.json'
 ];
 for (const file of required) if (!fs.existsSync(file)) throw new Error(`Missing frontend artifact: ${file}`);
 const text = file => fs.readFileSync(file,'utf8');
-const u28=text('update28.js'),u29=text('update29.js'),u47=text('update47.js'),u49=text('update49.js'),pluginUi=text('core/adapters/web-plugin-ui.mjs');
+const u28=text('update28.js'),u29=text('update29.js'),u47=text('update47.js'),u49=text('update49.js'),u50=text('update50.js'),pluginUi=text('core/adapters/web-plugin-ui.mjs');
 const need=(src,token,msg)=>{if(!src.includes(token))throw new Error(msg)};
 
 for (const token of ['landscape','portrait','rtHudMode','RideTrackerStandaloneHudEditor']) need(u28,token,`HUD editor missing ${token}`);
@@ -21,14 +21,20 @@ need(u47,'showMap','Canonical map view must remain available');
 need(pluginUi,'RideTrackerSensorDiagnostics','Plugin sensor diagnostics must be loaded in production');
 need(pluginUi,'RideTrackerRenderedExport','Rendered telemetry video export must remain available');
 
+for (const token of ['fitHudStage','availableW','availableH','16 / 9','9 / 16','RideTrackerHudStageFit']) need(u50,token,`HUD contain fix missing ${token}`);
+for (const token of ['devicemotion','ridetracker:plugin-telemetry','ridetracker:routed-telemetry','watchPosition','RideTrackerLiveSensorDiagnostics']) need(u50,token,`True live sensor diagnostics missing ${token}`);
+for (const token of ['wrapMethod','RideTrackerRideLibrary','RideTrackerStats','RideTrackerProfiles','RideTrackerSettings','RideTrackerDeviceCenter','RideTrackerCanonicalRoutes']) need(u50,token,`Canonical route adapter missing ${token}`);
+if (u50.includes("readNumber('latVal'")) throw new Error('Live sensor diagnostics must not depend on polled HUD text values.');
+
 if (fs.existsSync('index.html')) {
   const html=text('index.html');
   const built=html.includes('update49.js?v=');
   if (built) {
     need(html,'update49.js?v=','Built page must load frontend managers');
+    need(html,'update50.js?v=','Built page must load final frontend fixes');
     need(html,'core/adapters/web-plugin-ui.mjs?v=','Built page must load plugin UI diagnostics/export');
-    const p47=html.indexOf('update47.js?v='),p49=html.indexOf('update49.js?v='),pui=html.indexOf('core/adapters/web-plugin-ui.mjs?v=');
-    if (!(p47>=0 && p49>p47 && pui>p49)) throw new Error('Frontend boot order must be canonical routes -> frontend managers -> plugin UI');
+    const p47=html.indexOf('update47.js?v='),p49=html.indexOf('update49.js?v='),pui=html.indexOf('core/adapters/web-plugin-ui.mjs?v='),p50=html.indexOf('update50.js?v=');
+    if (!(p47>=0 && p49>p47 && pui>p49 && p50>pui)) throw new Error('Frontend boot order must be canonical routes -> frontend managers -> plugin UI -> final fixes');
   }
 }
 console.log('Frontend manager audit passed.');
