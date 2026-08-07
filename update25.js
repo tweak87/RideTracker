@@ -152,31 +152,23 @@
   }
 
   async function enterFullscreen() {
-    const wrap = document.getElementById('videoWrap');
-    const video = document.getElementById('preview');
-    if (!wrap) return;
-    addExitButton();
-    try {
-      if (wrap.requestFullscreen && !document.fullscreenElement) await wrap.requestFullscreen({ navigationUI: 'hide' });
-      else if (wrap.webkitRequestFullscreen && !document.webkitFullscreenElement) wrap.webkitRequestFullscreen();
-      else {
-        wrap.classList.add('rt-app-fullscreen');
-        document.body.classList.add('rt-app-fullscreen-active');
-      }
-    } catch (_) {
-      if (video?.webkitEnterFullscreen) {
-        try { video.webkitEnterFullscreen(); return; } catch (_) {}
-      }
-      wrap.classList.add('rt-app-fullscreen');
-      document.body.classList.add('rt-app-fullscreen-active');
+    // update39 is the canonical recording fullscreen controller. Delegating here
+    // prevents Safari from receiving two competing fullscreen requests.
+    if (window.RideTrackerRecordingFullscreen?.enter) {
+      window.RideTrackerRecordingFullscreen.enter();
+      return;
     }
-    try {
-      const orientation = screen.orientation;
-      if (orientation?.lock && matchMedia('(orientation: landscape)').matches) await orientation.lock('landscape');
-    } catch (_) {}
+    const wrap = document.getElementById('videoWrap');
+    if (!wrap) return;
+    wrap.classList.add('rt-app-fullscreen');
+    document.body.classList.add('rt-app-fullscreen-active');
   }
 
   async function exitFullscreen() {
+    if (window.RideTrackerRecordingFullscreen?.exit) {
+      window.RideTrackerRecordingFullscreen.exit();
+      return;
+    }
     const wrap = document.getElementById('videoWrap');
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
@@ -201,19 +193,19 @@
     const button = event.target.closest?.('button');
     const label = (button?.textContent || '').trim().toLowerCase();
     if (!button || !label.includes('mit video starten')) return;
+    if (window.RideTrackerRecordingFullscreen) return;
     enterFullscreen();
   }, true);
 
   document.addEventListener('click', event => {
     const button = event.target.closest?.('#start,#unifiedRideStart');
     if (!button) return;
+    if (window.RideTrackerRecordingFullscreen) return;
     const videoMode = document.getElementById('videoMode');
     const videoEnabled = !videoMode || !/aus/i.test(videoMode.textContent || '');
     if (videoEnabled) enterFullscreen();
   }, true);
 
-  // Update orientation state only. Native resize/orientation events already notify renderers;
-  // never dispatch another resize event from inside a resize handler.
   const refreshOrientation = () => {
     const wrap = document.getElementById('videoWrap');
     if (!wrap) return;
