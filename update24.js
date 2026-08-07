@@ -85,7 +85,6 @@
 
   window.RideTrackerSettings = { show: showSettings };
 
-  // Alte, wirkungslose Einstellungen-Route vor update19 abfangen.
   document.addEventListener('click', event => {
     const route = event.target.closest?.('[data-route="Einstellungen"]');
     if (!route) return;
@@ -108,9 +107,15 @@
     menu.appendChild(button);
   }
 
+  let scheduled = false;
   const observer = new MutationObserver(() => {
-    addDashboardTile();
-    ensureSettingsView();
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      addDashboardTile();
+      ensureSettingsView();
+    });
   });
   observer.observe(document.body, { childList: true, subtree: true });
   addDashboardTile();
