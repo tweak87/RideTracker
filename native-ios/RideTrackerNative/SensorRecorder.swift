@@ -44,6 +44,7 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
 
     let accessoryManager = BLEAccessoryManager()
     let sourceRouter = TelemetrySourceRouter()
+    let coreAdapter = RideTrackerCoreAdapter()
     let videoRecorder = VideoRecorder()
     let rideEngine = RideEngine()
     let altitudeFusion = AltitudeFusion()
@@ -103,6 +104,12 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
                 }
                 let routedHeartRate: RoutedTelemetrySample<Int>? = self.sourceRouter.resolve("heartRateBpm", at: uptime)
                 let routedSpeed: RoutedTelemetrySample<Double>? = self.sourceRouter.resolve("speedKmh", at: uptime)
+                if let routedHeartRate {
+                    self.coreAdapter.ingest(metric: routedHeartRate.metric, sourceID: routedHeartRate.sourceID, value: Double(routedHeartRate.value), unit: "bpm", quality: routedHeartRate.quality, timestamp: routedHeartRate.timestamp)
+                }
+                if let routedSpeed {
+                    self.coreAdapter.ingest(metric: routedSpeed.metric, sourceID: routedSpeed.sourceID, value: routedSpeed.value, unit: "km/h", quality: routedSpeed.quality, timestamp: routedSpeed.timestamp)
+                }
                 let processed = self.rideEngine.processMotion(timestamp: timestamp, deviceG: acceleration)
                 let speedMS = max(0, (routedSpeed?.value ?? 0) / 3.6)
                 self.speedKmh = routedSpeed?.value ?? 0
@@ -136,12 +143,14 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
         startMotionForCalibration()
         samples.removeAll(keepingCapacity: true)
         sourceRouter.reset()
+        coreAdapter.resetRuntime()
         rideEngine.reset()
         if let calibration = CalibrationMath.build(gravitySamples: Array(calibrationBuffer.suffix(150)), forwardEdge: forwardEdge) { rideEngine.calibration = calibration }
         altitudeFusion.reset()
         filteredDistance = 0; rejectedLocationCount = 0; acceptedLocationCount = 0
         ridePhase = "idle"; qualityScore = 0; lastSavedURL = nil; sessionID = UUID()
         startedAt = ProcessInfo.processInfo.systemUptime; startedAtDate = Date(); isRecording = true
+        coreAdapter.recordingStarted(sessionID: sessionID.uuidString, timestamp: startedAt)
         status = "Aufnahme läuft · Session \(sessionID.uuidString.prefix(8))"
         location.startUpdatingLocation()
         if recordVideo { videoRecorder.start(sessionID: sessionID, sensorStartUptime: startedAt) }
@@ -163,6 +172,7 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
         guard isRecording else { return }
         isRecording = false; endedAtDate = Date(); altimeter.stopRelativeAltitudeUpdates(); location.stopUpdatingLocation()
         if recordVideo { videoRecorder.stop() }
+        coreAdapter.recordingStopped()
         status = "Aufnahme beendet: \(samples.count) Samples"
     }
 
@@ -171,11 +181,20 @@ final class SensorRecorder: NSObject, ObservableObject, CLLocationManagerDelegat
         let duration = samples.last?.timestamp ?? 0
         let phaseEvents = phaseDetector.events.map { RideSessionEvent(id: UUID(), timestamp: $0.0, type: $0.1) }
         let sourceEvents = sourceRouter.switches.map { value in
-            RideSessionEvent(id: UUID(), timestamp: max(0, value.timestamp - startedAt), type: "source-switch:\(value.metric):\(value.from ?? "none")->\(value.to ?? "none"):\(value.reason)")
+            coreAdapter.sourceSwitched(metric: value.metric, sourceID: value.to, timestamp: value.timestamp)
+            return RideSessionEvent(id: UUID(), timestamp: max(0, value.timestamp - startedAt), type: "source-switch:\(value.metric):\(value.from ?? "none")->\(value.to ?? "none"):\(value.reason)")
         }
         let cal = rideEngine.calibration
         let document = RideSessionDocument(schemaVersion: "2.0.0", id: sessionID, platform: "ios", startedAt: startedAtDate, endedAt: endedAtDate, timebase: "systemUptime", calibration: RideSessionCalibration(mode: "manual", source: "iphone", isCalibrated: cal != nil, forwardEdge: forwardEdge.rawValue, up: cal.map { [$0.up.x, $0.up.y, $0.up.z] }, lateral: cal.map { [$0.lateral.x, $0.lateral.y, $0.lateral.z] }, forward: cal.map { [$0.forward.x, $0.forward.y, $0.forward.z] }), video: RideSessionVideo(sessionID: sessionID.uuidString, filename: videoRecorder.lastVideoURL?.lastPathComponent, startOffsetSeconds: videoRecorder.startOffsetSeconds), events: phaseEvents + sourceEvents, samples: samples, summary: RideSessionSummary(durationSeconds: duration, sampleCount: samples.count, distanceMeters: filteredDistance, acceptedLocations: acceptedLocationCount, rejectedLocations: rejectedLocationCount, qualityScore: qualityScore, finalPhase: ridePhase), notes: RideSessionNotes(privateNote: privateNote, communityComment: communityComment), heartRate: RideSessionHeartRate(source: sourceRouter.resolve("heartRateBpm", as: Int.self)?.sourceID ?? accessoryManager.connectedName, sampleCount: samples.compactMap(\.heartRateBpm).count, averageBpm: averageHeartRate()))
         let url = try RideSessionStore.save(document); lastSavedURL = url; status = "Session gespeichert: \(url.lastPathComponent)"; return url
+    }
+
+    func coreConfigurationSnapshot() -> CoreNativeConfigurationSnapshot {
+        coreAdapter.configurationSnapshot(
+            cameraSources: videoRecorder.cameraSources,
+            forwardEdge: forwardEdge.rawValue,
+            connectedAccessoryName: accessoryManager.connectedName
+        )
     }
 
     private func averageHeartRate() -> Double? {
