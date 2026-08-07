@@ -88,6 +88,11 @@ final class RideTrackerCoreAdapter: ObservableObject {
     static let coreVersion = "2.0.0-alpha.1"
     static let snapshotSchemaVersion = "1.0.0"
 
+    let plugins: CorePluginHost = {
+        let host = CorePluginHost()
+        host.registerBuiltins()
+        return host
+    }()
     let devices = CoreDeviceManager()
     let sensors = CoreSensorManager()
     let cameras = CoreCameraManager()
