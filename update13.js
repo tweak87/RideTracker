@@ -1,85 +1,57 @@
 (() => {
   'use strict';
 
-  const DB_NAME = 'RideTrackerLibrary';
-  const DB_VERSION = 1;
-  const STORE = 'rides';
   let activeView = null;
   let map = null;
   let mapLayer = null;
 
-  function openDB() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(STORE)) {
-          const store = db.createObjectStore(STORE, { keyPath: 'id' });
-          store.createIndex('createdAt', 'createdAt');
-          store.createIndex('parkName', 'parkName');
-        }
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
+  const database = () => window.RideTrackerDatabase;
+  const packageStore = () => database()?.stores?.ridePackages || 'ridePackages';
 
   async function putRide(ride) {
-    const db = await openDB();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).put(ride);
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-    db.close();
+    if (!ride?.id) throw new Error('RidePackage benötigt eine ID.');
+    const db = database();
+    if (!db) throw new Error('RideTrackerDatabase ist noch nicht bereit.');
+    await db.put(packageStore(), ride.id, ride);
+    return ride;
   }
 
   async function getRides() {
-    const db = await openDB();
-    const rides = await new Promise((resolve, reject) => {
-      const request = db.transaction(STORE, 'readonly').objectStore(STORE).getAll();
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => reject(request.error);
-    });
-    db.close();
-    return rides.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    const db = database();
+    if (!db) return [];
+    const rides = await db.getAll(packageStore());
+    return (Array.isArray(rides) ? rides : []).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   }
 
   async function deleteRide(id) {
-    const db = await openDB();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).delete(id);
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-    db.close();
+    const db = database();
+    if (!db) return;
+    await db.delete(packageStore(), id);
   }
 
   function normalizeRide(doc, source = 'web') {
     const samples = Array.isArray(doc.samples) ? doc.samples : [];
     const gps = samples
-      .filter(s => Number.isFinite(Number(s.latitude)) && Number.isFinite(Number(s.longitude)))
+      .filter(s => Number.isFinite(Number(s.latitude ?? s.lat)) && Number.isFinite(Number(s.longitude ?? s.lon)))
       .map(s => ({
-        latitude: Number(s.latitude), longitude: Number(s.longitude),
-        altitude: Number(s.relativeAltitudeM ?? s.relativeAltitude ?? s.gpsAltitude ?? 0),
-        timestamp: Number(s.timestamp || 0)
+        latitude: Number(s.latitude ?? s.lat), longitude: Number(s.longitude ?? s.lon),
+        altitude: Number(s.relativeAltitudeM ?? s.relativeAltitude ?? s.gpsAltitude ?? s.alt ?? 0),
+        timestamp: Number(s.timestamp ?? s.t ?? 0)
       }));
     const first = gps[0];
     const summary = doc.summary || {};
     return {
       id: String(doc.id || doc.sessionID || crypto.randomUUID()),
       schemaVersion: String(doc.schemaVersion || '2.0.0'),
-      createdAt: doc.startedAt || doc.createdAt || new Date().toISOString(),
+      createdAt: doc.startedAt || doc.started_at || doc.createdAt || new Date().toISOString(),
       endedAt: doc.endedAt || null,
       platform: doc.platform || source,
       parkName: doc.context?.parkName || doc.park?.name || doc.parkName || 'Unbekannter Park',
       rideName: doc.context?.rideName || doc.ride?.name || doc.rideName || 'Unbenannte Fahrt',
       latitude: Number(doc.context?.latitude ?? first?.latitude ?? NaN),
       longitude: Number(doc.context?.longitude ?? first?.longitude ?? NaN),
-      distanceMeters: Number(summary.distanceMeters ?? doc.distanceMeters ?? 0),
-      durationSeconds: Number(summary.durationSeconds ?? doc.durationSeconds ?? samples.at(-1)?.timestamp ?? 0),
+      distanceMeters: Number(summary.distanceMeters ?? summary.distance_m ?? doc.distanceMeters ?? 0),
+      durationSeconds: Number(summary.durationSeconds ?? summary.duration_s ?? doc.durationSeconds ?? samples.at(-1)?.timestamp ?? samples.at(-1)?.t ?? 0),
       qualityScore: Number(summary.qualityScore ?? doc.qualityScore ?? 0),
       sampleCount: Number(summary.sampleCount ?? samples.length),
       gps,
@@ -87,40 +59,45 @@
     };
   }
 
-  function currentWebRide() {
+  function currentWebRide(id = crypto.randomUUID()) {
     try {
       if (typeof S === 'undefined' || !Array.isArray(S.samples) || !S.samples.length) return null;
       const samples = S.samples.map((sample, index) => {
         const gps = S.gps?.[Math.min(index, Math.max(0, (S.gps?.length || 1) - 1))];
         return {
           timestamp: Number(sample.t ?? sample.timestamp ?? index / 50),
-          normalG: Number(sample.n ?? sample.normalG ?? 0),
-          lateralG: Number(sample.l ?? sample.lateralG ?? 0),
-          longitudinalG: Number(sample.q ?? sample.longitudinalG ?? 0),
-          speedMS: Number(sample.speedMS ?? 0),
-          relativeAltitudeM: Number(sample.height ?? 0),
-          latitude: Number(gps?.lat ?? gps?.latitude ?? NaN),
-          longitude: Number(gps?.lon ?? gps?.longitude ?? NaN)
+          normalG: Number(sample.n ?? sample.normal ?? sample.normalG ?? 0),
+          lateralG: Number(sample.l ?? sample.lateral ?? sample.lateralG ?? 0),
+          longitudinalG: Number(sample.q ?? sample.longitudinal ?? sample.longitudinalG ?? 0),
+          speedMS: Number(sample.speedMS ?? sample.speed ?? 0),
+          relativeAltitudeM: Number(sample.height ?? sample.alt ?? 0),
+          latitude: Number(gps?.lat ?? gps?.latitude ?? sample.lat ?? NaN),
+          longitude: Number(gps?.lon ?? gps?.longitude ?? sample.lon ?? NaN)
         };
       });
       return normalizeRide({
-        id: crypto.randomUUID(), schemaVersion: '2.0.0', platform: 'web',
-        startedAt: S.wall?.toISOString?.() || new Date().toISOString(), samples,
-        summary: { durationSeconds: Number(S.end || samples.at(-1)?.timestamp || 0), sampleCount: samples.length, distanceMeters: Number(S.dist || 0), qualityScore: 0 }
+        id, schemaVersion: '2.0.0', platform: 'web',
+        startedAt: S.wall || new Date().toISOString(), samples,
+        summary: {
+          durationSeconds: Number(S.end || samples.at(-1)?.timestamp || 0),
+          sampleCount: samples.length,
+          distanceMeters: Number(S.dist || 0),
+          qualityScore: 0
+        }
       });
     } catch (error) {
-      console.warn('RideTracker local save skipped', error);
+      console.warn('RideTracker ride package capture skipped', error);
       return null;
     }
   }
 
-  function installAutoSave() {
-    const stop = document.getElementById('stop');
-    stop?.addEventListener('click', () => setTimeout(async () => {
-      const ride = currentWebRide();
-      if (ride) await putRide(ride);
-    }, 250), true);
+  async function persistCurrentRide(id) {
+    const ride = currentWebRide(id);
+    if (!ride) return null;
+    return putRide(ride);
+  }
 
+  function installImportPersistence() {
     const importButton = document.getElementById('rideSessionImport');
     importButton?.addEventListener('click', () => setTimeout(async () => {
       const file = document.getElementById('rideSessionFile')?.files?.[0];
@@ -151,15 +128,15 @@
     closeView();
     const view = document.createElement('section');
     view.className = 'rt-view';
-    view.innerHTML = `<div class="rt-shell"><header class="rt-head"><div><h2>${title}</h2><div class="rt-meta">Lokal auf diesem Gerät gespeichert</div></div><button class="rt-back">Zurück</button></header><div class="rt-content"></div></div>`;
+    view.innerHTML = `<div class="rt-shell"><header class="rt-head"><div><h2>${title}</h2><div class="rt-meta">Bewusst gespeicherte oder importierte Fahrten</div></div><button class="rt-back">Zurück</button></header><div class="rt-content"></div></div>`;
     view.querySelector('.rt-back').onclick = closeView;
     document.body.appendChild(view); activeView = view;
     return view.querySelector('.rt-content');
   }
 
   async function showLibrary() {
-    const content = createView('Meine Fahrten');
-    content.innerHTML = `<div class="rt-import"><input id="rtImport" type="file" accept=".json,.ride.json,application/json" multiple><button id="rtImportBtn">Fahrten importieren</button></div><div class="rt-grid" id="rtRideGrid"></div>`;
+    const content = createView('RidePackages');
+    content.innerHTML = `<div class="rt-import"><input id="rtImport" type="file" accept=".json,.ride.json,application/json" multiple><button id="rtImportBtn">RidePackages importieren</button></div><div class="rt-grid" id="rtRideGrid"></div>`;
     content.querySelector('#rtImportBtn').onclick = async () => {
       const files = [...content.querySelector('#rtImport').files];
       for (const file of files) {
@@ -173,13 +150,13 @@
   async function renderRideGrid(grid) {
     const rides = await getRides();
     if (!rides.length) {
-      grid.innerHTML = `<div class="rt-empty">Noch keine lokale Fahrt vorhanden. Neue Fahrten werden nach dem Stoppen automatisch gespeichert. Bereits heruntergeladene JSON-Dateien können oben importiert werden.</div>`;
+      grid.innerHTML = `<div class="rt-empty">Noch kein RidePackage vorhanden. Fahrten werden nur nach bewusstem Speichern übernommen; JSON-Dateien können oben importiert werden.</div>`;
       return;
     }
     grid.innerHTML = rides.map(r => `<article class="rt-ride"><div><h3>${escapeHTML(r.rideName)}</h3><div class="rt-meta">${escapeHTML(r.parkName)}<br>${formatDate(r.createdAt)} · ${(r.distanceMeters/1000).toFixed(2)} km · ${formatDuration(r.durationSeconds)}<br>${r.sampleCount} Samples · Qualität ${r.qualityScore}/100</div></div><div class="rt-actions"><button data-map="${r.id}">Karte</button><button data-open="${r.id}">Details</button><button data-delete="${r.id}">Löschen</button></div></article>`).join('');
     grid.querySelectorAll('[data-map]').forEach(b => b.onclick = () => showMap(b.dataset.map));
     grid.querySelectorAll('[data-open]').forEach(b => b.onclick = async () => showDetails((await getRides()).find(r => r.id === b.dataset.open)));
-    grid.querySelectorAll('[data-delete]').forEach(b => b.onclick = async () => { if (confirm('Fahrt lokal löschen?')) { await deleteRide(b.dataset.delete); await renderRideGrid(grid); } });
+    grid.querySelectorAll('[data-delete]').forEach(b => b.onclick = async () => { if (confirm('RidePackage lokal löschen?')) { await deleteRide(b.dataset.delete); await renderRideGrid(grid); } });
   }
 
   async function showMap(focusId = null) {
@@ -202,7 +179,7 @@
     if (valid.length) map.fitBounds(mapLayer.getBounds().pad(.16));
     const parks = groupParks(rides);
     const list = content.querySelector('#rtParkList');
-    list.innerHTML = parks.length ? parks.map(p => `<div class="rt-park" data-ride="${p.rides[0].id}"><strong>${escapeHTML(p.name)}</strong><span>${p.rides.length} Fahrt${p.rides.length === 1 ? '' : 'en'} · ${p.rides.map(r => escapeHTML(r.rideName)).join(', ')}</span></div>`).join('') : `<div class="rt-empty">Noch keine Fahrten mit gültigen GPS-Punkten gespeichert.</div>`;
+    list.innerHTML = parks.length ? parks.map(p => `<div class="rt-park" data-ride="${p.rides[0].id}"><strong>${escapeHTML(p.name)}</strong><span>${p.rides.length} Fahrt${p.rides.length === 1 ? '' : 'en'} · ${p.rides.map(r => escapeHTML(r.rideName)).join(', ')}</span></div>`).join('') : `<div class="rt-empty">Noch keine bewusst gespeicherten Fahrten mit gültigen GPS-Punkten vorhanden.</div>`;
     list.querySelectorAll('[data-ride]').forEach(item => item.onclick = () => focusRide(item.dataset.ride));
     if (focusId) setTimeout(() => focusRide(focusId), 50);
   }
@@ -245,9 +222,10 @@
     document.addEventListener('click', event => {
       const button = event.target.closest('button,a,[role="button"]');
       if (!button) return;
-      const text = button.textContent.trim().toLowerCase();
-      if (text.includes('meine fahrten') || text === 'fahrten') { event.preventDefault(); event.stopImmediatePropagation(); showLibrary(); }
-      else if (text === 'karte' || text.includes('parks') && text.includes('karte')) { event.preventDefault(); event.stopImmediatePropagation(); showMap(); }
+      const label = button.textContent.trim().toLowerCase();
+      if (label === 'karte' || (label.includes('parks') && label.includes('karte'))) {
+        event.preventDefault(); event.stopImmediatePropagation(); showMap();
+      }
     }, true);
   }
 
@@ -261,6 +239,6 @@
 
   ensureStyles();
   hookMenu();
-  installAutoSave();
-  window.RideTrackerLibrary = { showLibrary, showMap, putRide, getRides };
+  installImportPersistence();
+  window.RideTrackerLibrary = { showLibrary, showMap, putRide, getRides, persistCurrentRide, normalizeRide };
 })();
