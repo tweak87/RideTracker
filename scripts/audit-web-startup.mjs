@@ -66,9 +66,11 @@ requireToken(u40, 'rtRecordingQuickStart', 'Simplified recording quick-start UI 
 requireToken(u40, 'Fahrt mit Video starten', 'Quick-start video action missing');
 requireToken(u40, 'Fahrt ohne Video starten', 'Quick-start no-video action missing');
 
-// Plugin migration: BLE/GNSS must enter via plugin telemetry.
+// Plugin migration: BLE/GNSS/IMU must enter via normalized plugin telemetry.
 requireToken(plugins, 'ridetracker:plugin-telemetry', 'Web plugin runtime must emit normalized plugin telemetry');
+requireToken(plugins, "return 'external-imu'", 'External IMU packets must be classified by the plugin runtime');
 requireToken(u35, 'ridetracker:plugin-telemetry', 'Source router must consume normalized plugin telemetry');
+requireToken(u35, "'external-imu'", 'Source router must accept external IMU plugin telemetry');
 failIf(u35.includes("addEventListener('ridetracker:heart-rate'"), 'BLE heart rate must no longer bypass plugin runtime');
 
 // Core user-facing modules must still expose their public APIs.
