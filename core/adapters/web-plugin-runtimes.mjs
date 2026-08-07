@@ -24,6 +24,15 @@ function classifyExternalPacket(packet = {}) {
   return null;
 }
 
+function cloneRuntime(runtime) {
+  return runtime ? {
+    ...runtime,
+    capabilities: [...runtime.capabilities],
+    availableCapabilities: [...runtime.availableCapabilities],
+    sources: Array.isArray(runtime.sources) ? runtime.sources.map(source => ({ ...source })) : []
+  } : null;
+}
+
 function attach(target = globalThis.window) {
   const coreRuntime = target?.RideTrackerCoreRuntime;
   if (!coreRuntime?.core) return null;
@@ -37,6 +46,10 @@ function attach(target = globalThis.window) {
       availableCapabilities: definition.capabilities.filter(capabilityAvailable),
       active: true,
       lastTelemetryAt: null,
+      previewActive: false,
+      recordingActive: false,
+      lastPreviewAt: null,
+      sources: [],
     });
   }
 
@@ -94,11 +107,60 @@ function attach(target = globalThis.window) {
     if (runtime) runtime.lastTelemetryAt = Number(detail.timestamp ?? detail.timestampMs ?? performance.now());
   };
 
+  const previewElement = () => target.document?.getElementById?.('preview') || null;
+  const livePreviewStream = () => {
+    const stream = previewElement()?.srcObject;
+    return stream && typeof stream.getVideoTracks === 'function' && stream.getVideoTracks().some(track => track.readyState === 'live') ? stream : null;
+  };
+
   const syncCamera = () => {
     const runtime = runtimeState.get('camera-source');
     if (!runtime) return;
     const snapshot = target.RideTrackerCameraSources?.snapshot?.();
     runtime.sources = Array.isArray(snapshot?.sources) ? snapshot.sources.map(source => ({ id: source.id, available: source.available !== false })) : [];
+    runtime.previewActive = Boolean(livePreviewStream());
+  };
+
+  async function ensureCameraPreview(payload = {}) {
+    const runtime = runtimeState.get('camera-source');
+    if (!runtime) throw new Error('camera-source plugin runtime is not registered');
+    const existing = livePreviewStream();
+    if (existing) {
+      runtime.previewActive = true;
+      return existing;
+    }
+    if (!target.navigator?.mediaDevices?.getUserMedia) throw new Error('camera.preview capability is unavailable');
+    const selected = target.RideTrackerCameraSources?.constraints?.();
+    const constraints = payload.constraints || selected || { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false };
+    const normalized = Object.prototype.hasOwnProperty.call(constraints, 'video') ? constraints : { video: constraints, audio: false };
+    const stream = await target.navigator.mediaDevices.getUserMedia(normalized);
+    const preview = previewElement();
+    if (preview) {
+      preview.srcObject = stream;
+      preview.muted = true;
+      preview.autoplay = true;
+      preview.playsInline = true;
+      preview.setAttribute('playsinline', '');
+      preview.removeAttribute('controls');
+      try { await preview.play(); } catch (_) {}
+    }
+    runtime.previewActive = true;
+    runtime.lastPreviewAt = performance.now();
+    target.dispatchEvent(new CustomEvent('ridetracker:camera-plugin-preview', { detail: { pluginId: 'camera-source', stream } }));
+    return stream;
+  }
+
+  const markRecordingStarted = () => {
+    const runtime = runtimeState.get('camera-source');
+    if (!runtime) return;
+    runtime.recordingActive = true;
+    runtime.previewActive = Boolean(livePreviewStream());
+  };
+  const markRecordingStopped = () => {
+    const runtime = runtimeState.get('camera-source');
+    if (!runtime) return;
+    runtime.recordingActive = false;
+    runtime.previewActive = Boolean(livePreviewStream());
   };
 
   target.addEventListener('ridetracker:heart-rate', onHeartRate);
@@ -106,15 +168,21 @@ function attach(target = globalThis.window) {
   target.addEventListener('ridetracker:plugin-telemetry', markTelemetry);
   target.addEventListener('ridetracker:routed-telemetry', markTelemetry);
   target.addEventListener('ridetracker:camera-sources', syncCamera);
+  target.addEventListener('ridetracker:recording-started', markRecordingStarted);
+  target.addEventListener('ridetracker:recording-stopped', markRecordingStopped);
   syncCamera();
 
   const api = {
-    list: () => [...runtimeState.values()].map(runtime => ({ ...runtime, capabilities: [...runtime.capabilities], availableCapabilities: [...runtime.availableCapabilities] })),
-    get: id => {
-      const runtime = runtimeState.get(id);
-      return runtime ? { ...runtime, capabilities: [...runtime.capabilities], availableCapabilities: [...runtime.availableCapabilities] } : null;
-    },
+    list: () => [...runtimeState.values()].map(cloneRuntime),
+    get: id => cloneRuntime(runtimeState.get(id)),
     byCapability: capability => api.list().filter(runtime => runtime.capabilities.includes(capability)),
+    async invoke(pluginId, operation, payload = {}) {
+      if (pluginId !== 'camera-source') throw new Error(`Unsupported web plugin runtime operation for ${pluginId}`);
+      if (operation === 'ensurePreview') return ensureCameraPreview(payload);
+      if (operation === 'previewStream') return livePreviewStream();
+      if (operation === 'state') return api.get('camera-source');
+      throw new Error(`Unsupported camera-source operation: ${operation}`);
+    },
     refresh() {
       for (const runtime of runtimeState.values()) runtime.availableCapabilities = runtime.capabilities.filter(capabilityAvailable);
       syncCamera();
@@ -126,6 +194,8 @@ function attach(target = globalThis.window) {
       target.removeEventListener('ridetracker:plugin-telemetry', markTelemetry);
       target.removeEventListener('ridetracker:routed-telemetry', markTelemetry);
       target.removeEventListener('ridetracker:camera-sources', syncCamera);
+      target.removeEventListener('ridetracker:recording-started', markRecordingStarted);
+      target.removeEventListener('ridetracker:recording-stopped', markRecordingStopped);
       runtimeState.clear();
     },
   };
