@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ridetracker.app/schema/plugin-capabilities.schema.json",
+  "title": "RideTracker Plugin Capabilities",
+  "type": "object",
+  "required": ["schemaVersion", "capabilities"],
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1.0.0" },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "motion.acceleration",
+          "motion.gyroscope",
+          "motion.orientation",
+          "location.position",
+          "location.speed",
+          "location.altitude",
+          "heart-rate.bpm",
+          "camera.preview",
+          "camera.recording",
+          "video.import",
+          "video.export",
+          "telemetry.import",
+          "telemetry.export",
+          "calibration.motion",
+          "calibration.location",
+          "calibration.camera",
+          "hud.widget-source"
+        ]
+      }
+    }
+  },
+  "additionalProperties": false
+}
