@@ -2,9 +2,9 @@
   'use strict';
 
   const DB_NAME = 'RideTrackerMedia';
-  // Version 4 intentionally repairs clients that were already promoted to v3
-  // while only the legacy "videos" store had been created.
-  const DB_VERSION = 4;
+  // Version 5 intentionally forces one more repair pass for Safari clients that
+  // may already have reached v4 while a legacy module still owned the upgrade event.
+  const DB_VERSION = 5;
   const STORES = Object.freeze({
     videos: 'videos',
     ridePackages: 'ridePackages',
@@ -15,12 +15,10 @@
   const nativeOpen = indexedDB.open.bind(indexedDB);
   let openPromise = null;
 
-  // Compatibility bridge for older RideTracker modules that still request DB version 1.
-  // Existing callers transparently use the current schema without losing stored videos.
+  // Compatibility bridge for older RideTracker modules that still request an old
+  // RideTrackerMedia version. They transparently request the current schema.
   indexedDB.open = function(name, version) {
-    if (name === DB_NAME && (!version || Number(version) < DB_VERSION)) {
-      return nativeOpen(name, DB_VERSION);
-    }
+    if (name === DB_NAME && (!version || Number(version) < DB_VERSION)) return nativeOpen(name, DB_VERSION);
     return version === undefined ? nativeOpen(name) : nativeOpen(name, version);
   };
 
@@ -46,11 +44,12 @@
           db.close();
           openPromise = null;
         };
+        const actualStores = [...db.objectStoreNames];
         const missing = Object.values(STORES).filter(store => !db.objectStoreNames.contains(store));
         if (missing.length) {
           db.close();
           openPromise = null;
-          reject(new Error(`RideTracker IndexedDB schema incomplete after v${DB_VERSION} repair: ${missing.join(', ')}`));
+          reject(new Error(`RideTracker IndexedDB schema incomplete after v${DB_VERSION} repair: missing ${missing.join(', ')}; present ${actualStores.join(', ')}`));
           return;
         }
         resolve(db);
@@ -68,7 +67,7 @@
         tx = db.transaction(store, mode);
       } catch (error) {
         openPromise = null;
-        reject(error);
+        reject(new Error(`RideTracker transaction failed for store ${store}; available stores: ${[...db.objectStoreNames].join(', ')}; ${error?.message || error}`));
         return;
       }
       const objectStore = tx.objectStore(store);
