@@ -1,6 +1,7 @@
 package de.ridetracker.session
 
 import android.content.Context
+import de.ridetracker.core.toJson
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -55,6 +56,8 @@ object RidePackageStore {
             .put("integrity", JSONObject()
                 .put("algorithm", "sha256")
                 .put("files", hashes))
+
+        session.configurationSnapshot?.let { manifest.put("configurationSnapshot", it.toJson()) }
 
         val packageFile = File(context.filesDir, telemetryFile.name.removeSuffix(".ride.json") + ".ride-package.json")
         packageFile.writeText(manifest.toString(2))
