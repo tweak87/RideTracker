@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'shared/**'
+      - 'core/**'
       - '.github/workflows/engine-tests.yml'
   pull_request:
     paths:
       - 'shared/**'
+      - 'core/**'
   workflow_dispatch:
 
 jobs:
@@ -26,3 +28,5 @@ jobs:
         run: node shared/ride-engine/ride-package.test.mjs
       - name: Run overlay specification tests
         run: node shared/overlay/overlay-core.test.mjs
+      - name: Run RideTracker Core contract tests
+        run: node core/ridetracker-core.test.mjs
