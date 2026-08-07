@@ -17,7 +17,9 @@ export class EventBus {
 }
 
 const performanceNow = () => globalThis.performance?.now?.() ?? Date.now();
-const clone = value => structuredClone ? structuredClone(value) : JSON.parse(JSON.stringify(value));
+const clone = value => typeof globalThis.structuredClone === 'function'
+  ? globalThis.structuredClone(value)
+  : JSON.parse(JSON.stringify(value));
 
 export const Events = Object.freeze({
   RECORDING_STARTED: 'recording.started',
