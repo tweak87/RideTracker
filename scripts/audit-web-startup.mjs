@@ -51,7 +51,11 @@ requireToken(u39, "recorded.classList.add('hidden')", 'Replay video must be hidd
 requireToken(u39, "live.removeAttribute('controls')", 'Live preview must not expose player controls');
 requireToken(u39, 'object-fit:cover', 'Fullscreen live preview must be image-filling');
 requireToken(u39, 'object-position:50% 50%', 'Fullscreen live preview must be centered');
-requireToken(u39, 'Deliberately do not stop the recording here', 'Leaving fullscreen must not stop recording');
+requireToken(u39, 'Recording deliberately continues.', 'Leaving fullscreen must not stop recording');
+requireToken(u39, 'rtRecordingControlPortal', 'Recording controls must live in a body-level portal');
+requireToken(u39, 'rtRecordingElapsed', 'Recording elapsed timer missing');
+requireToken(u39, 'Vollbild verlassen', 'Fullscreen minimize action missing');
+requireToken(u39, 'z-index:2147483646', 'Recording controls must stay above HUD layers');
 requireToken(u25, 'if (window.RideTrackerRecordingFullscreen) return;', 'Legacy fullscreen triggers must defer to update39');
 
 requireToken(u41, 'rideTracker.calibration.v1', 'Persistent calibration storage key missing');
@@ -105,12 +109,16 @@ if (fs.existsSync('index.html')) {
     }
   }
   const dbIndex = html.indexOf('core/storage/web-database-service.js?v=');
+  const rideEngineIndex = html.indexOf('shared/ride-engine/browser-adapter.js?v=');
+  const firstUpdateIndex = html.indexOf('update11.js?v=');
   const ridesIndex = html.indexOf('update37.js?v=');
   const pluginIndex = html.indexOf('core/adapters/web-plugin-runtimes.mjs?v=');
   const fullscreenIndex = html.indexOf('update39.js?v=');
   const calibrationIndex = html.indexOf('update41.js?v=');
   const sensorCalibrationIndex = html.indexOf('update42.js?v=');
   const actionsIndex = html.indexOf('update40.js?v=');
+  failIf(dbIndex < 0 || rideEngineIndex < 0 || firstUpdateIndex < 0 || dbIndex > rideEngineIndex || dbIndex > firstUpdateIndex,
+    'Database repair service must load before ride engine and every update module');
   if (dbIndex >= 0 || ridesIndex >= 0) failIf(dbIndex < 0 || ridesIndex < 0 || dbIndex > ridesIndex, 'Database service must load before the ride library');
   if (pluginIndex >= 0 || fullscreenIndex >= 0) failIf(pluginIndex < 0 || fullscreenIndex < 0 || pluginIndex > fullscreenIndex, 'Plugin runtime must load before recording fullscreen controller');
   if (fullscreenIndex >= 0 || calibrationIndex >= 0 || sensorCalibrationIndex >= 0 || actionsIndex >= 0) {
