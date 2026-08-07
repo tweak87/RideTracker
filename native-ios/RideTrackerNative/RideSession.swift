@@ -26,6 +26,7 @@ struct RideSessionDocument: Codable, Identifiable {
     let summary: RideSessionSummary
     let notes: RideSessionNotes
     let heartRate: RideSessionHeartRate
+    let configurationSnapshot: CoreNativeConfigurationSnapshot? = nil
 }
 
 enum RideSessionStore {
