@@ -23,6 +23,7 @@ jobs:
       - name: Validate shared schemas
         run: |
           python -m json.tool shared/core/configuration-snapshot.schema.json >/dev/null
+          python -m json.tool shared/core/plugin-capabilities.schema.json >/dev/null
           python -m json.tool shared/devices/device-registry.schema.json >/dev/null
       - name: Run canonical fixture
         run: node shared/ride-engine/ride-engine.test.mjs
@@ -34,3 +35,5 @@ jobs:
         run: node shared/overlay/overlay-core.test.mjs
       - name: Run RideTracker Core contract tests
         run: node core/ridetracker-core.test.mjs
+      - name: Run plugin capability contract tests
+        run: node core/plugin-capabilities.test.mjs
