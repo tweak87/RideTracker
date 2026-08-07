@@ -31,6 +31,11 @@
     if (state.busy || recordingActive()) return recordingActive();
     state.busy = true;
     try {
+      const session = window.RideTrackerRecordingSession;
+      if (session?.confirmReplaceBeforeStart && !(await session.confirmReplaceBeforeStart())) {
+        refresh();
+        return false;
+      }
       setVideoEnabled(video);
       const calibrationManager = window.RideTrackerCalibrationManager;
       if (calibrationManager && !(await calibrationManager.ensureForStart())) {
@@ -128,6 +133,9 @@
 
   window.addEventListener('ridetracker:recording-started', refresh);
   window.addEventListener('ridetracker:recording-stopped', refresh);
+  window.addEventListener('ridetracker:preview-ready', refresh);
+  window.addEventListener('ridetracker:ride-saved', refresh);
+  window.addEventListener('ridetracker:ride-discarded', refresh);
   window.addEventListener('ridetracker:database-ready', refresh);
   window.addEventListener('ridetracker:calibration-saved', refresh);
   window.addEventListener('ridetracker:calibration-restored', refresh);
