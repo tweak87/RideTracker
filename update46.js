@@ -145,3 +145,5 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true }); else install();
 })();
+
+import('./core/adapters/web-plugin-ui.mjs?v=48').catch(error => console.error('[RideTracker plugin UI]', error));
