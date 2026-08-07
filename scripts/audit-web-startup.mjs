@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const requiredFiles = [
-  'update24.js','update25.js','update29.js','update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js','update40.js','update41.js','update42.js','update43.js','update44.js',
+  'update24.js','update25.js','update29.js','update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js','update40.js','update41.js','update42.js','update43.js','update44.js','update45.js',
   'core/storage/web-database-service.js','core/adapters/web-plugin-runtimes.mjs'
 ];
 for (const file of requiredFiles) {
@@ -24,6 +24,7 @@ const u41 = text('update41.js');
 const u42 = text('update42.js');
 const u43 = text('update43.js');
 const u44 = text('update44.js');
+const u45 = text('update45.js');
 const db = text('core/storage/web-database-service.js');
 const plugins = text('core/adapters/web-plugin-runtimes.mjs');
 
@@ -73,6 +74,20 @@ requireToken(u44, "event.stopImmediatePropagation()", 'Legacy ride media handler
 requireToken(u44, "database.put(videoStore(), id, blob)", 'Ride saves must store video through central database service');
 requireToken(u44, "db()?.get(videoStore(), ride.id)", 'Stored ride playback must use central database service');
 requireToken(u44, "db()?.delete(videoStore(), ride.id)", 'Ride deletion must use central database service');
+requireToken(u44, 'ridetracker:ride-saved', 'Saving a ride must resolve the current recording session');
+requireToken(u44, 'ridetracker:ride-discarded', 'Discarding a ride must resolve the current recording session');
+
+requireToken(u45, 'RideTrackerRecordingSession', 'Unified recording session controller missing');
+requireToken(u45, "mode: 'live'", 'Recording session must start in live mode');
+requireToken(u45, "setMode('preview')", 'Recording session must expose preview mode');
+requireToken(u45, "setMode('recording')", 'Recording session must expose recording mode');
+requireToken(u45, 'confirmReplaceBeforeStart', 'New recordings must confirm replacement of unsaved preview');
+requireToken(u45, 'Die aktuelle Aufnahme wurde noch nicht gespeichert', 'Replacement confirmation text missing');
+requireToken(u45, 'showReplay', 'Recorded video must replace live view inside the same window');
+requireToken(u45, 'showLive', 'Starting another recording must restore live camera view');
+requireToken(u45, 'rtVideoStateBadge', 'Video state badge missing');
+requireToken(u45, 'VORSCHAU', 'Preview state label missing');
+requireToken(u40, 'session.confirmReplaceBeforeStart()', 'Canonical recording start must use the replacement gate');
 
 requireToken(u41, 'rideTracker.calibration.v1', 'Persistent calibration storage key missing');
 requireToken(u41, 'applyStored', 'Stored calibration restore path missing');
@@ -116,6 +131,7 @@ failIf(u35.includes("addEventListener('ridetracker:heart-rate'"), 'BLE heart rat
   [u42, 'RideTrackerSensorCalibration', 'sensor calibration'],
   [u43, 'RideTrackerPostRecording', 'post-recording preview'],
   [u44, 'RideTrackerRideMediaStorage', 'ride media storage'],
+  [u45, 'RideTrackerRecordingSession', 'recording session'],
   [plugins, 'RideTrackerWebPlugins', 'web plugin runtimes']
 ].forEach(([source, token, label]) => requireToken(source, token, `Missing ${label} API`));
 
@@ -134,6 +150,7 @@ if (fs.existsSync('index.html')) {
   const fullscreenIndex = html.indexOf('update39.js?v=');
   const postRecordingIndex = html.indexOf('update43.js?v=');
   const storageBridgeIndex = html.indexOf('update44.js?v=');
+  const sessionIndex = html.indexOf('update45.js?v=');
   const calibrationIndex = html.indexOf('update41.js?v=');
   const sensorCalibrationIndex = html.indexOf('update42.js?v=');
   const actionsIndex = html.indexOf('update40.js?v=');
@@ -147,10 +164,14 @@ if (fs.existsSync('index.html')) {
       'Post-recording controller must load after fullscreen controller');
     failIf(postRecordingIndex < 0 || storageBridgeIndex < 0 || postRecordingIndex > storageBridgeIndex,
       'Ride media storage bridge must load after post-recording preview controller');
+    failIf(storageBridgeIndex < 0 || sessionIndex < 0 || storageBridgeIndex > sessionIndex,
+      'Recording session controller must load after post-recording and storage controllers');
     if (fullscreenIndex >= 0 || calibrationIndex >= 0 || sensorCalibrationIndex >= 0 || actionsIndex >= 0) {
       failIf(fullscreenIndex < 0 || calibrationIndex < 0 || sensorCalibrationIndex < 0 || actionsIndex < 0 || fullscreenIndex > calibrationIndex || calibrationIndex > sensorCalibrationIndex || sensorCalibrationIndex > actionsIndex,
         'Recording startup order must be fullscreen -> calibration persistence -> sensor calibration -> actions');
     }
+    failIf(sessionIndex < 0 || actionsIndex < 0 || sessionIndex > actionsIndex,
+      'Recording session controller must load before canonical recording actions');
   }
 }
 
