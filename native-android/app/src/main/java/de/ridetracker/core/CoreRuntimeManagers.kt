@@ -84,3 +84,39 @@ class CoreCameraManager {
         fallbackIds = emptyList()
     }
 }
+
+data class CoreRecordingState(
+    val sessionId: String,
+    val startedAtMs: Long,
+    val endedAtMs: Long? = null,
+)
+
+class CoreRecordingManager {
+    var active: Boolean = false
+        private set
+    var session: CoreRecordingState? = null
+        private set
+
+    fun start(sessionId: String, timestampMs: Long): CoreRecordingState {
+        require(sessionId.isNotBlank()) { "sessionId is required" }
+        check(!active) { "recording already active" }
+        return CoreRecordingState(sessionId, timestampMs).also {
+            session = it
+            active = true
+        }
+    }
+
+    fun stop(timestampMs: Long): CoreRecordingState? {
+        val current = session ?: return null
+        if (!active) return current
+        return current.copy(endedAtMs = timestampMs).also {
+            session = it
+            active = false
+        }
+    }
+
+    fun reset() {
+        active = false
+        session = null
+    }
+}
