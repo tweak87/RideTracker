@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const requiredFiles = [
-  'update24.js','update25.js','update29.js','update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js','update40.js',
+  'update24.js','update25.js','update29.js','update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js','update40.js','update41.js',
   'core/storage/web-database-service.js','core/adapters/web-plugin-runtimes.mjs'
 ];
 for (const file of requiredFiles) {
@@ -20,6 +20,7 @@ const u37 = text('update37.js');
 const u38 = text('update38.js');
 const u39 = text('update39.js');
 const u40 = text('update40.js');
+const u41 = text('update41.js');
 const db = text('core/storage/web-database-service.js');
 const plugins = text('core/adapters/web-plugin-runtimes.mjs');
 
@@ -56,6 +57,16 @@ requireToken(u39, 'object-position:50% 50%', 'Fullscreen live preview must be ce
 requireToken(u39, 'Deliberately do not stop the recording here', 'Leaving fullscreen must not stop recording');
 requireToken(u25, 'if (window.RideTrackerRecordingFullscreen) return;', 'Legacy fullscreen triggers must defer to update39');
 
+// Persistent calibration must be reusable and must gate all canonical recording starts.
+requireToken(u41, 'rideTracker.calibration.v1', 'Persistent calibration storage key missing');
+requireToken(u41, 'applyStored', 'Stored calibration restore path missing');
+requireToken(u41, 'record.forwardEdge !== selectedForward()', 'Stored calibration must validate selected forward edge');
+requireToken(u41, 'ensureForStart', 'Calibration manager must expose a start gate');
+requireToken(u41, 'Jetzt kalibrieren', 'One-time calibration prompt missing');
+requireToken(u41, 'Neu kalibrieren', 'Explicit recalibration action missing');
+requireToken(u41, 'ridetracker:calibration-restored', 'Calibration restore event missing');
+requireToken(u40, 'calibrationManager.ensureForStart()', 'Canonical recording start must consult calibration manager');
+
 // Canonical recording actions: every simplified/minimize action must reach the real #start handler.
 requireToken(u40, 'canonicalStart', 'Recording actions must provide a canonical start path');
 requireToken(u40, 'start.click()', 'Canonical recording action must invoke the base #start handler');
@@ -84,6 +95,7 @@ failIf(u35.includes("addEventListener('ridetracker:heart-rate'"), 'BLE heart rat
   [u38, 'RideTrackerNavigation', 'navigation'],
   [u39, 'RideTrackerRecordingFullscreen', 'recording fullscreen'],
   [u40, 'RideTrackerRecordingActions', 'recording actions'],
+  [u41, 'RideTrackerCalibrationManager', 'calibration manager'],
   [plugins, 'RideTrackerWebPlugins', 'web plugin runtimes']
 ].forEach(([source, token, label]) => requireToken(source, token, `Missing ${label} API`));
 
@@ -98,6 +110,7 @@ if (fs.existsSync('index.html')) {
   const ridesIndex = html.indexOf('update37.js?v=');
   const pluginIndex = html.indexOf('core/adapters/web-plugin-runtimes.mjs?v=');
   const fullscreenIndex = html.indexOf('update39.js?v=');
+  const calibrationIndex = html.indexOf('update41.js?v=');
   const actionsIndex = html.indexOf('update40.js?v=');
   if (dbIndex >= 0 || ridesIndex >= 0) {
     failIf(dbIndex < 0 || ridesIndex < 0 || dbIndex > ridesIndex, 'Database service must load before the ride library');
@@ -105,8 +118,9 @@ if (fs.existsSync('index.html')) {
   if (pluginIndex >= 0 || fullscreenIndex >= 0) {
     failIf(pluginIndex < 0 || fullscreenIndex < 0 || pluginIndex > fullscreenIndex, 'Plugin runtime must load before recording fullscreen controller');
   }
-  if (fullscreenIndex >= 0 || actionsIndex >= 0) {
-    failIf(fullscreenIndex < 0 || actionsIndex < 0 || fullscreenIndex > actionsIndex, 'Recording fullscreen controller must load before recording action controller');
+  if (fullscreenIndex >= 0 || calibrationIndex >= 0 || actionsIndex >= 0) {
+    failIf(fullscreenIndex < 0 || calibrationIndex < 0 || actionsIndex < 0 || fullscreenIndex > calibrationIndex || calibrationIndex > actionsIndex,
+      'Recording startup order must be fullscreen -> calibration -> actions');
   }
 }
 
