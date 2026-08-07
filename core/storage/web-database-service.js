@@ -10,7 +10,17 @@
     cache: 'cache',
   });
 
+  const nativeOpen = indexedDB.open.bind(indexedDB);
   let openPromise = null;
+
+  // Compatibility bridge for older RideTracker modules that still request DB version 1.
+  // It preserves existing data while ensuring all callers use the current schema.
+  indexedDB.open = function(name, version) {
+    if (name === DB_NAME && (!version || Number(version) < DB_VERSION)) {
+      return nativeOpen(name, DB_VERSION);
+    }
+    return version === undefined ? nativeOpen(name) : nativeOpen(name, version);
+  };
 
   function upgrade(db) {
     for (const store of Object.values(STORES)) {
@@ -21,7 +31,7 @@
   function open() {
     if (openPromise) return openPromise;
     openPromise = new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      const request = nativeOpen(DB_NAME, DB_VERSION);
       request.onupgradeneeded = () => upgrade(request.result);
       request.onerror = () => { openPromise = null; reject(request.error || new Error('IndexedDB open failed')); };
       request.onblocked = () => console.warn('[RideTracker DB] Upgrade blocked by another tab.');
@@ -87,5 +97,7 @@
   };
 
   window.RideTrackerDatabase = api;
-  window.dispatchEvent(new CustomEvent('ridetracker:database-ready', { detail: { name: DB_NAME, version: DB_VERSION } }));
+  api.selfTest()
+    .then(result => window.dispatchEvent(new CustomEvent('ridetracker:database-ready', { detail: result })))
+    .catch(error => window.dispatchEvent(new CustomEvent('ridetracker:database-error', { detail: { message: String(error?.message || error) } })));
 })();
