@@ -123,6 +123,7 @@ class RideTrackerCoreAdapter {
         const val SNAPSHOT_SCHEMA_VERSION="1.0.0"
     }
 
+    val plugins = CorePluginHost().apply { registerBuiltins() }
     val devices = CoreDeviceManager()
     val sensors = CoreSensorManager()
     val cameras = CoreCameraManager()
