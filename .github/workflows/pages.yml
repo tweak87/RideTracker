@@ -21,6 +21,7 @@ jobs:
 
       - name: Validate active JavaScript syntax
         run: |
+          # Legacy update6/update7/update8 stay source-controlled but are no longer part of the production boot.
           for file in \
             update6.js update7.js update8.js update11.js update12.js \
             update13.js update14.js update15.js update16.js update17.js update18.js update19.js \
@@ -32,11 +33,12 @@ jobs:
           node scripts/audit-web-startup.mjs
           python -m json.tool shared/devices/device-registry.schema.json >/dev/null
           python -m json.tool shared/core/configuration-snapshot.schema.json >/dev/null
+          python -m json.tool shared/core/plugin-capabilities.schema.json >/dev/null
 
       - name: Build canonical web directory
         run: |
           mkdir -p dist/shared dist/scripts
-          cp index.html update6.js update7.js update8.js update11.js update12.js \
+          cp index.html update11.js update12.js \
             update13.js update14.js update15.js update16.js update17.js update18.js update19.js \
             update23.js update24.js update25.js update26.js update27.js update28.js update29.js update33.js update34.js update35.js update36.js update37.js update38.js dist/
           cp -R core dist/core
@@ -48,7 +50,7 @@ jobs:
           cd dist
           node scripts/prepare-pages.mjs
           VERSION="${GITHUB_SHA}"
-          sed -i "s#</body>#<script src=\"update6.js?v=${VERSION}\"></script><script src=\"update7.js?v=${VERSION}\"></script><script src=\"update8.js?v=${VERSION}\"></script><script type=\"module\" src=\"shared/ride-engine/browser-adapter.js?v=${VERSION}\"></script><script type=\"module\" src=\"update11.js?v=${VERSION}\"></script><script type=\"module\" src=\"update12.js?v=${VERSION}\"></script><script src=\"update13.js?v=${VERSION}\"></script><script src=\"update14.js?v=${VERSION}\"></script><script src=\"update16.js?v=${VERSION}\"></script><script src=\"update15.js?v=${VERSION}\"></script><script src=\"update17.js?v=${VERSION}\"></script><script src=\"update18.js?v=${VERSION}\"></script><script src=\"update19.js?v=${VERSION}\"></script><script src=\"update23.js?v=${VERSION}\"></script><script src=\"update24.js?v=${VERSION}\"></script><script src=\"update25.js?v=${VERSION}\"></script><script src=\"update26.js?v=${VERSION}\"></script><script src=\"update27.js?v=${VERSION}\"></script><script src=\"update28.js?v=${VERSION}\"></script><script src=\"update29.js?v=${VERSION}\"></script><script src=\"update33.js?v=${VERSION}\"></script><script src=\"update34.js?v=${VERSION}\"></script><script src=\"update35.js?v=${VERSION}\"></script><script src=\"update36.js?v=${VERSION}\"></script><script src=\"update37.js?v=${VERSION}\"></script><script type=\"module\" src=\"core/adapters/web-runtime-adapter.mjs?v=${VERSION}\"></script><script src=\"update38.js?v=${VERSION}\"></script></body>#" index.html
+          sed -i "s#</body>#<script type=\"module\" src=\"shared/ride-engine/browser-adapter.js?v=${VERSION}\"></script><script type=\"module\" src=\"update11.js?v=${VERSION}\"></script><script type=\"module\" src=\"update12.js?v=${VERSION}\"></script><script src=\"update13.js?v=${VERSION}\"></script><script src=\"update14.js?v=${VERSION}\"></script><script src=\"update16.js?v=${VERSION}\"></script><script src=\"update15.js?v=${VERSION}\"></script><script src=\"update17.js?v=${VERSION}\"></script><script src=\"update18.js?v=${VERSION}\"></script><script src=\"update19.js?v=${VERSION}\"></script><script src=\"update23.js?v=${VERSION}\"></script><script src=\"update24.js?v=${VERSION}\"></script><script src=\"update25.js?v=${VERSION}\"></script><script src=\"update26.js?v=${VERSION}\"></script><script src=\"update27.js?v=${VERSION}\"></script><script src=\"update28.js?v=${VERSION}\"></script><script src=\"update29.js?v=${VERSION}\"></script><script src=\"update33.js?v=${VERSION}\"></script><script src=\"update34.js?v=${VERSION}\"></script><script src=\"update35.js?v=${VERSION}\"></script><script src=\"update36.js?v=${VERSION}\"></script><script src=\"update37.js?v=${VERSION}\"></script><script type=\"module\" src=\"core/adapters/web-runtime-adapter.mjs?v=${VERSION}\"></script><script src=\"update38.js?v=${VERSION}\"></script></body>#" index.html
           sed -i 's#<head>#<head><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">#' index.html
           node scripts/audit-web-startup.mjs
           touch .nojekyll
@@ -71,6 +73,13 @@ jobs:
           test -f dist/core/builtin-plugins.mjs
           test -f dist/shared/devices/device-registry.schema.json
           test -f dist/shared/core/configuration-snapshot.schema.json
+          test -f dist/shared/core/plugin-capabilities.schema.json
+          ! test -f dist/update6.js
+          ! test -f dist/update7.js
+          ! test -f dist/update8.js
+          ! grep -q 'update6.js?v=' dist/index.html
+          ! grep -q 'update7.js?v=' dist/index.html
+          ! grep -q 'update8.js?v=' dist/index.html
           ! find dist -maxdepth 1 \( -name 'update20.js' -o -name 'update21.js' -o -name 'update22.js' -o -name 'update30.js' -o -name 'update31.js' -o -name 'update32.js' \) | grep -q .
           ! grep -q 'id="rtHudConfigView"' dist/update23.js
           ! grep -q '>Modus: Telemetrie<' dist/index.html
