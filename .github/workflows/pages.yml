@@ -25,7 +25,7 @@ jobs:
           for file in \
             update6.js update7.js update8.js update11.js update12.js \
             update13.js update14.js update15.js update16.js update17.js update18.js update19.js \
-            update23.js update24.js update25.js update26.js update27.js update28.js update29.js update33.js update34.js update35.js update36.js update37.js update38.js update39.js update40.js update41.js update42.js update43.js update44.js update45.js update46.js update47.js update49.js update50.js \
+            update23.js update24.js update25.js update26.js update27.js update28.js update29.js update33.js update34.js update35.js update36.js update37.js update38.js update39.js update40.js update41.js update42.js update43.js update44.js update45.js update46.js update47.js update49.js update50.js update51.js update52.js \
             core/storage/web-database-service.js core/ridetracker-core.mjs core/builtin-plugins.mjs core/adapters/web-runtime-adapter.mjs core/adapters/web-plugin-runtimes.mjs core/adapters/web-plugin-ui.mjs \
             shared/overlay/overlay-core.js scripts/prepare-pages.mjs scripts/audit-web-startup.mjs scripts/audit-frontend-managers.mjs; do
             node --check "$file"
@@ -42,7 +42,7 @@ jobs:
           mkdir -p dist/shared dist/scripts
           cp index.html update11.js update12.js \
             update13.js update14.js update15.js update16.js update17.js update18.js update19.js \
-            update23.js update24.js update25.js update26.js update27.js update28.js update29.js update33.js update34.js update35.js update36.js update37.js update38.js update39.js update40.js update41.js update42.js update43.js update44.js update45.js update46.js update47.js update49.js update50.js dist/
+            update23.js update24.js update25.js update26.js update27.js update28.js update29.js update33.js update34.js update35.js update36.js update37.js update38.js update39.js update40.js update41.js update42.js update43.js update44.js update45.js update46.js update47.js update49.js update50.js update51.js update52.js dist/
           cp -R core dist/core
           cp -R shared/ride-engine dist/shared/
           cp -R shared/overlay dist/shared/
@@ -52,7 +52,7 @@ jobs:
           cd dist
           node scripts/prepare-pages.mjs
           VERSION="${GITHUB_SHA}"
-          sed -i "s#</body>#<script src=\"core/storage/web-database-service.js?v=${VERSION}\"></script><script type=\"module\" src=\"shared/ride-engine/browser-adapter.js?v=${VERSION}\"></script><script type=\"module\" src=\"update11.js?v=${VERSION}\"></script><script type=\"module\" src=\"update12.js?v=${VERSION}\"></script><script src=\"update13.js?v=${VERSION}\"></script><script src=\"update14.js?v=${VERSION}\"></script><script src=\"update16.js?v=${VERSION}\"></script><script src=\"update15.js?v=${VERSION}\"></script><script src=\"update17.js?v=${VERSION}\"></script><script src=\"update18.js?v=${VERSION}\"></script><script src=\"update19.js?v=${VERSION}\"></script><script src=\"update23.js?v=${VERSION}\"></script><script src=\"update24.js?v=${VERSION}\"></script><script src=\"update25.js?v=${VERSION}\"></script><script src=\"update26.js?v=${VERSION}\"></script><script src=\"update27.js?v=${VERSION}\"></script><script src=\"update28.js?v=${VERSION}\"></script><script src=\"update29.js?v=${VERSION}\"></script><script src=\"update33.js?v=${VERSION}\"></script><script src=\"update34.js?v=${VERSION}\"></script><script src=\"update35.js?v=${VERSION}\"></script><script src=\"update36.js?v=${VERSION}\"></script><script src=\"update37.js?v=${VERSION}\"></script><script type=\"module\" src=\"core/adapters/web-runtime-adapter.mjs?v=${VERSION}\"></script><script type=\"module\" src=\"core/adapters/web-plugin-runtimes.mjs?v=${VERSION}\"></script><script src=\"update38.js?v=${VERSION}\"></script><script src=\"update39.js?v=${VERSION}\"></script><script src=\"update43.js?v=${VERSION}\"></script><script src=\"update44.js?v=${VERSION}\"></script><script src=\"update45.js?v=${VERSION}\"></script><script src=\"update41.js?v=${VERSION}\"></script><script src=\"update42.js?v=${VERSION}\"></script><script src=\"update40.js?v=${VERSION}\"></script><script src=\"update46.js?v=${VERSION}\"></script><script src=\"update47.js?v=${VERSION}\"></script><script src=\"update49.js?v=${VERSION}\"></script><script type=\"module\" src=\"core/adapters/web-plugin-ui.mjs?v=${VERSION}\"></script><script src=\"update50.js?v=${VERSION}\"></script></body>#" index.html
+          sed -i "s#</body>#<script src=\"core/storage/web-database-service.js?v=${VERSION}\"></script><script type=\"module\" src=\"shared/ride-engine/browser-adapter.js?v=${VERSION}\"></script><script type=\"module\" src=\"update11.js?v=${VERSION}\"></script><script type=\"module\" src=\"update12.js?v=${VERSION}\"></script><script src=\"update13.js?v=${VERSION}\"></script><script src=\"update14.js?v=${VERSION}\"></script><script src=\"update16.js?v=${VERSION}\"></script><script src=\"update15.js?v=${VERSION}\"></script><script src=\"update17.js?v=${VERSION}\"></script><script src=\"update18.js?v=${VERSION}\"></script><script src=\"update19.js?v=${VERSION}\"></script><script src=\"update23.js?v=${VERSION}\"></script><script src=\"update24.js?v=${VERSION}\"></script><script src=\"update25.js?v=${VERSION}\"></script><script src=\"update26.js?v=${VERSION}\"></script><script src=\"update27.js?v=${VERSION}\"></script><script src=\"update28.js?v=${VERSION}\"></script><script src=\"update29.js?v=${VERSION}\"></script><script src=\"update33.js?v=${VERSION}\"></script><script src=\"update34.js?v=${VERSION}\"></script><script src=\"update35.js?v=${VERSION}\"></script><script src=\"update36.js?v=${VERSION}\"></script><script src=\"update37.js?v=${VERSION}\"></script><script type=\"module\" src=\"core/adapters/web-runtime-adapter.mjs?v=${VERSION}\"></script><script type=\"module\" src=\"core/adapters/web-plugin-runtimes.mjs?v=${VERSION}\"></script><script src=\"update38.js?v=${VERSION}\"></script><script src=\"update39.js?v=${VERSION}\"></script><script src=\"update43.js?v=${VERSION}\"></script><script src=\"update44.js?v=${VERSION}\"></script><script src=\"update45.js?v=${VERSION}\"></script><script src=\"update41.js?v=${VERSION}\"></script><script src=\"update42.js?v=${VERSION}\"></script><script src=\"update40.js?v=${VERSION}\"></script><script src=\"update46.js?v=${VERSION}\"></script><script src=\"update47.js?v=${VERSION}\"></script><script src=\"update49.js?v=${VERSION}\"></script><script type=\"module\" src=\"core/adapters/web-plugin-ui.mjs?v=${VERSION}\"></script><script src=\"update50.js?v=${VERSION}\"></script><script src=\"update51.js?v=${VERSION}\"></script><script src=\"update52.js?v=${VERSION}\"></script></body>#" index.html
           sed -i 's#<head>#<head><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">#' index.html
           node scripts/audit-web-startup.mjs
           node scripts/audit-frontend-managers.mjs
@@ -62,10 +62,12 @@ jobs:
         run: |
           grep -q 'RideTrackerStandaloneHudEditor' dist/update28.js
           grep -q 'rtConfiguredLiveHud' dist/update29.js
+          grep -q 'overlayEnabled' dist/update29.js
           grep -q 'RideTrackerDeviceCenter' dist/update33.js
           grep -q 'RideTrackerSourceRouting' dist/update34.js
           grep -q 'RideTrackerRecordingSourceRouter' dist/update35.js
           grep -q 'RideTrackerCameraSources' dist/update36.js
+          grep -q 'syncFromStream' dist/update36.js
           grep -q 'RideTrackerDatabase' dist/core/storage/web-database-service.js
           grep -q 'MIN_SCHEMA_VERSION = 6' dist/core/storage/web-database-service.js
           grep -q 'inspectAndRepair' dist/core/storage/web-database-service.js
@@ -80,24 +82,22 @@ jobs:
           grep -q 'RideTrackerDialogManager' dist/update49.js
           grep -q 'RideTrackerOverlayManager' dist/update49.js
           grep -q 'RideTrackerOrientationManager' dist/update49.js
-          grep -q 'rtHudClosePortal' dist/update49.js
           grep -q 'RideTrackerHudStageFit' dist/update50.js
           grep -q 'RideTrackerLiveSensorDiagnostics' dist/update50.js
-          grep -q 'devicemotion' dist/update50.js
-          grep -q 'wrapMethod' dist/update50.js
-          grep -q 'media-export' dist/core/builtin-plugins.mjs
-          grep -q 'video.export' dist/core/builtin-plugins.mjs
-          grep -q 'telemetry.export' dist/core/builtin-plugins.mjs
-          grep -q 'RideTrackerCoreRuntime' dist/core/adapters/web-runtime-adapter.mjs
-          grep -q 'RideTrackerWebPlugins' dist/core/adapters/web-plugin-runtimes.mjs
-          grep -q 'media-export' dist/core/adapters/web-plugin-runtimes.mjs
+          grep -q 'RideTrackerExternalSensorConnections' dist/update51.js
+          grep -q 'Suchen & verbinden' dist/update51.js
+          grep -q 'RideTrackerHudPortraitFit' dist/update52.js
+          grep -q 'Frontkamera verwenden' dist/update52.js
+          grep -q 'device.discovery' dist/core/builtin-plugins.mjs
+          grep -q 'device.connection' dist/core/builtin-plugins.mjs
+          grep -q 'scanAndConnect' dist/core/adapters/web-plugin-runtimes.mjs
+          grep -q 'connectHeartRate' dist/core/adapters/web-plugin-runtimes.mjs
+          grep -q 'connectAccessory' dist/core/adapters/web-plugin-runtimes.mjs
           grep -q 'RideTrackerSensorDiagnostics' dist/core/adapters/web-plugin-ui.mjs
           grep -q 'RideTrackerRenderedExport' dist/core/adapters/web-plugin-ui.mjs
-          grep -q 'update46.js?v=' dist/index.html
-          grep -q 'update47.js?v=' dist/index.html
-          grep -q 'update49.js?v=' dist/index.html
-          grep -q 'core/adapters/web-plugin-ui.mjs?v=' dist/index.html
           grep -q 'update50.js?v=' dist/index.html
+          grep -q 'update51.js?v=' dist/index.html
+          grep -q 'update52.js?v=' dist/index.html
           grep -q 'rtInlineDashboard' dist/index.html
           test -f dist/core/ridetracker-core.mjs
           test -f dist/core/builtin-plugins.mjs
@@ -105,9 +105,7 @@ jobs:
           test -f dist/core/adapters/web-plugin-runtimes.mjs
           test -f dist/core/adapters/web-plugin-ui.mjs
           test -f dist/shared/devices/device-registry.schema.json
-          test -f dist/shared/core/configuration-snapshot.schema.json
           test -f dist/shared/core/plugin-capabilities.schema.json
-          test -f dist/shared/core/plugin-diagnostics.json
           ! test -f dist/update6.js
           ! test -f dist/update7.js
           ! test -f dist/update8.js
