@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const requiredFiles = [
-  'update24.js','update25.js','update29.js','update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js',
+  'update24.js','update25.js','update29.js','update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js','update40.js',
   'core/storage/web-database-service.js','core/adapters/web-plugin-runtimes.mjs'
 ];
 for (const file of requiredFiles) {
@@ -19,6 +19,7 @@ const u36 = text('update36.js');
 const u37 = text('update37.js');
 const u38 = text('update38.js');
 const u39 = text('update39.js');
+const u40 = text('update40.js');
 const db = text('core/storage/web-database-service.js');
 const plugins = text('core/adapters/web-plugin-runtimes.mjs');
 
@@ -55,6 +56,16 @@ requireToken(u39, 'object-position:50% 50%', 'Fullscreen live preview must be ce
 requireToken(u39, 'Deliberately do not stop the recording here', 'Leaving fullscreen must not stop recording');
 requireToken(u25, 'if (window.RideTrackerRecordingFullscreen) return;', 'Legacy fullscreen triggers must defer to update39');
 
+// Canonical recording actions: every simplified/minimize action must reach the real #start handler.
+requireToken(u40, 'canonicalStart', 'Recording actions must provide a canonical start path');
+requireToken(u40, 'start.click()', 'Canonical recording action must invoke the base #start handler');
+requireToken(u40, 'setVideoEnabled(video)', 'Canonical recording action must explicitly set video mode');
+requireToken(u40, 'minimizeAndStartVideo', 'Minimize-and-video action API missing');
+requireToken(u40, '/minim/.test(label)', 'Existing minimize/video buttons must be routed to canonical recording actions');
+requireToken(u40, 'rtRecordingQuickStart', 'Simplified recording quick-start UI missing');
+requireToken(u40, 'Fahrt mit Video starten', 'Quick-start video action missing');
+requireToken(u40, 'Fahrt ohne Video starten', 'Quick-start no-video action missing');
+
 // Plugin migration: BLE/GNSS must enter via plugin telemetry.
 requireToken(plugins, 'ridetracker:plugin-telemetry', 'Web plugin runtime must emit normalized plugin telemetry');
 requireToken(u35, 'ridetracker:plugin-telemetry', 'Source router must consume normalized plugin telemetry');
@@ -70,6 +81,7 @@ failIf(u35.includes("addEventListener('ridetracker:heart-rate'"), 'BLE heart rat
   [u37, 'RideTrackerRideLibrary', 'ride library'],
   [u38, 'RideTrackerNavigation', 'navigation'],
   [u39, 'RideTrackerRecordingFullscreen', 'recording fullscreen'],
+  [u40, 'RideTrackerRecordingActions', 'recording actions'],
   [plugins, 'RideTrackerWebPlugins', 'web plugin runtimes']
 ].forEach(([source, token, label]) => requireToken(source, token, `Missing ${label} API`));
 
@@ -84,11 +96,15 @@ if (fs.existsSync('index.html')) {
   const ridesIndex = html.indexOf('update37.js?v=');
   const pluginIndex = html.indexOf('core/adapters/web-plugin-runtimes.mjs?v=');
   const fullscreenIndex = html.indexOf('update39.js?v=');
+  const actionsIndex = html.indexOf('update40.js?v=');
   if (dbIndex >= 0 || ridesIndex >= 0) {
     failIf(dbIndex < 0 || ridesIndex < 0 || dbIndex > ridesIndex, 'Database service must load before the ride library');
   }
   if (pluginIndex >= 0 || fullscreenIndex >= 0) {
     failIf(pluginIndex < 0 || fullscreenIndex < 0 || pluginIndex > fullscreenIndex, 'Plugin runtime must load before recording fullscreen controller');
+  }
+  if (fullscreenIndex >= 0 || actionsIndex >= 0) {
+    failIf(fullscreenIndex < 0 || actionsIndex < 0 || fullscreenIndex > actionsIndex, 'Recording fullscreen controller must load before recording action controller');
   }
 }
 
