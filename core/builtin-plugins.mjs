@@ -13,6 +13,8 @@ export const BuiltinCapabilities = Object.freeze({
   TELEMETRY_EXPORT: 'telemetry.export',
   DEVICE_DISCOVERY: 'device.discovery',
   DEVICE_CONNECTION: 'device.connection',
+  SENSOR_CHANNELS: 'sensor.channels',
+  DIAGNOSTICS_LIVE: 'diagnostics.live',
   CALIBRATION_MOTION: 'calibration.motion',
   CALIBRATION_LOCATION: 'calibration.location',
   CALIBRATION_CAMERA: 'calibration.camera',
@@ -36,6 +38,8 @@ export const builtinPlugins = Object.freeze([
     BuiltinCapabilities.LOCATION_POSITION,
     BuiltinCapabilities.LOCATION_SPEED,
     BuiltinCapabilities.LOCATION_ALTITUDE,
+    BuiltinCapabilities.SENSOR_CHANNELS,
+    BuiltinCapabilities.DIAGNOSTICS_LIVE,
     BuiltinCapabilities.CALIBRATION_MOTION,
     BuiltinCapabilities.CALIBRATION_LOCATION,
     BuiltinCapabilities.HUD_WIDGET_SOURCE,
@@ -51,6 +55,8 @@ export const builtinPlugins = Object.freeze([
     BuiltinCapabilities.HEART_RATE_BPM,
     BuiltinCapabilities.DEVICE_DISCOVERY,
     BuiltinCapabilities.DEVICE_CONNECTION,
+    BuiltinCapabilities.SENSOR_CHANNELS,
+    BuiltinCapabilities.DIAGNOSTICS_LIVE,
     BuiltinCapabilities.HUD_WIDGET_SOURCE,
   ], {
     autoReconnect: { type: 'boolean', default: true },
@@ -64,6 +70,8 @@ export const builtinPlugins = Object.freeze([
     BuiltinCapabilities.MOTION_ORIENTATION,
     BuiltinCapabilities.DEVICE_DISCOVERY,
     BuiltinCapabilities.DEVICE_CONNECTION,
+    BuiltinCapabilities.SENSOR_CHANNELS,
+    BuiltinCapabilities.DIAGNOSTICS_LIVE,
     BuiltinCapabilities.CALIBRATION_MOTION,
     BuiltinCapabilities.HUD_WIDGET_SOURCE,
   ], {
@@ -80,6 +88,8 @@ export const builtinPlugins = Object.freeze([
     BuiltinCapabilities.LOCATION_ALTITUDE,
     BuiltinCapabilities.DEVICE_DISCOVERY,
     BuiltinCapabilities.DEVICE_CONNECTION,
+    BuiltinCapabilities.SENSOR_CHANNELS,
+    BuiltinCapabilities.DIAGNOSTICS_LIVE,
     BuiltinCapabilities.CALIBRATION_LOCATION,
     BuiltinCapabilities.HUD_WIDGET_SOURCE,
   ], {
@@ -95,6 +105,7 @@ export const builtinPlugins = Object.freeze([
     BuiltinCapabilities.CAMERA_PREVIEW,
     BuiltinCapabilities.CAMERA_RECORDING,
     BuiltinCapabilities.MICROPHONE,
+    BuiltinCapabilities.DIAGNOSTICS_LIVE,
     BuiltinCapabilities.CALIBRATION_CAMERA,
   ], {
     sourceId: { type: 'string', nullable: true },
