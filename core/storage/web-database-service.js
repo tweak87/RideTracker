@@ -113,6 +113,21 @@
     });
   }
 
+  async function destroy() {
+    try {
+      const db = await open();
+      db.close();
+    } catch (_) {}
+    openPromise = null;
+    activeVersion = 0;
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(DB_NAME);
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => reject(request.error || new Error('RideTracker database deletion failed'));
+      request.onblocked = () => reject(new Error('RideTracker database deletion is blocked by another open tab. Close other RideTracker tabs and retry.'));
+    });
+  }
+
   const api = {
     name: DB_NAME,
     minimumSchemaVersion: MIN_SCHEMA_VERSION,
@@ -122,7 +137,9 @@
     put: (store, key, value) => withStore(store, 'readwrite', s => s.put(value, key)),
     get: (store, key) => withStore(store, 'readonly', s => s.get(key)),
     delete: (store, key) => withStore(store, 'readwrite', s => s.delete(key)),
+    clear: store => withStore(store, 'readwrite', s => s.clear()),
     getAll: store => withStore(store, 'readonly', s => s.getAll()),
+    destroy,
     async selfTest() {
       const db = await open();
       const missing = missingStores(db);
