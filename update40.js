@@ -13,13 +13,35 @@
 
   const state = { busy: false };
   const button = id => document.getElementById(id);
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   const recordingActive = () => button('stop')?.disabled === false;
   const videoEnabled = () => !/aus/i.test(button('videoMode')?.textContent || '');
+  const initialized = () => /initialisiert/i.test(button('initState')?.textContent || '') && !/nicht initialisiert/i.test(button('initState')?.textContent || '');
+  const initializationFailed = () => /fehler/i.test(button('initState')?.textContent || '');
   const cameraReady = () => {
     const stream = document.getElementById('preview')?.srcObject;
     return stream instanceof MediaStream && stream.getVideoTracks().some(track => track.readyState === 'live');
   };
+  const videoRecorderActive = () => {
+    try { return typeof S !== 'undefined' && S?.recorder?.state === 'recording'; } catch (_) { return false; }
+  };
   const calibrated = () => Boolean(window.RideTrackerCalibrationManager?.current?.()) || button('start')?.disabled === false || /kalibriert/i.test(document.getElementById('calState')?.textContent || '');
+
+  function message(text) {
+    const meta = document.getElementById('videoMeta');
+    if (meta) meta.textContent = text;
+    const status = document.getElementById('status');
+    if (status && !recordingActive()) status.textContent = text;
+  }
+
+  async function waitFor(predicate, timeoutMs = 12000, intervalMs = 80) {
+    const started = performance.now();
+    while (performance.now() - started < timeoutMs) {
+      try { if (predicate()) return true; } catch (_) {}
+      await sleep(intervalMs);
+    }
+    return false;
+  }
 
   function setVideoEnabled(enabled) {
     const toggle = button('videoMode');
@@ -27,40 +49,130 @@
     if (enabled !== videoEnabled()) toggle.click();
   }
 
+  async function recoverCamera() {
+    if (cameraReady()) return true;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      message('Auf diesem Gerät ist kein Kamera-Zugriff verfügbar.');
+      return false;
+    }
+    message('Kamera wird vorbereitet …');
+    try {
+      const selected = window.RideTrackerCameraSources?.constraints?.();
+      const constraints = selected || { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const videoTracks = stream.getVideoTracks();
+      if (!videoTracks.length) throw new Error('Kein Video-Track verfügbar');
+      const cameraStream = new MediaStream(videoTracks);
+      try {
+        if (typeof S !== 'undefined') {
+          S.cam?.getTracks?.().forEach(track => track.stop());
+          S.cam = cameraStream;
+        }
+      } catch (_) {}
+      const preview = document.getElementById('preview');
+      if (preview) {
+        preview.srcObject = cameraStream;
+        preview.muted = true;
+        preview.autoplay = true;
+        preview.playsInline = true;
+        preview.setAttribute('playsinline', '');
+        preview.classList.remove('hidden');
+        try { await preview.play(); } catch (_) {}
+      }
+      const ready = await waitFor(cameraReady, 4000);
+      if (!ready) throw new Error('Livebild wurde nicht aktiv');
+      window.dispatchEvent(new CustomEvent('ridetracker:camera-ready'));
+      message('Kamera bereit.');
+      refresh();
+      return true;
+    } catch (error) {
+      message(`Kamera konnte nicht gestartet werden: ${error?.message || error}`);
+      return false;
+    }
+  }
+
+  async function ensureInitialized({ video }) {
+    if (!initialized()) {
+      const init = button('init');
+      if (!init) {
+        message('Initialisierungsschaltfläche fehlt.');
+        return false;
+      }
+      if (initializationFailed()) init.disabled = false;
+      message('Kamera und Sensoren werden initialisiert …');
+      if (!init.disabled) init.click();
+      const done = await waitFor(() => initialized() || initializationFailed(), 16000);
+      if (!done || !initialized()) {
+        message('Initialisierung nicht abgeschlossen. Bitte Berechtigungen für Bewegung, Kamera und Standort prüfen.');
+        refresh();
+        return false;
+      }
+    }
+    if (video && !cameraReady() && !(await recoverCamera())) {
+      refresh();
+      return false;
+    }
+    refresh();
+    return true;
+  }
+
   async function canonicalStart({ video = true, minimize = false } = {}) {
     if (state.busy || recordingActive()) return recordingActive();
     state.busy = true;
     try {
       const session = window.RideTrackerRecordingSession;
-      if (session?.confirmReplaceBeforeStart && !(await session.confirmReplaceBeforeStart())) {
+      if (session?.confirmReplaceBeforeStart && session.confirmReplaceBeforeStart() === false) {
         refresh();
         return false;
       }
+
       setVideoEnabled(video);
+
+      // Important on iOS: trigger the base permission flow immediately from the user action.
+      const initialization = ensureInitialized({ video });
+      if (!(await initialization)) return false;
+
       const calibrationManager = window.RideTrackerCalibrationManager;
       if (calibrationManager && !(await calibrationManager.ensureForStart())) {
         refresh();
         return false;
       }
+
       const start = button('start');
-      if (!start) return false;
-      if (start.disabled) {
-        const initialized = /initialisiert/i.test(document.getElementById('initState')?.textContent || '') && !/nicht initialisiert/i.test(document.getElementById('initState')?.textContent || '');
-        const message = initialized
-          ? 'Kalibrierung wird vorbereitet. Danach kann die Aufnahme gestartet werden.'
-          : 'Bitte zuerst einmalig Kamera und Sensoren initialisieren. Eine gespeicherte Kalibrierung wird danach automatisch übernommen.';
-        document.getElementById('videoMeta')?.replaceChildren(document.createTextNode(message));
+      if (!start) {
+        message('Aufnahme-Startschaltfläche fehlt.');
         return false;
       }
+      if (start.disabled) {
+        message('Aufnahme noch nicht startbereit. Initialisierung und Kalibrierung werden geprüft.');
+        refresh();
+        return false;
+      }
+
+      window.RideTrackerRecordingSession?.showLive?.();
       start.click();
-      await new Promise(resolve => setTimeout(resolve, 0));
-      if (!recordingActive()) return false;
-      if (video && window.RideTrackerRecordingFullscreen?.enter) {
+      const started = await waitFor(recordingActive, 1800);
+      if (!started) {
+        message('Aufnahme konnte nicht gestartet werden.');
+        refresh();
+        return false;
+      }
+
+      if (video) {
+        const recorderStarted = await waitFor(videoRecorderActive, 2200);
+        if (!recorderStarted) {
+          button('stop')?.click();
+          message('Videoaufnahme konnte nicht gestartet werden. Kamera/MediaRecorder bitte erneut prüfen.');
+          refresh();
+          return false;
+        }
+      }
+
+      window.dispatchEvent(new CustomEvent('ridetracker:canonical-recording-started', { detail: { video, minimize } }));
+      if (video && !minimize && window.RideTrackerRecordingFullscreen?.enter) {
         await window.RideTrackerRecordingFullscreen.enter();
       }
-      if (minimize) {
-        await window.RideTrackerRecordingFullscreen?.exit?.();
-      }
+      if (minimize) await window.RideTrackerRecordingFullscreen?.exit?.();
       refresh();
       return true;
     } finally {
@@ -78,7 +190,7 @@
     const panel = document.createElement('section');
     panel.id = 'rtRecordingQuickStart';
     panel.innerHTML = `
-      <div><strong>Aufnahmebereit</strong><div class="rt-quick-help">Die App verwendet eine passende gespeicherte Kalibrierung automatisch. Falls keine vorhanden ist, wirst du vor dem Start einmalig gefragt.</div></div>
+      <div><strong>Aufnahmebereit</strong><div class="rt-quick-help">Ein Klick übernimmt Initialisierung, gespeicherte Kalibrierung und Aufnahme. Nur fehlende Berechtigungen oder Sensoren werden nachgefragt.</div></div>
       <div class="rt-quick-status">
         <span class="rt-quick-chip" data-status="camera">Kamera</span>
         <span class="rt-quick-chip" data-status="calibration">Kalibrierung</span>
@@ -115,20 +227,21 @@
     }
     const startVideo = panel.querySelector('#rtQuickStartVideo');
     const startNoVideo = panel.querySelector('#rtQuickStartNoVideo');
-    if (startVideo) startVideo.disabled = recordingActive();
-    if (startNoVideo) startNoVideo.disabled = recordingActive();
+    if (startVideo) startVideo.disabled = recordingActive() || state.busy;
+    if (startNoVideo) startNoVideo.disabled = recordingActive() || state.busy;
     window.RideTrackerCalibrationManager?.refresh?.();
   }
 
   document.addEventListener('click', event => {
     const target = event.target.closest?.('button,[role="button"]');
-    if (!target || target.id === 'start' || target.id === 'rtQuickStartVideo') return;
+    if (!target || target.id === 'start' || target.id === 'rtQuickStartVideo' || target.id === 'rtQuickStartNoVideo') return;
     const label = (target.textContent || target.getAttribute('aria-label') || '').trim().toLowerCase();
     const isMinimizeAndVideo = /minim/.test(label) && /video/.test(label) && /start/.test(label);
-    if (!isMinimizeAndVideo) return;
+    const isUnifiedStart = target.id === 'unifiedRideStart' || /kalibrieren\s*&\s*fahrt starten/.test(label);
+    if (!isMinimizeAndVideo && !isUnifiedStart) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    void canonicalStart({ video: true, minimize: true });
+    void canonicalStart({ video: isUnifiedStart ? videoEnabled() : true, minimize: isMinimizeAndVideo });
   }, true);
 
   window.addEventListener('ridetracker:recording-started', refresh);
@@ -137,13 +250,14 @@
   window.addEventListener('ridetracker:ride-saved', refresh);
   window.addEventListener('ridetracker:ride-discarded', refresh);
   window.addEventListener('ridetracker:database-ready', refresh);
+  window.addEventListener('ridetracker:camera-ready', refresh);
   window.addEventListener('ridetracker:calibration-saved', refresh);
   window.addEventListener('ridetracker:calibration-restored', refresh);
   const observer = new MutationObserver(() => requestAnimationFrame(refresh));
   const install = () => {
     ensureQuickStart();
     refresh();
-    for (const id of ['start','stop','videoMode','calState','preview']) {
+    for (const id of ['start','stop','videoMode','calState','initState','preview']) {
       const node = document.getElementById(id);
       if (node) observer.observe(node, { attributes: true, childList: true, subtree: true });
     }
@@ -154,6 +268,8 @@
     startWithVideo: () => canonicalStart({ video: true }),
     startWithoutVideo: () => canonicalStart({ video: false }),
     minimizeAndStartVideo: () => canonicalStart({ video: true, minimize: true }),
+    ensureInitialized,
+    recoverCamera,
     refresh
   };
 })();
