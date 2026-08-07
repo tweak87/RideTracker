@@ -52,4 +52,21 @@ class CoreRuntimeManagersTest {
         assertEquals(listOf("0", "1"), manager.ordered().map { it.id })
         assertEquals(listOf("0", "1"), manager.snapshot().sources.map { it.id })
     }
+
+    @Test
+    fun recordingManagerOwnsLifecycleState() {
+        val manager = CoreRecordingManager()
+        val started = manager.start("ride-1", 100L)
+
+        assertTrue(manager.active)
+        assertEquals("ride-1", started.sessionId)
+        assertEquals(100L, manager.session?.startedAtMs)
+
+        val stopped = manager.stop(250L)
+        assertFalse(manager.active)
+        assertEquals(250L, stopped?.endedAtMs)
+
+        manager.reset()
+        assertNull(manager.session)
+    }
 }
