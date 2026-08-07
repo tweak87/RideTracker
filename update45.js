@@ -113,7 +113,7 @@
     return true;
   }
 
-  async function confirmReplaceBeforeStart() {
+  function confirmReplaceBeforeStart() {
     if (!state.unsaved) return true;
     if (state.replacing) return false;
     state.replacing = true;
