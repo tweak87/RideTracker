@@ -26,9 +26,10 @@ jobs:
             update13.js update14.js update15.js update16.js update17.js update18.js update19.js \
             update23.js update24.js update25.js update26.js update27.js update28.js update29.js update33.js update34.js update35.js update36.js update37.js update38.js \
             core/ridetracker-core.mjs core/builtin-plugins.mjs core/adapters/web-runtime-adapter.mjs \
-            shared/overlay/overlay-core.js scripts/prepare-pages.mjs; do
+            shared/overlay/overlay-core.js scripts/prepare-pages.mjs scripts/audit-web-startup.mjs; do
             node --check "$file"
           done
+          node scripts/audit-web-startup.mjs
           python -m json.tool shared/devices/device-registry.schema.json >/dev/null
           python -m json.tool shared/core/configuration-snapshot.schema.json >/dev/null
 
@@ -43,12 +44,13 @@ jobs:
           cp -R shared/overlay dist/shared/
           cp -R shared/devices dist/shared/
           cp -R shared/core dist/shared/
-          cp scripts/prepare-pages.mjs dist/scripts/
+          cp scripts/prepare-pages.mjs scripts/audit-web-startup.mjs dist/scripts/
           cd dist
           node scripts/prepare-pages.mjs
           VERSION="${GITHUB_SHA}"
           sed -i "s#</body>#<script src=\"update6.js?v=${VERSION}\"></script><script src=\"update7.js?v=${VERSION}\"></script><script src=\"update8.js?v=${VERSION}\"></script><script type=\"module\" src=\"shared/ride-engine/browser-adapter.js?v=${VERSION}\"></script><script type=\"module\" src=\"update11.js?v=${VERSION}\"></script><script type=\"module\" src=\"update12.js?v=${VERSION}\"></script><script src=\"update13.js?v=${VERSION}\"></script><script src=\"update14.js?v=${VERSION}\"></script><script src=\"update16.js?v=${VERSION}\"></script><script src=\"update15.js?v=${VERSION}\"></script><script src=\"update17.js?v=${VERSION}\"></script><script src=\"update18.js?v=${VERSION}\"></script><script src=\"update19.js?v=${VERSION}\"></script><script src=\"update23.js?v=${VERSION}\"></script><script src=\"update24.js?v=${VERSION}\"></script><script src=\"update25.js?v=${VERSION}\"></script><script src=\"update26.js?v=${VERSION}\"></script><script src=\"update27.js?v=${VERSION}\"></script><script src=\"update28.js?v=${VERSION}\"></script><script src=\"update29.js?v=${VERSION}\"></script><script src=\"update33.js?v=${VERSION}\"></script><script src=\"update34.js?v=${VERSION}\"></script><script src=\"update35.js?v=${VERSION}\"></script><script src=\"update36.js?v=${VERSION}\"></script><script src=\"update37.js?v=${VERSION}\"></script><script type=\"module\" src=\"core/adapters/web-runtime-adapter.mjs?v=${VERSION}\"></script><script src=\"update38.js?v=${VERSION}\"></script></body>#" index.html
           sed -i 's#<head>#<head><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">#' index.html
+          node scripts/audit-web-startup.mjs
           touch .nojekyll
 
       - name: Verify canonical HUD device ride and core artifact
@@ -64,6 +66,7 @@ jobs:
           grep -q 'RideTrackerCoreRuntime' dist/core/adapters/web-runtime-adapter.mjs
           grep -q 'core/adapters/web-runtime-adapter.mjs?v=' dist/index.html
           grep -q 'update38.js?v=' dist/index.html
+          grep -q 'rtInlineDashboard' dist/index.html
           test -f dist/core/ridetracker-core.mjs
           test -f dist/core/builtin-plugins.mjs
           test -f dist/shared/devices/device-registry.schema.json
