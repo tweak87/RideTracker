@@ -126,10 +126,11 @@ class RideTrackerCoreAdapter {
     val devices = CoreDeviceManager()
     val sensors = CoreSensorManager()
     val cameras = CoreCameraManager()
+    val recording = CoreRecordingManager()
 
     private val events=mutableListOf<CoreRuntimeEvent>()
-    var activeSessionId:String?=null
-        private set
+    val activeSessionId:String?
+        get() = recording.session?.sessionId?.takeIf { recording.active }
 
     fun ingest(
         metric:String,
@@ -156,13 +157,14 @@ class RideTrackerCoreAdapter {
     }
 
     fun recordingStarted(sessionId:String,timestampMs:Long=SystemClock.elapsedRealtime()) {
-        activeSessionId=sessionId
-        append(CoreRuntimeEvent("recording.started",timestampMs,sessionId=sessionId))
+        val state = recording.start(sessionId,timestampMs)
+        append(CoreRuntimeEvent("recording.started",timestampMs,sessionId=state.sessionId))
     }
 
     fun recordingStopped(timestampMs:Long=SystemClock.elapsedRealtime()) {
-        append(CoreRuntimeEvent("recording.stopped",timestampMs,sessionId=activeSessionId))
-        activeSessionId=null
+        val sessionId = recording.session?.sessionId
+        recording.stop(timestampMs)
+        append(CoreRuntimeEvent("recording.stopped",timestampMs,sessionId=sessionId))
     }
 
     fun sourceSwitched(metric:String,sourceId:String?,timestampMs:Long=SystemClock.elapsedRealtime()) {
@@ -171,8 +173,8 @@ class RideTrackerCoreAdapter {
 
     fun resetRuntime() {
         sensors.clear()
+        recording.reset()
         events.clear()
-        activeSessionId=null
     }
 
     fun telemetrySnapshot():List<CoreTelemetrySample> = sensors.snapshot()
