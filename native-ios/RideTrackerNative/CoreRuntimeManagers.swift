@@ -27,7 +27,7 @@ final class CoreSensorManager {
         precondition(!sample.channelID.isEmpty, "sample.channelID is required")
         precondition(!sample.metric.isEmpty, "sample.metric is required")
         precondition(sample.value.isFinite, "sample.value must be finite")
-        precondition((0...1).contains(sample.quality), "sample.quality must be 0...1")
+        precondition((0.0...1.0).contains(sample.quality), "sample.quality must be 0...1")
         latest[key(sample.deviceID, sample.channelID)] = sample
         return sample
     }
