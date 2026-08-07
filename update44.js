@@ -41,8 +41,15 @@
     writeMeta(rides);
     localStorage.removeItem(DRAFT_KEY);
     document.getElementById('rtPostRecordActions')?.setAttribute('hidden', '');
+    window.dispatchEvent(new CustomEvent('ridetracker:ride-saved', { detail: { rideId: id, hasVideo: Boolean(blob) } }));
     window.RideTrackerRideLibrary?.show?.();
     return ride;
+  }
+
+  function discardCurrentRide() {
+    localStorage.removeItem(DRAFT_KEY);
+    document.getElementById('rtPostRecordActions')?.setAttribute('hidden', '');
+    window.dispatchEvent(new CustomEvent('ridetracker:ride-discarded'));
   }
 
   async function playStoredRide(button) {
@@ -87,6 +94,13 @@
       void saveRide().catch(error => window.dispatchEvent(new CustomEvent('ridetracker:database-error', { detail: { message: `Fahrt speichern: ${error?.message || error}` } })));
       return;
     }
+    const discard = event.target.closest?.('#rtDiscardRide');
+    if (discard) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      discardCurrentRide();
+      return;
+    }
     const action = event.target.closest?.('#rtRideLibrary [data-action]');
     if (!action) return;
     if (action.dataset.action === 'play') {
@@ -98,5 +112,5 @@
     }
   }, true);
 
-  window.RideTrackerRideMediaStorage = { saveRide, currentRecordedBlob };
+  window.RideTrackerRideMediaStorage = { saveRide, discardCurrentRide, currentRecordedBlob };
 })();
