@@ -22,7 +22,7 @@
   style.textContent = `
     #rtHudClosePortal{position:fixed;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));z-index:2147483647;display:none;padding:11px 14px;border-radius:13px;border:1px solid #4d718f;background:#102436;color:#fff;font-weight:850;box-shadow:0 10px 35px rgba(0,0,0,.6)}
     body.rt-hud-editor-open #rtHudClosePortal{display:block!important}
-    #rtHudOrientationInfo{display:inline-flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid #31536b;border-radius:10px;background:#091626;color:#96aac1;font-size:12px;white-space:nowrap}
+    #rtHudOrientationInfo{display:inline-flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid #31536b;border-radius:10px;background:#091626;color:#96aac1;font-size:12px;white-space:nowrap;cursor:pointer}
     #rtHudOrientationInfo b{color:#5fd0ff}
     body.rt-dialog-open{overscroll-behavior:none}
     body:not([data-rt-route="record"]) #rtVideoStateBadge,body.rt-dialog-open #rtVideoStateBadge,body.rt-navigation-open #rtVideoStateBadge{display:none!important}
@@ -94,26 +94,22 @@
     if (route.id === 'statistics') return void window.RideTrackerStats?.showStats?.();
     if (route.id === 'achievements') return void window.RideTrackerStats?.showAchievements?.();
     if (route.id === 'profile') return void window.RideTrackerProfiles?.showProfiles?.();
-    if (route.id === 'hud') return void openHudEditor();
+    if (route.id === 'hud') return void DialogManager.open('hud');
     if (route.id === 'devices') return void window.RideTrackerDeviceCenter?.open?.();
     if (route.id === 'imports') return void window.RideTrackerTools?.showImports?.();
     if (route.id === 'settings') return void window.RideTrackerSettings?.show?.();
     return false;
   }
 
-  function routeButton(route, cls, attr) {
-    return `<button class="${cls}" ${attr}="${route.title}" data-registry-route="${route.id}"><i>${route.icon}</i><span><b>${route.title}</b><small>${route.subtitle}</small></span></button>`;
-  }
-
   function rebuildMenus() {
     const inlineMenu = document.querySelector('#rtInlineDashboard .rt-inline-menu');
-    if (inlineMenu) inlineMenu.innerHTML = ROUTES.filter(route => route.id !== 'home').map(route => `<button class="rt-inline-action" data-inline-route="${route.title}" data-registry-route="${route.id}"><i>${route.icon}</i><span><strong>${route.title}</strong><small>${route.subtitle}</small></span></button>`).join('');
+    if (inlineMenu) inlineMenu.innerHTML = ROUTES.filter(route => route.id !== 'home').map(route => `<button class="rt-inline-action" data-registry-route="${route.id}"><i>${route.icon}</i><span><strong>${route.title}</strong><small>${route.subtitle}</small></span></button>`).join('');
     const inlineNav = document.querySelector('#rtInlineDrawer .rt-inline-nav');
-    if (inlineNav) inlineNav.innerHTML = ROUTES.map(route => `<button data-inline-route="${route.title}" data-registry-route="${route.id}">${route.icon} ${route.title}</button>`).join('');
+    if (inlineNav) inlineNav.innerHTML = ROUTES.map(route => `<button data-registry-route="${route.id}">${route.icon} ${route.title}</button>`).join('');
     const canonical = document.querySelector('#rtCanonicalDrawer .rt-canonical-list');
-    if (canonical) canonical.innerHTML = ROUTES.map(route => routeButton(route,'rt-canonical-item','data-canonical-route')).join('');
+    if (canonical) canonical.innerHTML = ROUTES.map(route => `<button class="rt-canonical-item" data-registry-route="${route.id}"><i>${route.icon}</i><span><b>${route.title}</b><small>${route.subtitle}</small></span></button>`).join('');
     const legacyHome = document.querySelector('.rt-home-panel nav');
-    if (legacyHome) legacyHome.innerHTML = `<button data-home-close>Zur aktuellen Ansicht</button>${ROUTES.map(route => `<button data-home-route="${route.id}" data-registry-route="${route.id}">${route.icon} ${route.title}</button>`).join('')}`;
+    if (legacyHome) legacyHome.innerHTML = `<button data-home-close>Zur aktuellen Ansicht</button>${ROUTES.map(route => `<button data-registry-route="${route.id}">${route.icon} ${route.title}</button>`).join('')}`;
   }
 
   async function forceCloseHud(reason='user') {
@@ -124,7 +120,6 @@
     document.documentElement.style.removeProperty('overflow');
     document.body.style.removeProperty('overflow');
     document.body.classList.remove('rt-hud-editor-open');
-    byId('rtHudClosePortal')?.setAttribute('aria-hidden','true');
     window.dispatchEvent(new CustomEvent('ridetracker:hud-editor-closed',{detail:{reason}}));
   }
 
@@ -137,35 +132,29 @@
 
   const OrientationManager = (() => {
     let auto = true;
+    function updateInfo(mode = byId('rtHudMode')?.value || orientationMode()) {
+      const info = byId('rtHudOrientationInfo');
+      if (info) info.innerHTML = `Ausrichtung: <b>${mode === 'portrait' ? 'Hochformat 9:16' : 'Querformat 16:9'}</b> · ${auto?'automatisch':'manuell'}`;
+    }
     function sync(force = false) {
       const root = byId('rtStandaloneHudEditor');
       if (!root?.classList.contains('open') || (!auto && !force)) return;
       const select = byId('rtHudMode');
       if (!select) return;
       const next = orientationMode();
-      if (select.value !== next) {
+      if (auto && select.value !== next) {
         select.value = next;
         select.dispatchEvent(new Event('change',{bubbles:true}));
       }
-      const info = byId('rtHudOrientationInfo');
-      if (info) info.innerHTML = `Ausrichtung: <b>${next === 'portrait' ? 'Hochformat 9:16' : 'Querformat 16:9'}</b> · ${auto?'automatisch':'manuell'}`;
-      window.dispatchEvent(new CustomEvent('ridetracker:hud-orientation-changed',{detail:{mode:next,auto}}));
+      updateInfo(auto ? next : select.value);
+      window.dispatchEvent(new CustomEvent('ridetracker:hud-orientation-changed',{detail:{mode:select.value,auto}}));
     }
-    function setAuto(value) { auto = Boolean(value); sync(true); return auto; }
+    function setAuto(value) { auto = Boolean(value); if (auto) sync(true); else updateInfo(); return auto; }
     window.addEventListener('orientationchange',()=>setTimeout(()=>sync(),80),{passive:true});
     window.addEventListener('resize',()=>sync(),{passive:true});
     screen.orientation?.addEventListener?.('change',()=>sync());
-    return { sync, setAuto, isAuto:()=>auto, current:orientationMode };
+    return { sync, setAuto, isAuto:()=>auto, current:orientationMode, updateInfo };
   })();
-
-  async function openHudEditor() {
-    const root = byId('rtStandaloneHudEditor');
-    if (!root) return false;
-    document.body.classList.add('rt-hud-editor-open');
-    await window.RideTrackerStandaloneHudEditor?.open?.();
-    OrientationManager.sync(true);
-    return true;
-  }
 
   function enhanceHudEditor() {
     const root = byId('rtStandaloneHudEditor');
@@ -184,7 +173,7 @@
     if (top && !byId('rtHudOrientationInfo')) {
       const info = document.createElement('span'); info.id='rtHudOrientationInfo';
       const select = byId('rtHudMode'); select?.insertAdjacentElement('afterend',info);
-      select?.addEventListener('change',()=>{ OrientationManager.setAuto(false); setTimeout(()=>OrientationManager.sync(true),0); });
+      select?.addEventListener('change',()=>{ OrientationManager.setAuto(false); OrientationManager.updateInfo(select.value); });
       info.addEventListener('click',()=>{ OrientationManager.setAuto(!OrientationManager.isAuto()); OrientationManager.sync(true); });
       info.title='Antippen: automatische Ausrichtung ein-/ausschalten';
     }
@@ -227,11 +216,20 @@
     window.addEventListener('popstate',()=>{if(DialogManager.active())void DialogManager.close(undefined,'history');});
   }
 
+  function patchTopLevelButtons() {
+    const canonicalProfile = byId('rtCanonicalProfile');
+    if (canonicalProfile) canonicalProfile.onclick = event => { event.preventDefault(); void navigate('profile'); };
+    const inlineProfile = byId('rtInlineProfile');
+    if (inlineProfile) inlineProfile.onclick = event => { event.preventDefault(); void navigate('profile'); };
+  }
+
   function verifyViews() {
     const routeTitles = ROUTES.map(x=>x.title);
     const inline = [...document.querySelectorAll('#rtInlineDrawer [data-registry-route]')].map(x=>x.textContent.trim().replace(/^\S+\s+/,'').trim());
     const canonical = [...document.querySelectorAll('#rtCanonicalDrawer [data-registry-route]')].map(x=>x.querySelector('b')?.textContent || '');
-    const consistent = routeTitles.every((title,index)=>inline[index]===title&&canonical[index]===title);
+    const main = [...document.querySelectorAll('#rtInlineDashboard .rt-inline-menu [data-registry-route]')].map(x=>x.querySelector('strong')?.textContent || '');
+    const expectedMain = routeTitles.filter(title=>title!=='Startseite');
+    const consistent = routeTitles.every((title,index)=>inline[index]===title&&canonical[index]===title) && expectedMain.every((title,index)=>main[index]===title);
     window.dispatchEvent(new CustomEvent('ridetracker:navigation-audit',{detail:{consistent,routes:routeTitles}}));
     return {consistent,routes:routeTitles};
   }
@@ -239,10 +237,16 @@
   function install() {
     rebuildMenus();
     enhanceHudEditor();
+    patchTopLevelButtons();
     installRouteCleanup();
     document.addEventListener('click',captureRegistryNavigation,true);
-    const observer = new MutationObserver(()=>{ rebuildMenus(); enhanceHudEditor(); OverlayManager.sync(); });
-    observer.observe(document.body,{childList:true,subtree:true});
+    let scheduled = false;
+    const observer = new MutationObserver(()=>{
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(()=>{ scheduled=false; enhanceHudEditor(); patchTopLevelButtons(); OverlayManager.sync(); });
+    });
+    observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','data-mode','data-rt-route']});
     OverlayManager.sync();
     window.RideTrackerNavigationRegistry = { routes:()=>ROUTES.map(x=>({...x})), navigate, audit:verifyViews };
     window.RideTrackerDialogManager = DialogManager;
