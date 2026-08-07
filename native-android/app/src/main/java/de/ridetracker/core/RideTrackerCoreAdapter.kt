@@ -2,6 +2,8 @@ package de.ridetracker.core
 
 import android.os.SystemClock
 import de.ridetracker.video.CameraSourceManager
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class CoreTelemetrySample(
     val timestampMs:Long,
@@ -44,6 +46,34 @@ data class CoreNativeConfigurationSnapshot(
     val calibrationMode:String,
     val forwardEdge:String,
 )
+
+fun CoreNativeConfigurationSnapshot.toJson():JSONObject = JSONObject().apply {
+    put("coreVersion",coreVersion)
+    put("capturedAtEpochMs",capturedAtEpochMs)
+    put("platform",platform)
+    put("devices",JSONArray().apply {
+        devices.forEach { device -> put(JSONObject()
+            .put("id",device.id)
+            .put("name",device.name)
+            .put("type",device.type)
+            .put("enabled",device.enabled)) }
+    })
+    put("camera",JSONObject().apply {
+        if(camera.primaryId==null) put("primaryId",JSONObject.NULL) else put("primaryId",camera.primaryId)
+        put("fallbackIds",JSONArray(camera.fallbackIds))
+        put("sources",JSONArray().apply {
+            camera.sources.forEach { source -> put(JSONObject()
+                .put("id",source.id)
+                .put("name",source.name)
+                .put("position",source.position)
+                .put("transport",source.transport)
+                .put("available",source.available)) }
+        })
+    })
+    put("calibration",JSONObject()
+        .put("mode",calibrationMode)
+        .put("forwardEdge",forwardEdge))
+}
 
 class RideTrackerCoreAdapter {
     companion object { const val CORE_VERSION="2.0.0-alpha.1" }
