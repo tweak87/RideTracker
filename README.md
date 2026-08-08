@@ -1,5 +1,11 @@
 # RideTracker
 
+## Aktuelle Web-Version
+
+Die Community-Grundlage ist als Version `2026.08.08-community-foundation.1` dokumentiert. Sie umfasst die mobile Hauptnavigation, Aufnahme-Preflight, Fahrt-Sichtbarkeit, Support-/Logcenter, lokale Administration und Chromium-/WebKit-UX-Tests.
+
+Der unmittelbar vorherige stabile Produktionsstand bleibt unter Commit `8485df203665f8e93558fcbcac72a890fc6e9c3b` und Branch [`rollback/pre-community-foundation-20260808`](https://github.com/tweak87/RideTracker/tree/rollback/pre-community-foundation-20260808) erhalten. Details stehen in [`docs/COMMUNITY_FOUNDATION.md`](docs/COMMUNITY_FOUNDATION.md).
+
 Plattformübergreifende Telemetrie- und Analyseplattform für Achterbahnen und Fahrgeschäfte.
 
 ## Aktueller Entwicklungsstand / Chat-Handoff

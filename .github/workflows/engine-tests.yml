@@ -25,12 +25,16 @@ jobs:
           python -m json.tool shared/core/configuration-snapshot.schema.json >/dev/null
           python -m json.tool shared/core/plugin-capabilities.schema.json >/dev/null
           python -m json.tool shared/devices/device-registry.schema.json >/dev/null
+          python -m json.tool shared/core/community-state.schema.json >/dev/null
+          python -m json.tool shared/core/release-manifest.json >/dev/null
       - name: Run canonical fixture
         run: node shared/ride-engine/ride-engine.test.mjs
       - name: Run sensor fusion tests
         run: node shared/ride-engine/sensor-fusion.test.mjs
       - name: Run canonical GPS speed tests
         run: node shared/ride-engine/gps-speed.test.mjs
+      - name: Run community model tests
+        run: node shared/core/community-model.test.mjs
       - name: Run RidePackage contract tests
         run: node shared/ride-engine/ride-package.test.mjs
       - name: Run overlay specification tests

@@ -1,0 +1,60 @@
+name: Test Web Community UX
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - 'index.html'
+      - 'update*.js'
+      - 'core/**'
+      - 'shared/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'playwright.config.mjs'
+      - '.github/workflows/web-e2e.yml'
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'update*.js'
+      - 'core/**'
+      - 'shared/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'playwright.config.mjs'
+      - '.github/workflows/web-e2e.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: web-community-ux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install test dependencies
+        run: npm ci
+      - name: Install Chromium and WebKit
+        run: npx playwright install --with-deps chromium webkit
+      - name: Run mobile and desktop UX tests
+        run: npm run test:e2e
+      - name: Upload browser diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-community-playwright-report
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 14

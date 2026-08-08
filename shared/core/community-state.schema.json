@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ridetracker.local/schema/community-state.schema.json",
+  "title": "RideTracker Community State",
+  "type": "object",
+  "required": ["schemaVersion", "profile", "rides", "updatedAt"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "profile": {
+      "type": "object",
+      "required": ["id", "pseudonym", "defaultVisibility", "shareExactTrack", "endpointPrivacyMeters"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "pseudonym": { "type": "string", "minLength": 1 },
+        "defaultVisibility": { "enum": ["draft", "private", "friends", "public"] },
+        "shareExactTrack": { "type": "boolean" },
+        "endpointPrivacyMeters": { "type": "number", "minimum": 0, "maximum": 5000 }
+      },
+      "additionalProperties": true
+    },
+    "rides": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id", "communityId", "visibility", "publicationState", "shareExactTrack", "endpointPrivacyMeters"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "communityId": { "type": "string", "minLength": 1 },
+          "visibility": { "enum": ["draft", "private", "friends", "public"] },
+          "publicationState": { "enum": ["draft", "local", "ready-for-backend"] },
+          "shareExactTrack": { "type": "boolean" },
+          "endpointPrivacyMeters": { "type": "number", "minimum": 0, "maximum": 5000 }
+        },
+        "additionalProperties": true
+      }
+    },
+    "moderation": { "type": "object" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

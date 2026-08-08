@@ -1,0 +1,23 @@
+(() => {
+  'use strict';
+  globalThis.RideTrackerReleaseManifest = Object.freeze({
+    product: 'RideTracker',
+    version: '2026.08.08-community-foundation.1',
+    channel: 'community-foundation',
+    releasedAt: '2026-08-08T00:00:00.000Z',
+    baseline: Object.freeze({
+      label: 'Stable GPS and navigation baseline',
+      commit: '8485df203665f8e93558fcbcac72a890fc6e9c3b',
+      rollbackBranch: 'rollback/pre-community-foundation-20260808',
+      url: 'https://github.com/tweak87/RideTracker/tree/rollback/pre-community-foundation-20260808'
+    }),
+    features: Object.freeze([
+      'community-navigation',
+      'recording-preflight',
+      'ride-visibility-model',
+      'support-bundle',
+      'local-admin-center',
+      'mobile-browser-e2e'
+    ])
+  });
+})();

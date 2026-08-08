@@ -4,7 +4,7 @@ const activeUpdates = [
   'update11.js','update12.js','update13.js','update14.js','update15.js','update16.js','update17.js','update18.js','update19.js',
   'update23.js','update24.js','update25.js','update26.js','update27.js','update28.js','update29.js',
   'update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js','update40.js','update41.js','update42.js','update43.js','update44.js','update45.js','update46.js','update47.js',
-  'update49.js','update50.js','update51.js','update52.js','update53.js','update54.js','update55.js','update56.js','update57.js','update58.js','update59.js','update60.js'
+  'update49.js','update50.js','update51.js','update52.js','update53.js','update54.js','update55.js','update56.js','update57.js','update58.js','update59.js','update60.js','update61.js'
 ];
 const requiredFiles = [...activeUpdates,'core/storage/web-database-service.js','core/adapters/web-plugin-runtimes.mjs','core/builtin-plugins.mjs'];
 for (const file of requiredFiles) if (!fs.existsSync(file)) throw new Error(`Missing active web module: ${file}`);
