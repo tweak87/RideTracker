@@ -70,6 +70,7 @@
     }
     function routeChanged(route) {
       document.body.dataset.rtRoute = route;
+      document.body.classList.toggle('rt-record-mode', route === 'record');
       if (route !== 'record') {
         window.RideTrackerRecordingFullscreen?.leave?.();
         window.RideTrackerHudReplay?.detach?.();
@@ -181,9 +182,14 @@
     const originalClose = window.RideTrackerStandaloneHudEditor?.close;
     if (window.RideTrackerStandaloneHudEditor && !window.RideTrackerStandaloneHudEditor.__managed49) {
       window.RideTrackerStandaloneHudEditor.open = async () => {
+        root.classList.add('open');
         document.body.classList.add('rt-hud-editor-open');
-        await originalOpen?.();
-        OrientationManager.sync(true);
+        try {
+          await originalOpen?.();
+        } finally {
+          root.classList.add('open');
+          OrientationManager.sync(true);
+        }
       };
       window.RideTrackerStandaloneHudEditor.close = async () => {
         await originalClose?.();

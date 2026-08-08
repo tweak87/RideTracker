@@ -7,7 +7,7 @@
   const style = document.createElement('style');
   style.id = 'rtRecordingStateStyle';
   style.textContent = `
-    #rtRecordingBanner:not(.verified-recording){display:none!important}
+    body:not(.rt-record-mode) #rtRecordingBanner:not(.verified-recording):not(.starting){display:none!important}
     #rtRecordingBanner .rt-recording-time{display:block;font-variant-numeric:tabular-nums;font-weight:800;margin-top:2px}
     #rtRecordingBanner.starting .rt-recording-dot{background:#ffd166;animation:none}
   `;
@@ -15,7 +15,11 @@
 
   const copy = banner.querySelector('.rt-recording-copy');
   const detail = copy?.querySelector('span');
+  const heading = copy?.querySelector('strong');
   const stopButton = banner.querySelector('.rt-recording-stop');
+  const autoButton = banner.querySelector('.rt-recording-auto');
+  const settingsButton = banner.querySelector('.rt-recording-settings');
+  const videoChoice = banner.querySelector('[data-record-video]');
   let state = 'idle';
   let startedAt = 0;
   let confirmTimer = null;
@@ -45,10 +49,12 @@
     banner.classList.toggle('starting', next === 'starting');
     if (next === 'recording') {
       startedAt = performance.now();
+      if (heading) heading.textContent = 'Aufnahme läuft';
       if (detail) detail.innerHTML = 'Sensoren und optional Video werden aufgezeichnet.<b class="rt-recording-time">00:00</b>';
     } else {
       startedAt = 0;
-      if (detail) detail.textContent = next === 'starting' ? 'Aufnahme wird initialisiert …' : 'Sensoren und optional Video werden aufgezeichnet.';
+      if (heading) heading.textContent = next === 'starting' ? 'Fahrt wird vorbereitet' : 'Fahrt automatisch starten';
+      if (detail) detail.textContent = next === 'starting' ? 'Sensoren, GPS und Kalibrierung werden automatisch vorbereitet …' : 'Initialisierung, Kalibrierung und Aufnahme erfolgen in einem Schritt.';
     }
   }
 
@@ -74,6 +80,26 @@
     requestStop();
   }, true);
 
+  autoButton?.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const preflightVideo = document.querySelector('#rtCommunityPreflight [data-video]');
+    if (preflightVideo) preflightVideo.checked = videoChoice?.checked !== false;
+    requestStartVerification();
+    void Promise.resolve(window.RideTrackerPreflight?.start?.()).then(started => {
+      if (started === false && !coreConfirmsRecording()) setState('idle');
+    }).catch(error => {
+      setState('idle');
+      if (detail) detail.textContent = `Start fehlgeschlagen: ${error?.message || error}`;
+    });
+  }, true);
+
+  settingsButton?.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    void window.RideTrackerCommunity?.navigate?.('devices');
+  }, true);
+
   document.addEventListener('click', event => {
     const button = event.target.closest('button');
     if (!button) return;
@@ -91,7 +117,16 @@
       const seconds = Math.max(0, Math.floor((performance.now() - startedAt) / 1000));
       const time = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
       const node = detail.querySelector('.rt-recording-time');
-      if (node) node.textContent = time;
+      if (node && node.textContent !== time) node.textContent = time;
+    }
+    if (state === 'idle') {
+      const result = window.RideTrackerPreflight?.last?.();
+      const blocking = result?.blocking?.length || 0;
+      const warning = result?.warning?.length || 0;
+      const nextDetail = result ? (blocking
+        ? `${blocking} Voraussetzung(en) benötigen eine Freigabe.`
+        : warning ? `Startbereit · ${warning} Punkt(e) werden beim Start automatisch vorbereitet.` : 'Alle Sensoren und die Kalibrierung sind bereit.') : '';
+      if (detail && nextDetail && detail.textContent !== nextDetail) detail.textContent = nextDetail;
     }
   }, 250);
 

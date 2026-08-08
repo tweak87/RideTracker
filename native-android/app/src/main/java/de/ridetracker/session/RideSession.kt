@@ -1,6 +1,10 @@
 package de.ridetracker.session
 
 import android.content.Context
+import de.ridetracker.context.AndroidRideContextSnapshot
+import de.ridetracker.context.contextJson
+import de.ridetracker.context.environmentJson
+import de.ridetracker.context.toJson
 import de.ridetracker.core.CoreNativeConfigurationSnapshot
 import de.ridetracker.core.toJson
 import de.ridetracker.engine.SeatCalibration
@@ -57,6 +61,7 @@ data class RideSessionDocument(
     val communityComment: String = "",
     val heartRateSource: String? = null,
     val configurationSnapshot: CoreNativeConfigurationSnapshot? = null,
+    val rideContext: AndroidRideContextSnapshot? = null,
 ) {
     fun toJson(owner: LocalUserProfile? = null): JSONObject = JSONObject().apply {
         put("schemaVersion", "2.0.0")
@@ -66,12 +71,15 @@ data class RideSessionDocument(
         put("endedAt", endedAt.toString())
         put("timebase", "elapsedRealtimeNanos")
         owner?.let { put("owner", JSONObject().put("profileID", it.id).put("displayName", it.name)) }
+        put("context", rideContext?.contextJson() ?: JSONObject().put("parkID", JSONObject.NULL).put("rideID", JSONObject.NULL).put("parkName", JSONObject.NULL).put("rideName", JSONObject.NULL))
+        put("environment", rideContext?.environmentJson() ?: JSONObject().put("weather", JSONObject().put("start", JSONObject.NULL).put("end", JSONObject.NULL)))
+        put("thumbnail", rideContext?.thumbnail?.toJson() ?: JSONObject.NULL)
         put("calibration", JSONObject().apply {
             put("mode", calibrationMode); put("source", "android_phone"); put("isCalibrated", calibration != null); put("forwardEdge", forwardEdge)
             putVector("up", calibration?.up); putVector("lateral", calibration?.lateral); putVector("forward", calibration?.forward)
         })
         put("video", JSONObject().apply { put("sessionID", id); putNullable("filename", videoFilename); put("startOffsetSeconds", videoStartOffsetSeconds) })
-        put("notes", JSONObject().apply { put("private", privateNote); put("comment", communityComment) })
+        put("notes", JSONObject().apply { put("private", privateNote); put("privateNote", privateNote); put("comment", communityComment); put("communityComment", communityComment) })
         configurationSnapshot?.let { put("configurationSnapshot", it.toJson()) }
         val heartRates = samples.mapNotNull { it.heartRateBpm }
         put("heartRate", JSONObject().apply {

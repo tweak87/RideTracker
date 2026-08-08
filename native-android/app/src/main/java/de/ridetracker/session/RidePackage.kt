@@ -1,6 +1,9 @@
 package de.ridetracker.session
 
 import android.content.Context
+import de.ridetracker.context.contextJson
+import de.ridetracker.context.environmentJson
+import de.ridetracker.context.toJson
 import de.ridetracker.core.toJson
 import org.json.JSONArray
 import org.json.JSONObject
@@ -45,11 +48,13 @@ object RidePackageStore {
                 .put("sampleCount", session.summary.sampleCount)
                 .put("durationSeconds", session.summary.durationSeconds))
             .put("media", media)
-            .put("context", JSONObject()
+            .put("context", session.rideContext?.contextJson() ?: JSONObject()
                 .put("parkID", JSONObject.NULL)
                 .put("rideID", JSONObject.NULL)
                 .put("parkName", JSONObject.NULL)
                 .put("rideName", JSONObject.NULL))
+            .put("environment", session.rideContext?.environmentJson() ?: JSONObject().put("weather", JSONObject().put("start", JSONObject.NULL).put("end", JSONObject.NULL)))
+            .put("thumbnail", session.rideContext?.thumbnail?.toJson() ?: JSONObject.NULL)
             .put("privacy", JSONObject()
                 .put("visibility", "private")
                 .put("locationPrecision", "exact"))

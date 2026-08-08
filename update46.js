@@ -64,6 +64,7 @@
   function setRoute(route) {
     state.route = route;
     document.body.dataset.rtRoute = route;
+    document.body.classList.toggle('rt-record-mode', route === 'record');
     hideLegacyDashboard();
     syncVideoBadge();
   }

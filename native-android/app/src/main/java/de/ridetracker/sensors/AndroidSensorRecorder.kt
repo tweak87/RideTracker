@@ -16,6 +16,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult as GoogleLocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import de.ridetracker.context.AndroidRideContextSnapshot
 import de.ridetracker.core.CoreNativeSourceRoutingSnapshot
 import de.ridetracker.core.RideTrackerCoreAdapter
 import de.ridetracker.engine.*
@@ -31,6 +32,9 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     var status by mutableStateOf("Bereit"); private set
     var sampleCount by mutableStateOf(0); private set
     var speedKmh by mutableStateOf(0.0); private set
+    var speedSource by mutableStateOf("unavailable"); private set
+    var stationaryLocked by mutableStateOf(false); private set
+    var headingDegrees by mutableStateOf<Double?>(null); private set
     var relativeAltitudeM by mutableStateOf(0.0); private set
     var ridePhase by mutableStateOf("idle"); private set
     var qualityScore by mutableStateOf(0); private set
@@ -55,9 +59,11 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private val gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
     private val pressure = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
+    private val rotationVector = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
     private val altitudeFusion = AltitudeFusion()
     private val phaseDetector = RidePhaseDetector()
     private val rideEngine = RideEngine()
+    private val gpsSpeedEstimator = GpsSpeedEstimator()
     private val sourceRouter = TelemetrySourceRouter().apply {
         policies = listOf(
             TelemetrySourcePolicy("heartRateBpm", "ble-heart/heartRate", listOf("watch-heart/heartRate"), 0.6, 3_000L),
@@ -76,12 +82,16 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     private var previousPhase = "idle"
     private var videoFilename: String? = null
     private var videoStartOffsetSeconds = 0.0
+    private var rideContextSnapshot: AndroidRideContextSnapshot? = null
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: GoogleLocationResult) { result.locations.forEach(::handleLocation) }
     }
 
-    init { accelerometer?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) } }
+    init {
+        accelerometer?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
+        rotationVector?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
+    }
 
     fun calibrateNow(): Boolean {
         val calibration = CalibrationMath.build(calibrationBuffer.takeLast(150), forwardEdge)
@@ -110,6 +120,7 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     }
 
     fun attachVideo(filename: String?, startOffsetSeconds: Double) { videoFilename = filename; videoStartOffsetSeconds = startOffsetSeconds }
+    fun attachRideContext(snapshot: AndroidRideContextSnapshot) { rideContextSnapshot = snapshot }
 
     fun stop() {
         if (!isRecording) return
@@ -145,23 +156,31 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
         val document = RideSessionDocument(
             id = sessionId, startedAt = startedAtInstant, endedAt = Instant.now(), events = sessionEvents.toList() + sourceEvents, samples = sessionSamples.toList(),
             summary = RideSessionSummary(duration, sampleCount, distanceMeters, acceptedLocations, rejectedLocations, qualityScore, ridePhase),
-            calibrationMode = "manual", forwardEdge = forwardEdge.name.lowercase(), calibration = rideEngine.calibration,
+            calibrationMode = "automatic", forwardEdge = forwardEdge.name.lowercase(), calibration = rideEngine.calibration,
             videoFilename = videoFilename, videoStartOffsetSeconds = videoStartOffsetSeconds,
             privateNote = privateNote, communityComment = communityComment, heartRateSource = sourceRouter.resolve<Int>("heartRateBpm")?.sourceId ?: heartRateSource,
-            configurationSnapshot = configurationSnapshot,
+            configurationSnapshot = configurationSnapshot, rideContext = rideContextSnapshot,
         )
         return document.save(context).also { lastSavedPath = it.absolutePath; status = "Session gespeichert: ${it.name}" }
     }
 
     private fun reset() {
-        sampleCount = 0; speedKmh = 0.0; relativeAltitudeM = 0.0; ridePhase = "idle"; previousPhase = "idle"
+        sampleCount = 0; speedKmh = 0.0; speedSource = "unavailable"; stationaryLocked = false; relativeAltitudeM = 0.0; ridePhase = "idle"; previousPhase = "idle"
         qualityScore = 0; acceptedLocations = 0; rejectedLocations = 0; distanceMeters = 0.0
         latestLocation = null; latestSpeedMs = 0.0; latestAltitude = 0.0; lastAltitudeTime = 0.0; climbRate = 0.0
         hasBarometer = pressure != null; lastSavedPath = null; videoFilename = null; videoStartOffsetSeconds = 0.0
-        sessionSamples.clear(); sessionEvents.clear(); sourceRouter.reset(); coreAdapter.resetRuntime(); altitudeFusion.reset(); rideEngine.reset()
+        rideContextSnapshot = null; sessionSamples.clear(); sessionEvents.clear(); sourceRouter.reset(); coreAdapter.resetRuntime(); altitudeFusion.reset(); rideEngine.reset(); gpsSpeedEstimator.reset()
     }
 
     override fun onSensorChanged(event: SensorEvent) {
+        if (event.sensor.type == Sensor.TYPE_ROTATION_VECTOR) {
+            val matrix = FloatArray(9)
+            val orientation = FloatArray(3)
+            SensorManager.getRotationMatrixFromVector(matrix, event.values)
+            SensorManager.getOrientation(matrix, orientation)
+            headingDegrees = (Math.toDegrees(orientation[0].toDouble()) + 360.0) % 360.0
+            return
+        }
         if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
             val vector = Vector3(event.values[0].toDouble() / SensorManager.GRAVITY_EARTH, event.values[1].toDouble() / SensorManager.GRAVITY_EARTH, event.values[2].toDouble() / SensorManager.GRAVITY_EARTH)
             calibrationBuffer.addLast(vector); while (calibrationBuffer.size > 250) calibrationBuffer.removeFirst(); calibrationSampleCount = calibrationBuffer.size
@@ -194,13 +213,17 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
 
     private fun handleLocation(location: Location) {
         if (!isRecording) return
-        val point = LocationInput(t = (location.elapsedRealtimeNanos - recordingStartNs) / 1_000_000_000.0, latitude = location.latitude, longitude = location.longitude, accuracy = location.accuracy.toDouble(), speed = if (location.hasSpeed()) location.speed.toDouble() else null)
+        val nativeSpeed = if (location.hasSpeed()) location.speed.toDouble().coerceAtLeast(0.0) else null
+        val estimate = gpsSpeedEstimator.update(GpsObservation(location.elapsedRealtimeNanos / 1_000_000L, location.latitude, location.longitude, location.accuracy.toDouble(), nativeSpeed))
+        speedKmh = estimate.speedKmh ?: 0.0
+        speedSource = estimate.source
+        stationaryLocked = estimate.stationaryLocked
+        sourceRouter.ingest("speedKmh", "phone-gps/speed", speedKmh, estimate.confidence, location.elapsedRealtimeNanos / 1_000_000L)
+        if (estimate.suppressPosition) { rejectedLocations += 1; updateQuality(); return }
+        val point = LocationInput(t = (location.elapsedRealtimeNanos - recordingStartNs) / 1_000_000_000.0, latitude = location.latitude, longitude = location.longitude, accuracy = location.accuracy.toDouble(), speed = estimate.speedMS)
         val result = rideEngine.processLocation(point)
         if (!result.accepted) { rejectedLocations += 1; return }
         acceptedLocations += 1; distanceMeters = rideEngine.distanceM; latestLocation = location
-        val valueKmh = if (location.hasSpeed()) location.speed.toDouble().coerceAtLeast(0.0) * 3.6 else 0.0
-        val quality = (1.0 - location.accuracy.toDouble() / 100.0).coerceIn(0.0, 1.0)
-        sourceRouter.ingest("speedKmh", "phone-gps/speed", valueKmh, quality, location.elapsedRealtimeNanos / 1_000_000L)
         updateQuality()
     }
 

@@ -9,7 +9,7 @@ const updates = [
   'update11.js','update12.js','update13.js','update14.js','update15.js','update16.js','update17.js','update18.js','update19.js',
   'update23.js','update24.js','update25.js','update26.js','update27.js','update28.js','update29.js',
   'update33.js','update34.js','update35.js','update36.js','update37.js','update38.js','update39.js','update40.js','update41.js','update42.js','update43.js','update44.js','update45.js','update46.js','update47.js',
-  'update49.js','update50.js','update51.js','update52.js','update53.js','update54.js','update55.js','update56.js','update57.js','update58.js','update59.js','update60.js','update61.js','update62.js','update63.js'
+  'update49.js','update50.js','update51.js','update52.js','update53.js','update54.js','update55.js','update56.js','update57.js','update58.js','update59.js','update60.js','update61.js','update62.js','update63.js','update64.js'
 ];
 const auditScripts = ['prepare-pages.mjs','audit-web-startup.mjs','audit-frontend-managers.mjs','audit-runtime-regressions.mjs'];
 
@@ -53,7 +53,7 @@ const tags = [
   scriptTag('update33.js'),scriptTag('update34.js'),scriptTag('update35.js'),scriptTag('update36.js'),scriptTag('update37.js'),
   scriptTag('core/adapters/web-runtime-adapter.mjs', true),scriptTag('core/adapters/web-plugin-runtimes.mjs', true),
   scriptTag('update38.js'),scriptTag('update39.js'),scriptTag('update43.js'),scriptTag('update44.js'),scriptTag('update45.js'),scriptTag('update41.js'),scriptTag('update42.js'),scriptTag('update40.js'),scriptTag('update46.js'),scriptTag('update47.js'),scriptTag('update49.js'),
-  scriptTag('core/adapters/web-plugin-ui.mjs', true),scriptTag('update50.js'),scriptTag('update51.js'),scriptTag('update52.js'),scriptTag('update53.js'),scriptTag('update54.js'),scriptTag('update55.js'),scriptTag('update56.js'),scriptTag('update57.js'),scriptTag('update58.js'),scriptTag('update59.js'),scriptTag('update60.js'),scriptTag('update61.js'),scriptTag('update62.js'),scriptTag('update63.js')
+  scriptTag('core/adapters/web-plugin-ui.mjs', true),scriptTag('update50.js'),scriptTag('update51.js'),scriptTag('update52.js'),scriptTag('update53.js'),scriptTag('update54.js'),scriptTag('update55.js'),scriptTag('update56.js'),scriptTag('update57.js'),scriptTag('update58.js'),scriptTag('update59.js'),scriptTag('update60.js'),scriptTag('update61.js'),scriptTag('update62.js'),scriptTag('update63.js'),scriptTag('update64.js')
 ];
 let html = fs.readFileSync(path.join(output, 'index.html'), 'utf8');
 if (!html.includes('</body>')) throw new Error('Built index.html has no closing body tag');

@@ -36,6 +36,11 @@
     return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
   }
 
+  function headingDeltaDegrees(a, b) {
+    if (!finite(a) || !finite(b)) return 180;
+    return Math.abs(((Number(b) - Number(a) + 540) % 360) - 180);
+  }
+
   function pointTimestampMs(point) {
     const absolute = numberOrNull(point?.gpsTimestampMs ?? point?.timestampMs);
     if (absolute !== null) return absolute;
@@ -54,9 +59,18 @@
       holdMaximumSeconds: 3.2,
       riseAlpha: 0.58,
       fallAlpha: 0.36,
+      stationaryLockPoints: 3,
+      stationaryReleasePoints: 2,
+      stationaryNativeMaximumMS: 0.8,
+      stationaryReleaseSpeedMS: 1.4,
+      stationaryCourseToleranceDeg: 70,
       ...options,
     };
-    const state = { previous: null, history: [], smoothedSpeedMS: null, lastMovingAtMs: null, points: 0 };
+    const state = {
+      previous: null, history: [], smoothedSpeedMS: null, lastMovingAtMs: null, points: 0,
+      stationaryAnchor: null, stationarySamples: 0, stationaryLocked: false,
+      movementEvidence: 0, movementHeadingDeg: null,
+    };
 
     function reset() {
       state.previous = null;
@@ -64,6 +78,11 @@
       state.smoothedSpeedMS = null;
       state.lastMovingAtMs = null;
       state.points = 0;
+      state.stationaryAnchor = null;
+      state.stationarySamples = 0;
+      state.stationaryLocked = false;
+      state.movementEvidence = 0;
+      state.movementHeadingDeg = null;
     }
 
     function update(point) {
@@ -120,6 +139,42 @@
         && nativeSpeedMS >= config.minimumMovingSpeedMS
         && nativeSpeedMS <= config.maximumSpeedMS;
       const derivedUseful = derivedSpeedMS !== null && derivedSpeedMS >= config.minimumMovingSpeedMS;
+      const currentAccuracyM = Math.max(0, numberOrNull(point?.horizontalAccuracyM) ?? 25);
+      if (!state.stationaryAnchor) state.stationaryAnchor = { ...point };
+      const anchorDistanceM = distanceMeters(state.stationaryAnchor, point);
+      const stationaryRadiusM = clamp(currentAccuracyM * 0.55, 4, 22);
+      const nativeSaysStationary = nativeSpeedMS === null || nativeSpeedMS <= config.stationaryNativeMaximumMS;
+      const insideStationaryCluster = anchorDistanceM <= stationaryRadiusM;
+      const movementSpeedMS = Math.max(nativeUseful ? nativeSpeedMS : 0, derivedUseful ? derivedSpeedMS : 0);
+      const courseConsistent = derivedHeadingDeg !== null
+        && (state.movementHeadingDeg === null
+          || headingDeltaDegrees(state.movementHeadingDeg, derivedHeadingDeg) <= config.stationaryCourseToleranceDeg);
+      const recentlyMoving = state.lastMovingAtMs !== null && currentTimestampMs !== null
+        && currentTimestampMs - state.lastMovingAtMs <= config.holdMaximumSeconds * 1000;
+
+      if (nativeSaysStationary && insideStationaryCluster && !(recentlyMoving && derivedUseful)) {
+        state.stationarySamples += 1;
+        state.movementEvidence = 0;
+        state.movementHeadingDeg = null;
+        if (state.stationarySamples >= config.stationaryLockPoints) state.stationaryLocked = true;
+      } else if (movementSpeedMS >= config.stationaryReleaseSpeedMS) {
+        const strongNativeMovement = nativeUseful && nativeSpeedMS >= 2.2;
+        state.movementEvidence += strongNativeMovement ? 1 : (courseConsistent ? 1 : 0.35);
+        if (derivedHeadingDeg !== null) state.movementHeadingDeg = derivedHeadingDeg;
+        if (state.movementEvidence >= config.stationaryReleasePoints) {
+          state.stationaryLocked = false;
+          state.stationarySamples = 0;
+          state.stationaryAnchor = { ...point };
+          if (state.smoothedSpeedMS === 0) state.smoothedSpeedMS = null;
+        }
+      } else {
+        state.movementEvidence = Math.max(0, state.movementEvidence - 0.5);
+        if (!state.stationaryLocked) {
+          state.stationaryAnchor = { ...point };
+          state.stationarySamples = 0;
+        }
+      }
+
       let rawSpeedMS = null;
       let source = 'unavailable';
 
@@ -141,6 +196,21 @@
       } else if (derivedSpeedMS !== null) {
         rawSpeedMS = Math.max(0, derivedSpeedMS);
         source = 'derived';
+      }
+
+      // A single wandering phone fix must not turn a stationary vehicle into a fast one.
+      // From a stationary cluster we require multiple directionally consistent fixes (or
+      // two strong native-speed fixes) before releasing the zero-speed lock.
+      const movementConfirmed = state.movementEvidence >= config.stationaryReleasePoints;
+      const suppressUnconfirmedMovement = state.stationaryLocked
+        || (!movementConfirmed && state.stationarySamples > 0 && rawSpeedMS !== null
+          && rawSpeedMS >= config.minimumMovingSpeedMS && !nativeUseful
+          && (confidence < 0.25 || currentAccuracyM > 5));
+      if (state.points > 0 && suppressUnconfirmedMovement) {
+        rawSpeedMS = 0;
+        source = state.stationaryLocked ? 'stationary-lock' : 'stationary-candidate';
+        confidence = Math.max(confidence, insideStationaryCluster ? 0.9 : 0.55);
+        if (state.stationaryLocked) state.smoothedSpeedMS = 0;
       }
 
       if (rawSpeedMS !== null && rawSpeedMS >= config.minimumMovingSpeedMS) state.lastMovingAtMs = currentTimestampMs;
@@ -174,6 +244,10 @@
         derivedHeadingDeg,
         segmentDistanceM,
         noiseAllowanceM,
+        stationaryLocked: state.stationaryLocked,
+        stationaryRadiusM,
+        anchorDistanceM,
+        movementEvidence: state.movementEvidence,
       };
     }
 

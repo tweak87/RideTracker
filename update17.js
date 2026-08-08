@@ -58,8 +58,11 @@
     style.textContent = `
       .rt-back{position:relative!important;top:auto!important;right:auto!important;z-index:2!important;margin:0!important}
       .rt-head{padding-top:max(16px,env(safe-area-inset-top))!important;padding-right:12px!important;gap:12px!important}
-      .rt-recording-banner{position:fixed;left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom));z-index:50000;display:none;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid #ff7587;border-radius:16px;background:rgba(91,15,31,.96);color:#fff;box-shadow:0 12px 35px rgba(0,0,0,.45);backdrop-filter:blur(14px)}
-      .rt-recording-banner.visible{display:flex}.rt-recording-dot{width:10px;height:10px;border-radius:50%;background:#ff405d;box-shadow:0 0 0 0 rgba(255,64,93,.65);animation:rtPulse 1.4s infinite}.rt-recording-copy{flex:1}.rt-recording-copy strong{display:block}.rt-recording-copy span{font-size:12px;opacity:.82}.rt-recording-stop{border:0;border-radius:12px;padding:10px 13px;background:#fff;color:#651426;font-weight:900}
+      .rt-recording-banner{position:fixed;left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom));z-index:2495000;display:none;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:11px;padding:12px 14px;border:1px solid #376181;border-radius:18px;background:rgba(8,29,46,.97);color:#fff;box-shadow:0 12px 35px rgba(0,0,0,.45);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+      body.rt-record-mode .rt-recording-banner,.rt-recording-banner.visible{display:grid}body.rt-record-mode .rt-recording-banner{bottom:calc(var(--rt61-nav-h,72px) + 10px + env(safe-area-inset-bottom))}.rt-recording-banner.verified-recording{border-color:#ff7587;background:rgba(91,15,31,.97)}.rt-recording-banner.starting{border-color:#ffd166;background:rgba(70,49,9,.97)}
+      .rt-recording-dot{width:10px;height:10px;border-radius:50%;background:#5fd0ff;box-shadow:0 0 0 0 rgba(95,208,255,.65)}.rt-recording-banner.verified-recording .rt-recording-dot{background:#ff405d;animation:rtPulse 1.4s infinite}.rt-recording-banner.starting .rt-recording-dot{background:#ffd166;animation:rtPulse 1.4s infinite}.rt-recording-copy{min-width:0}.rt-recording-copy strong{display:block}.rt-recording-copy span{display:block;font-size:12px;opacity:.82;line-height:1.35}.rt-recording-actions{display:flex;align-items:center;gap:7px}.rt-recording-actions button{border:1px solid #47708e;border-radius:12px;padding:10px 12px;background:#102b40;color:#fff;font-weight:850}.rt-recording-auto{background:#5fd0ff!important;color:#001522!important;border-color:#5fd0ff!important}.rt-recording-stop{border:0!important;background:#fff!important;color:#651426!important}.rt-recording-banner:not(.verified-recording) .rt-recording-stop{display:none}.rt-recording-banner.verified-recording .rt-recording-auto,.rt-recording-banner.verified-recording .rt-recording-settings,.rt-recording-banner.starting .rt-recording-auto{display:none}.rt-recording-video{display:flex;align-items:center;gap:5px;font-size:11px;color:#bcd0e1;white-space:nowrap}.rt-recording-banner.verified-recording .rt-recording-video,.rt-recording-banner.starting .rt-recording-video{display:none}
+      body.rt-record-mode main{padding-bottom:calc(210px + var(--rt61-nav-h,72px) + env(safe-area-inset-bottom))!important}body.rt-record-mode main>.controls{display:none!important}body.rt-record-mode #rtCommunityPreflight{padding:0;border:0;background:transparent}body.rt-record-mode #rtCommunityPreflight>:not(#rtRideContext64){display:none!important}
+      @media(max-width:640px){.rt-recording-banner{grid-template-columns:auto minmax(0,1fr);padding:11px}.rt-recording-actions{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto auto}.rt-recording-actions button{min-height:46px}.rt-recording-video{justify-self:end}}
       @keyframes rtPulse{70%{box-shadow:0 0 0 10px rgba(255,64,93,0)}100%{box-shadow:0 0 0 0 rgba(255,64,93,0)}}
       .rt-ride-media-list{display:grid;gap:12px}.rt-ride-media-card{display:grid;grid-template-columns:92px 1fr;gap:12px;padding:12px;border:1px solid #29435f;border-radius:17px;background:#0c192a}.rt-ride-photo{width:92px;height:92px;border-radius:13px;object-fit:cover;background:#111f31}.rt-ride-photo.empty{display:grid;place-items:center;color:#7890aa;font-size:12px;text-align:center}.rt-stars button{font-size:24px;background:transparent;border:0;padding:1px;color:#65778d}.rt-stars button.on{color:#ffc247}.rt-media-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.rt-media-actions label,.rt-media-actions button{display:inline-flex;align-items:center;padding:8px 10px;border:1px solid #38516d;border-radius:10px;background:#11233a;color:#fff;font-weight:700;font-size:12px}.rt-media-actions input{display:none}`;
     document.head.appendChild(style);
@@ -68,11 +71,11 @@
   function isRecording() {
     const stop = document.getElementById('stop');
     if (stop && !stop.disabled) return true;
-    return [...document.querySelectorAll('button')].some(b => !b.disabled && /Aufnahme stoppen|Fahrt stoppen|Stoppen/.test(b.textContent || ''));
+    return Boolean(window.RideTrackerRecordingFullscreen?.isRecording?.());
   }
 
   function stopRecording() {
-    const candidates = [document.getElementById('stop'), ...document.querySelectorAll('button')].filter(Boolean);
+    const candidates = [document.getElementById('stop'), ...document.querySelectorAll('button:not(.rt-recording-stop)')].filter(Boolean);
     const button = candidates.find(b => !b.disabled && /Aufnahme stoppen|Fahrt stoppen|Stoppen/.test(b.textContent || ''));
     button?.click();
   }
@@ -83,8 +86,8 @@
       banner = document.createElement('aside');
       banner.id = 'rtRecordingBanner';
       banner.className = 'rt-recording-banner';
-      banner.innerHTML = `<span class="rt-recording-dot"></span><div class="rt-recording-copy"><strong>Aufnahme läuft</strong><span>Sensoren und optional Video werden aufgezeichnet.</span></div><button class="rt-recording-stop">Stoppen</button>`;
-      banner.querySelector('button').onclick = stopRecording;
+      banner.innerHTML = `<span class="rt-recording-dot"></span><div class="rt-recording-copy"><strong>Fahrt automatisch starten</strong><span>Initialisierung, Kalibrierung und Aufnahme erfolgen in einem Schritt.</span></div><div class="rt-recording-actions"><label class="rt-recording-video"><input type="checkbox" data-record-video checked> Video</label><button type="button" class="rt-recording-auto">Automatisch starten</button><button type="button" class="rt-recording-settings">Sensoren</button><button type="button" class="rt-recording-stop">Stoppen</button></div>`;
+      banner.querySelector('.rt-recording-stop').onclick = stopRecording;
       document.body.appendChild(banner);
     }
     setInterval(() => banner.classList.toggle('visible', isRecording()), 250);

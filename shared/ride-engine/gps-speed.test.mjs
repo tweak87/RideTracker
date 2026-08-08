@@ -64,6 +64,43 @@ const stationary = stationaryEstimator.update({
 });
 assert.equal(stationary.speedMS, 0, 'GPS jitter inside the accuracy radius must stay stationary');
 
+const lockedStationaryEstimator = gps.createEstimator();
+const stationaryLatitude = 50;
+const jitterSequence = [0, 0.000004, -0.000003, 0.00009, 0.000002, -0.000004, 0.000003];
+const lockedResults = jitterSequence.map((offset, index) => lockedStationaryEstimator.update({
+  latitude: stationaryLatitude + offset,
+  longitude: 8,
+  horizontalAccuracyM: 8,
+  gpsTimestampMs: 1_000 + index * 1_000,
+  nativeSpeedMS: index ? 0 : null,
+}));
+assert.ok(lockedResults.slice(2).every(result => result.speedMS === 0), 'one displaced stationary fix must never create a speed spike');
+assert.equal(lockedResults.at(-1).stationaryLocked, true, 'stable fixes must engage the stationary lock');
+
+const launchAfterStopEstimator = gps.createEstimator();
+for (let index = 0; index < 4; index += 1) launchAfterStopEstimator.update({
+  latitude: 50,
+  longitude: 8,
+  horizontalAccuracyM: 4,
+  gpsTimestampMs: 1_000 + index * 1_000,
+  nativeSpeedMS: 0,
+});
+launchAfterStopEstimator.update({latitude:50.00005,longitude:8,horizontalAccuracyM:4,gpsTimestampMs:5_000,nativeSpeedMS:6});
+const launched = launchAfterStopEstimator.update({latitude:50.00014,longitude:8,horizontalAccuracyM:4,gpsTimestampMs:6_000,nativeSpeedMS:10});
+assert.ok(launched.speedMS > 3, 'two strong native fixes must release the stationary lock');
+
+const derivedLaunchEstimator = gps.createEstimator();
+for (let index = 0; index < 4; index += 1) derivedLaunchEstimator.update({
+  latitude: 50,
+  longitude: 8,
+  horizontalAccuracyM: 3,
+  gpsTimestampMs: 1_000 + index * 1_000,
+  nativeSpeedMS: null,
+});
+derivedLaunchEstimator.update({latitude:50.00008,longitude:8,horizontalAccuracyM:3,gpsTimestampMs:5_000,nativeSpeedMS:null});
+const derivedLaunch = derivedLaunchEstimator.update({latitude:50.00018,longitude:8,horizontalAccuracyM:3,gpsTimestampMs:6_000,nativeSpeedMS:null});
+assert.ok(derivedLaunch.speedMS > 2, 'two directionally consistent geometry fixes must release the stationary lock');
+
 const impossibleEstimator = gps.createEstimator();
 impossibleEstimator.update({ latitude: 50, longitude: 8, horizontalAccuracyM: 3, gpsTimestampMs: 1_000 });
 const impossible = impossibleEstimator.update({ latitude: 51, longitude: 8, horizontalAccuracyM: 3, gpsTimestampMs: 2_000 });

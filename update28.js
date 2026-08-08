@@ -25,7 +25,7 @@
   const css = document.createElement('style');
   css.id = 'rtStandaloneHudEditorStyle';
   css.textContent = `
-    #rtStandaloneHudEditor{position:fixed;inset:0;z-index:2000000;background:#02070d;color:#f5fbff;display:none;overflow:hidden;overscroll-behavior:none;touch-action:none;font-family:system-ui,-apple-system,sans-serif}
+    #rtStandaloneHudEditor{position:fixed;inset:0;z-index:2147483000;background:#02070d;color:#f5fbff;display:none;overflow:hidden;overscroll-behavior:none;touch-action:none;font-family:system-ui,-apple-system,sans-serif}
     #rtStandaloneHudEditor.open{display:grid;grid-template-rows:auto minmax(0,1fr)}
     .rt-hud-top{display:flex;align-items:center;gap:10px;padding:max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left));background:#07131f;border-bottom:1px solid #29435f}
     .rt-hud-top h2{margin:0;font-size:18px}.rt-hud-top .spacer{flex:1}.rt-hud-top button,.rt-hud-top select{background:#102436;color:#fff;border:1px solid #31536b;border-radius:10px;padding:9px 11px;font-weight:700}

@@ -2,11 +2,11 @@
 
 ## Version und Rollback
 
-- Produktversion: `2026.08.08-speed-compass-3d.1`
-- Gesicherter Ausgangsstand: `9a0d225bd291f1c5c3b65cb4f507f898dcf5a83b`
-- Remote-Rollback-Branch: `rollback/pre-speed-compass-3d-20260808`
-- Lokales Tag: `speed-compass-3d-baseline-20260808`
-- Rollback-Link: <https://github.com/tweak87/RideTracker/tree/rollback/pre-speed-compass-3d-20260808>
+- Produktversion: `2026.08.08-context-map-weather.1`
+- Gesicherter Ausgangsstand: `5a4f178947b144694543161e1f8a459ab19a07b5`
+- Remote-Rollback-Branch: `rollback/pre-park-map-weather-20260808`
+- Lokales Tag: `park-map-weather-baseline-20260808`
+- Rollback-Link: <https://github.com/tweak87/RideTracker/tree/rollback/pre-park-map-weather-20260808>
 
 Der Ausgangsstand bleibt unverändert. Ein Rollback erfolgt über einen neuen Branch oder Pull Request auf Basis des genannten Commits. Lokal gespeicherte Fahrten werden durch einen Code-Rollback nicht automatisch gelöscht oder verändert.
 
@@ -65,9 +65,11 @@ Parks, Bahnen und einzelne Fahrten erhalten automatisch erzeugte SVG-Miniaturen.
 
 1. Ein eigenes Supabase-Projekt anlegen.
 2. `backend/supabase/001_community_backend.sql` im SQL-Editor ausführen.
-3. In RideTracker **Administration → Community-Backend & 3D → Backend konfigurieren** öffnen.
-4. Projekt-URL und Publishable-/Anon-Key eintragen.
-5. Verbindungstest abwarten und anschließend ein Konto registrieren oder anmelden.
+3. Danach `backend/supabase/002_privacy_security_hardening.sql` ausführen.
+4. Die rechtliche und technische Checkliste in `docs/PRIVACY_AND_BACKEND_ROLLOUT.md` abschließen.
+5. In RideTracker **Administration → Community-Backend & 3D → Backend konfigurieren** öffnen.
+6. Projekt-URL, ausschließlich den Publishable-/Anon-Key und die HTTPS-Adresse des veröffentlichten Datenschutzhinweises eintragen.
+7. Verbindung, Zustimmung, RLS-Isolation, Export und Löschung mit einem Testkonto prüfen.
 
 Die direkte REST-/Auth-Anbindung benötigt kein zusätzliches JavaScript-SDK. Das Datenbankschema kann später hinter einer anderen kompatiblen API betrieben werden; die Browser-Schnittstelle liegt in `shared/core/community-backend.js`.
 

@@ -8,6 +8,7 @@
   const CONFIG_KEY = 'rideTracker.communityBackend.v1';
   const SESSION_KEY = 'rideTracker.communitySession.v1';
   const DEFAULT_TIMEOUT_MS = 12000;
+  const PRIVACY_NOTICE_VERSION = '2026-08-08-v1';
 
   class CommunityBackendError extends Error {
     constructor(message, details = {}) {
@@ -67,7 +68,8 @@
   function validateConfig(input) {
     const url = normalizeUrl(input?.url);
     const publishableKey = String(input?.publishableKey || input?.anonKey || '').trim();
-    if (!url && !publishableKey) return { enabled: false, url: '', publishableKey: '' };
+    const privacyNoticeUrl = String(input?.privacyNoticeUrl || '').trim();
+    if (!url && !publishableKey) return { enabled: false, url: '', publishableKey: '', privacyNoticeUrl: '' };
     if (!/^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(url)) {
       throw new CommunityBackendError('Die Backend-URL muss eine gültige HTTPS-Adresse sein.', { code: 'INVALID_BACKEND_URL' });
     }
@@ -77,7 +79,10 @@
     if (isForbiddenKey(publishableKey)) {
       throw new CommunityBackendError('Service-Role-Schlüssel dürfen niemals im Browser gespeichert werden.', { code: 'SERVICE_ROLE_REJECTED' });
     }
-    return { enabled: true, url, publishableKey };
+    if (privacyNoticeUrl && !/^https:\/\//i.test(privacyNoticeUrl)) {
+      throw new CommunityBackendError('Der Datenschutzhinweis muss über eine HTTPS-Adresse erreichbar sein.', { code: 'INVALID_PRIVACY_NOTICE_URL' });
+    }
+    return { enabled: true, url, publishableKey, privacyNoticeUrl };
   }
 
   function cleanText(value, maxLength = 160) {
@@ -325,16 +330,23 @@
       p_report_id: reportId, p_decision: cleanText(decision, 30), p_note: cleanText(note, 1000)
     });
     const getMyRole = () => rpc('my_community_role');
+    const privacyStatus = () => rpc('privacy_notice_status');
+    const acceptPrivacyNotice = () => rpc('accept_privacy_notice', { p_notice_version: PRIVACY_NOTICE_VERSION, p_source: 'web' });
+    const revokePrivacyNotice = () => rpc('revoke_privacy_notice');
+    const exportMyData = () => rpc('export_my_community_data');
+    const eraseMyCommunityData = () => rpc('erase_my_community_data');
 
     return {
       configure, getStatus, health, signUp, signIn, signOut, refreshSession,
       upsertProfile, syncRide, listFeed, listFriends, searchProfiles,
       sendFriendRequest, respondFriendRequest, reportContent,
       listModerationQueue, moderateReport, getMyRole,
+      privacyStatus, acceptPrivacyNotice, revokePrivacyNotice,
+      exportMyData, eraseMyCommunityData,
       _debug: { getConfig: () => ({ ...config }), getSession: () => session, sanitizeTrackModel }
     };
   }
 
   const defaultClient = createClient();
-  return { createClient, CommunityBackendError, validateConfig, sanitizeTrackModel, client: defaultClient };
+  return { createClient, CommunityBackendError, validateConfig, sanitizeTrackModel, PRIVACY_NOTICE_VERSION, client: defaultClient };
 });
