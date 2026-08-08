@@ -4,7 +4,7 @@ Stand: 2026-08-08
 
 Dieses Dokument ist die verbindliche Übergabe für einen neuen Chat. Vor Änderungen zuerst `main`, die letzten Actions und dieses Dokument lesen. Danach nur auf Basis des tatsächlichen Repository-Stands weiterarbeiten.
 
-Aktuelle Zielversion: `2026.08.08-ice-telemetry-fire8.3`. Der vorherige Stand ist am Commit `5a4f178947b144694543161e1f8a459ab19a07b5` und Branch `rollback/pre-park-map-weather-20260808` dokumentiert. Neu sind die wählbare Parkkarte, optionale Wetter-/Wind-Snapshots, lizenzierte Thumbnails, der automatische Aufnahme-Dialog, der strengere Stillstandfilter, die Sensor-FAQ, monotone ICE-GPS-Zeitbasis, Kalibrierungs-Lageprüfung, horizontale G-Kraft-Diagnose, verifizierter Fire-OS-8-Testbuild und Supabase-Migration 002 mit Datenschutz-Gate, Export und Löschung.
+Aktuelle Zielversion: `2026.08.08-video-gforce-trails.4`. Der vorherige stabile Produktionsstand ist am Commit `5a4f178947b144694543161e1f8a459ab19a07b5` und Branch `rollback/pre-park-map-weather-20260808` dokumentiert. Neu sind der aus dem ursprünglichen Fingertipp gestartete iOS-Berechtigungsablauf, App-Vollbild bereits während der Aufnahmevorbereitung, ein garantiert sichtbares konfiguriertes HUD, ausschließlich nachgelagerte Park-/Attraktionsermittlung und die zweigeteilte G-Ball-/Vertikallastanzeige mit ausblendendem Verlaufsschweif. Die bisherigen Funktionen wie Parkkarte, Wetter, lizenzierte Thumbnails, ICE-GPS-Zeitbasis, Kalibrierungs-Lageprüfung, Fire-OS-8-Testbuild und Supabase-Datenschutzfunktionen bleiben erhalten.
 
 ## 1. Produktziel
 
@@ -35,6 +35,7 @@ Kernziele:
 - Aufnahme-Vollbild kann verlassen werden, ohne die Aufnahme zu stoppen.
 - Während REC: sichtbarer REC-Timer + Stop; Vorschau/REC-Badges dürfen niemals auf fremden Menüebenen schweben.
 - HUD-Konfiguration ist getrennt vom Aufnahmebild; Portrait 9:16 und Landscape 16:9 werden separat gespeichert.
+- Parkkarte und Attraktionskandidaten dürfen nie den Aufnahmebeginn verzögern und erscheinen ausschließlich nach `ridetracker:recording-stopped` im Dialog `Fahrt fertigstellen`.
 
 ## 3. HUD-System – verbindlicher Zustand
 
@@ -42,6 +43,7 @@ Historische HUD-Systeme wurden bereinigt. Zielzustand:
 
 - `update28.js`: einziger Standalone HUD-Editor.
 - `update29.js`: konfigurierbarer Live-/Replay-HUD-Renderer.
+- `shared/overlay/g-force-visualizer.js`: gemeinsames Modell und Canvas-Rendering für horizontalen G-Ball, Vertikallast und zeitlich ausblendenden Schweif.
 - Alte Basis-HUD-/Toolbar-Systeme dürfen nicht wieder aktiviert werden.
 
 Achsen nach Kalibrierung:
@@ -52,6 +54,8 @@ Achsen nach Kalibrierung:
 - Ruhendes Telefon nach Kalibrierung: vertikal ungefähr +1 G.
 
 Replay-HUD muss aus `video.currentTime` und gespeicherten Telemetrie-Timestamps lesen, nicht aus Live-DOM-Werten.
+
+Die G-Kraft-Anzeige besteht aus zwei gekoppelten Punkten: Draufsicht für lateral/longitudinal und Vertikallast für normal G. Beide zeigen ungefähr die letzten drei Sekunden als ausblendenden Schweif. Bei einem Rückwärtssprung der Replay-Zeit muss die Historie geleert werden.
 
 ## 4. Aufnahme / Speicherung
 

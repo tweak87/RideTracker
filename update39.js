@@ -29,14 +29,14 @@
     #rtRecordingMinimizeButton{right:max(12px,env(safe-area-inset-right))!important}
     #rtRecordingStopButton .rt-rec-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#ff334e;margin-right:7px;vertical-align:0;box-shadow:0 0 0 0 rgba(255,51,78,.7);animation:rtRecPulse 1.3s infinite}
     #rtRecordingStatusChip{pointer-events:none!important;position:fixed!important;left:50%!important;transform:translateX(-50%)!important;bottom:max(18px,calc(env(safe-area-inset-bottom) + 10px))!important;display:none!important;border-radius:999px!important;padding:8px 12px!important;background:rgba(0,0,0,.68)!important;color:#fff!important;border:1px solid rgba(255,255,255,.35)!important;font-size:12px!important}
-    body.rt-app-fullscreen-active #rtRecordingStatusChip[data-recording="true"]{display:block!important}
+    body.rt-app-fullscreen-active #rtRecordingStatusChip[data-recording="true"],body.rt-app-fullscreen-active #rtRecordingStatusChip[data-preparing="true"]{display:block!important}
     @keyframes rtRecPulse{0%{box-shadow:0 0 0 0 rgba(255,51,78,.7)}70%{box-shadow:0 0 0 8px rgba(255,51,78,0)}100%{box-shadow:0 0 0 0 rgba(255,51,78,0)}}
     body.rt-app-fullscreen-active{overflow:hidden!important;overscroll-behavior:none!important;touch-action:none!important}
     @media(max-width:520px){#rtRecordingControlPortal .rt-record-control{top:max(8px,env(safe-area-inset-top))!important;padding:9px 11px!important;font-size:13px!important}}
   `;
   document.head.appendChild(style);
 
-  const state={recording:false,startedAt:0,raf:0,lastText:'',activationToken:0,syncTimer:0};
+  const state={recording:false,preparing:false,startedAt:0,raf:0,lastText:'',activationToken:0,syncTimer:0};
   const wrap=()=>document.getElementById('videoWrap');
   const stopButton=()=>document.getElementById('stop');
   const preview=()=>document.getElementById('preview');
@@ -96,7 +96,7 @@
     const stop=document.getElementById('rtRecordingStopButton');
     const chip=document.getElementById('rtRecordingStatusChip');
     if(stop)stop.dataset.recording=String(state.recording);
-    if(chip)chip.dataset.recording=String(state.recording);
+    if(chip){chip.dataset.recording=String(state.recording);chip.dataset.preparing=String(state.preparing);chip.textContent=state.recording?'Aufnahme läuft · HUD und Video aktiv':'Kamera, Sensoren und Kalibrierung werden vorbereitet …';}
   }
 
   function tick(){
@@ -123,7 +123,7 @@
     if(active===state.recording){updateControlState();return;}
     state.recording=active;state.activationToken+=1;
     if(active){
-      state.startedAt=performance.now();state.lastText='';forceLivePreviewMode();ensureControls();updateControlState();tick();void activateRecordingView(state.activationToken);
+      state.preparing=false;state.startedAt=performance.now();state.lastText='';forceLivePreviewMode();ensureControls();updateControlState();ensureAppFullscreen();tick();void activateRecordingView(state.activationToken);
     }else{
       cancelAnimationFrame(state.raf);state.raf=0;state.lastText='';
       const elapsed=document.getElementById('rtRecordingElapsed');if(elapsed)elapsed.textContent='00:00';
@@ -148,6 +148,7 @@
   }
 
   async function leaveFullscreen(){
+    state.preparing=false;
     try{
       if(document.fullscreenElement)await document.exitFullscreen();
       else if(document.webkitFullscreenElement&&document.webkitExitFullscreen)document.webkitExitFullscreen();
@@ -161,8 +162,16 @@
 
   function ensureAppFullscreen(){
     const host=wrap();
-    if(!host||!state.recording)return;
+    if(!host||(!state.recording&&!state.preparing))return;
     forceLivePreviewMode();ensureControls();host.classList.add('rt-app-fullscreen');document.body.classList.add('rt-app-fullscreen-active');updateControlState();
+  }
+
+  function beginPreparation(){
+    state.preparing=true;forceLivePreviewMode();ensureControls();ensureAppFullscreen();updateControlState();return true;
+  }
+
+  async function abortPreparation(){
+    if(state.recording)return false;state.preparing=false;await leaveFullscreen();return true;
   }
 
   function keepSafariVideoInsideApp(){
@@ -190,6 +199,8 @@
 
   window.RideTrackerRecordingFullscreen={
     enter:async()=>{if(!state.recording)return false;const video=await waitForLivePreview();if(!video)return false;ensureAppFullscreen();return true;},
+    beginPreparation,
+    abortPreparation,
     exit:leaveFullscreen,
     stop:stopRecording,
     isRecording:()=>state.recording,

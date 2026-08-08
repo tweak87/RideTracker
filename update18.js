@@ -20,6 +20,7 @@
   const autoButton = banner.querySelector('.rt-recording-auto');
   const settingsButton = banner.querySelector('.rt-recording-settings');
   const videoChoice = banner.querySelector('[data-record-video]');
+  const weatherChoice = banner.querySelector('[data-record-weather]');
   let state = 'idle';
   let startedAt = 0;
   let confirmTimer = null;
@@ -85,6 +86,8 @@
     event.stopImmediatePropagation();
     const preflightVideo = document.querySelector('#rtCommunityPreflight [data-video]');
     if (preflightVideo) preflightVideo.checked = videoChoice?.checked !== false;
+    window.RideTrackerRideContext?.setWeatherEnabled?.(weatherChoice?.checked === true);
+    window.RideTrackerRecordingActions?.primeForUserGesture?.({video:videoChoice?.checked !== false,fullscreen:videoChoice?.checked !== false});
     requestStartVerification();
     void Promise.resolve(window.RideTrackerPreflight?.start?.()).then(started => {
       if (started === false && !coreConfirmsRecording()) setState('idle');

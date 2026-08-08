@@ -4,7 +4,7 @@
   const STORAGE_KEY = 'rideTracker.hud.configuration.v1';
   const ELEMENTS = [
     ['pulse', 'Puls', '142 BPM'],
-    ['gDial', 'G-Kraft-Kreis', '+0.8 / +2.4 G'],
+    ['gDial', 'G-Ball & Vertikallast', 'Punkte mit 3-Sekunden-Schweif'],
     ['gValues', 'G-Achsen', 'LAT +0.8 · VERT +2.4 · LONG −0.5'],
     ['speed', 'Geschwindigkeit', '87 KM/H'],
     ['compass', 'Kompass', '032° · NO'],
@@ -13,12 +13,12 @@
   ];
   const BASE = {
     landscape: {
-      pulse: {x:.02,y:.62,w:.29,h:.31}, gDial:{x:.42,y:.48,w:.17,h:.30}, gValues:{x:.33,y:.84,w:.34,h:.11},
+      pulse: {x:.02,y:.62,w:.29,h:.31}, gDial:{x:.33,y:.44,w:.34,h:.36}, gValues:{x:.33,y:.82,w:.34,h:.11},
       speed:{x:.70,y:.61,w:.28,h:.33}, compass:{x:.41,y:.04,w:.18,h:.18}, vibration:{x:.80,y:.06,w:.18,h:.24}, dynamics:{x:.03,y:.06,w:.24,h:.18}
     },
     portrait: {
-      vibration:{x:.04,y:.03,w:.42,h:.13}, dynamics:{x:.54,y:.03,w:.42,h:.13}, compass:{x:.33,y:.17,w:.34,h:.13}, gDial:{x:.18,y:.31,w:.64,h:.21},
-      gValues:{x:.07,y:.54,w:.86,h:.10}, pulse:{x:.05,y:.69,w:.43,h:.25}, speed:{x:.52,y:.69,w:.43,h:.25}
+      vibration:{x:.04,y:.03,w:.42,h:.13}, dynamics:{x:.54,y:.03,w:.42,h:.13}, compass:{x:.33,y:.17,w:.34,h:.13}, gDial:{x:.08,y:.28,w:.84,h:.27},
+      gValues:{x:.07,y:.57,w:.86,h:.10}, pulse:{x:.05,y:.69,w:.43,h:.25}, speed:{x:.52,y:.69,w:.43,h:.25}
     }
   };
 
@@ -60,6 +60,12 @@
     return config;
   }
   let config = loadConfig();
+  if (config.gForceVisualizerVersion !== 2) {
+    const oldLandscape=config.profiles.landscape.elements.gDial,oldPortrait=config.profiles.portrait.elements.gDial;
+    if(Math.abs(Number(oldLandscape.width)-.17)<.001&&Math.abs(Number(oldLandscape.height)-.30)<.001)Object.assign(oldLandscape,{x:BASE.landscape.gDial.x,y:BASE.landscape.gDial.y,width:BASE.landscape.gDial.w,height:BASE.landscape.gDial.h});
+    if(Math.abs(Number(oldPortrait.width)-.64)<.001&&Math.abs(Number(oldPortrait.height)-.21)<.001)Object.assign(oldPortrait,{x:BASE.portrait.gDial.x,y:BASE.portrait.gDial.y,width:BASE.portrait.gDial.w,height:BASE.portrait.gDial.h});
+    config.gForceVisualizerVersion=2;localStorage.setItem(STORAGE_KEY,JSON.stringify(config));
+  }
   let mode = matchMedia('(orientation:portrait)').matches ? 'portrait' : 'landscape';
   let selected = 'pulse';
   let drag = null;

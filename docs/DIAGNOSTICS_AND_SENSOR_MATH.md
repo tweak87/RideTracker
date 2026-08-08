@@ -1,5 +1,19 @@
 # RideTracker – Sensor-Mathematik und Diagnosemodell
 
+## G-Ball mit Verlaufsschweif
+
+Die aktuelle Oberfläche stellt G-Kräfte in zwei bewusst getrennten Bildern dar:
+
+- **Draufsicht:** Die horizontale Position kombiniert Seitenkraft (links/rechts) und Längskraft (beschleunigen/bremsen). Der Abstand vom Mittelpunkt entspricht dem horizontalen Gesamtwert `sqrt(lateral² + longitudinal²)`.
+- **Vertikallast:** Ein eigener Punkt läuft von negativer Last beziehungsweise Airtime bis zu hoher positiver Last. Die Referenz bei `+1 g` entspricht näherungsweise dem ruhenden Telefon.
+- **Schweif:** Die letzten rund drei Sekunden werden mit abnehmender Deckkraft nachgezogen. Beim Zurückspringen im Replay wird der alte Schweif verworfen, damit keine zeitlich falsche Verbindung entsteht.
+
+Farben dienen als Orientierung und nicht als sicherheitstechnische Grenzwertbewertung: Violett kennzeichnet sehr geringe Vertikallast/Airtime, Cyan/Grün den normalen Bereich, Gelb erhöhte und Rot/Pink hohe gemessene Last.
+
+## Reihenfolge der Kontextbestimmung
+
+Vor dem Start werden nur Aufnahmekette, Sensoren, Kamera, Kalibrierung und – nach ausdrücklicher Aktivierung – ein Wetter-Snapshot vorbereitet. Eine Parkabfrage findet nicht statt. Erst das Ereignis `ridetracker:recording-stopped` erzeugt aus den aufgezeichneten GPS-Punkten einen robusten repräsentativen Standort und bietet danach Karte, Parkkandidaten und Attraktionsauswahl an.
+
 ## 1. Welche Sensoren wofür verwendet werden
 
 ### Accelerometer / Beschleunigung
