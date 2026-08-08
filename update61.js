@@ -165,12 +165,13 @@
   }
   async function startPreparedRide() {
     if(state.busy||isRecording())return isRecording();state.busy=true;let successful=false;const panel=ensurePreflight(),button=panel?.querySelector('[data-start]'),withVideo=Boolean(panel?.querySelector('[data-video]')?.checked);
+    window.RideTrackerRecordingActions?.primeForUserGesture?.({video:withVideo,fullscreen:withVideo});
     if(button){button.disabled=true;button.textContent='Berechtigungen & Sensoren werden vorbereitet …';}
     log('info','preflight','Automatic preparation started',{withVideo});
     try{
       const before=state.lastPreflight||await inspectPreflight();
       if(before.blocking.includes('database')||before.blocking.includes('storage'))throw new Error('Datenbank oder Speicher ist nicht aufnahmebereit.');
-      const contextPreparation=Promise.resolve(window.RideTrackerRideContext?.prepareForRecording?.()).catch(contextError=>{log('warn','ride-context','Park/Wetter-Kontext konnte nicht vorbereitet werden',{message:contextError?.message||String(contextError)});return null;});
+      const contextPreparation=Promise.resolve(window.RideTrackerRideContext?.prepareForRecording?.({parkLookup:false})).catch(contextError=>{log('warn','ride-context','Wetter-Kontext konnte nicht vorbereitet werden',{message:contextError?.message||String(contextError)});return null;});
       const startAction=withVideo?window.RideTrackerRecordingActions?.startWithVideo?.():window.RideTrackerRecordingActions?.startWithoutVideo?.();
       const started=await startAction;
       if(!started)throw new Error('Die Aufnahme konnte nach der automatischen Vorbereitung nicht gestartet werden.');

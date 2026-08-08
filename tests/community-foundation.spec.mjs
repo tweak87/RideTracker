@@ -59,13 +59,14 @@ test('record route uses the automatic bottom dialog and keeps manual controls in
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('.rt-recording-auto')).toContainText('Automatisch starten');
   await expect(dialog.locator('[data-record-video]')).toBeChecked();
+  await expect(dialog.locator('[data-record-weather]')).toBeVisible();
   await expect(page.locator('main>.controls')).toBeHidden();
   await expect(page.locator('#rtCommunityPreflight .rt61-preflight-actions')).toBeHidden();
   await dialog.locator('.rt-recording-settings').click();
   await expect.poll(()=>page.evaluate(()=>document.body.dataset.rtRoute)).toBe('devices');
 });
 
-test('nearby park map, optional weather and sensor FAQ work without automatic external calls', async ({page}) => {
+test('park map opens only after the ride and optional weather stays consent based', async ({page}) => {
   const transparentPng=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+XyQ+WQAAAABJRU5ErkJggg==','base64');
   await page.route('https://tile.openstreetmap.org/**',route=>route.fulfill({status:200,contentType:'image/png',body:transparentPng}));
   await page.route('https://api.open-meteo.com/**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
@@ -73,10 +74,13 @@ test('nearby park map, optional weather and sensor FAQ work without automatic ex
     current:{time:'2026-08-08T12:00',temperature_2m:24.2,relative_humidity_2m:52,apparent_temperature:25.1,precipitation:0,rain:0,weather_code:1,cloud_cover:22,surface_pressure:1008,wind_speed_10m:14,wind_direction_10m:230,wind_gusts_10m:27}
   })}));
   await page.locator('#rtCommunityBottomNav [data-community-route="record"]').click();
-  await expect(page.locator('#rtRideContext64 [data-weather]')).not.toBeChecked();
-  await expect(page.locator('#rtRideContext64 [data-status]')).toContainText('Noch keine externen Standortdaten');
+  await expect(page.locator('#rtRideContext64')).toBeHidden();
   await page.evaluate(()=>{
-    window.RideTrackerGpsCapture.last=()=>({latitude:48.268,longitude:7.721,horizontalAccuracyM:5});
+    window.RideTrackerGpsCapture.points=()=>[
+      {timestamp:0,latitude:48.268,longitude:7.721,horizontalAccuracyM:5},
+      {timestamp:1,latitude:48.2681,longitude:7.7211,horizontalAccuracyM:5},
+    ];
+    window.RideTrackerGpsCapture.last=()=>({latitude:48.2681,longitude:7.7211,horizontalAccuracyM:5});
     window.RideTrackerReferenceEngine.nearbyParks=async()=>[
       {provider:'osm',id:'park-1',name:'Europa-Park',latitude:48.267,longitude:7.72},
       {provider:'osm',id:'park-2',name:'Testpark',latitude:48.31,longitude:7.75},
@@ -85,7 +89,13 @@ test('nearby park map, optional weather and sensor FAQ work without automatic ex
       {provider:'osm',id:`${park.id}-ride`,name:`Bahn in ${park.name}`,latitude:park.latitude,longitude:park.longitude},
     ];
     window.RideTrackerReferenceEngine.reverseCountry=async()=>({code:'DE'});
+    window.dispatchEvent(new CustomEvent('ridetracker:recording-stopped'));
   });
+  await expect(page.locator('#rtRideDraft61')).toBeVisible();
+  await expect(page.locator('#rtRideContext64')).toBeVisible();
+  await expect(page.locator('#rtRideContext64')).toContainText('Erst jetzt wird die aufgezeichnete Route ausgewertet');
+  await expect(page.locator('#rtRideContext64 [data-weather]')).not.toBeChecked();
+  await expect(page.locator('#rtRideContext64 [data-status]')).toContainText('Fahrt beendet');
   await page.locator('#rtRideContext64 [data-load]').click();
   await expect(page.locator('#rtRideContext64 [data-parks] button')).toHaveCount(2);
   await expect(page.locator('#rtRideContext64 .rt64-marker.park')).toHaveCount(2);
@@ -160,6 +170,23 @@ test('G-force diagnostics expose lateral force and orientation-independent horiz
   expect(result.metrics.horizontalG).toBeCloseTo(.5,6);
   expect(result.metrics.lateralMS2).toBeCloseTo(2.941995,6);
   await expect(page.locator('#rtGForceDiagnostics65')).toContainText('Horizontal gesamt');
+  await expect(page.locator('#rtGForceDiagnostics65')).toContainText('3-Sekunden-Schweif');
+  await expect(page.locator('#rtGForceDetailCanvas65')).toBeVisible();
+  expect(await page.evaluate(()=>Boolean(window.RideTrackerGForceVisualizer?.createTrail))).toBe(true);
+});
+
+test('recording preparation enters app fullscreen and keeps the configured HUD visible', async ({page}) => {
+  await page.locator('#rtCommunityBottomNav [data-community-route="record"]').click();
+  const state=await page.evaluate(async()=>{
+    window.RideTrackerRecordingFullscreen.beginPreparation();
+    const stop=document.getElementById('stop');stop.disabled=false;
+    window.dispatchEvent(new CustomEvent('ridetracker:recording-started'));
+    await new Promise(resolve=>setTimeout(resolve,350));
+    const canvas=document.getElementById('rtConfiguredLiveHud');
+    return{wrap:document.getElementById('videoWrap').classList.contains('rt-app-fullscreen'),body:document.body.classList.contains('rt-app-fullscreen-active'),hud:canvas?getComputedStyle(canvas).display:null,trail:Boolean(window.RideTrackerGForceVisualizer)};
+  });
+  expect(state).toEqual({wrap:true,body:true,hud:'block',trail:true});
+  await page.evaluate(()=>{document.getElementById('stop').disabled=true;window.dispatchEvent(new CustomEvent('ridetracker:recording-stopped'));return window.RideTrackerRecordingFullscreen.exit();});
 });
 
 test('compass is configurable and uses GPS course as fallback', async ({page}) => {

@@ -9,7 +9,7 @@
   const state = {
     location: null, parks: [], attractions: [], selectedPark: null, selectedAttraction: null,
     country: null, weather: { start: null, end: null }, thumbnail: null,
-    recordingStartedAt: null, mapZoom: 11, busy: false, observerScheduled: false,
+    recordingStartedAt: null, recordingStoppedAt: null, postRide:false, mapZoom: 11, busy: false, observerScheduled: false,
   };
   const finite = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -18,6 +18,7 @@
   const log = (level, message, data) => window.RideTrackerSupportCenter?.log?.(level, 'ride-context', message, data);
   const preferences = () => ({ weatherEnabled:false, parkRadiusM:25000, externalLookupConsent:false, ...readJson(localStorage, PREFERENCES_KEY, {}) });
   const savePreferences = patch => writeJson(localStorage, PREFERENCES_KEY, { ...preferences(), ...patch });
+  const setWeatherEnabled = enabled => { const value=Boolean(enabled);savePreferences({weatherEnabled:value});const input=document.querySelector('#rtRideContext64 [data-weather]');if(input)input.checked=value;return value; };
   const database = () => window.RideTrackerDatabase;
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -66,6 +67,15 @@
     return new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(position => resolve({
       latitude:Number(position.coords.latitude), longitude:Number(position.coords.longitude), horizontalAccuracyM:Number(position.coords.accuracy)||null, capturedAt:new Date(position.timestamp || Date.now()).toISOString(),
     }), error => reject(new Error(error?.message || 'Standort konnte nicht ermittelt werden.')), {enableHighAccuracy:true, maximumAge:15000, timeout:14000}));
+  }
+
+  function recordedLocation() {
+    const points=(window.RideTrackerGpsCapture?.points?.()||[]).filter(point=>finite(point?.latitude)&&finite(point?.longitude));
+    if(!points.length)return null;
+    const sortedLat=points.map(point=>Number(point.latitude)).sort((a,b)=>a-b),sortedLon=points.map(point=>Number(point.longitude)).sort((a,b)=>a-b),middle=Math.floor(points.length/2);
+    const latitude=sortedLat[middle],longitude=sortedLon[middle];
+    const representative=[...points].sort((a,b)=>window.RideTrackerGpsMath.distanceMeters({latitude,longitude},a)-window.RideTrackerGpsMath.distanceMeters({latitude,longitude},b))[0];
+    return{latitude:Number(representative.latitude),longitude:Number(representative.longitude),horizontalAccuracyM:finite(representative.horizontalAccuracyM)?Number(representative.horizontalAccuracyM):null,capturedAt:new Date().toISOString(),source:'recorded-ride-gps',pointCount:points.length};
   }
 
   function weatherCodeText(code) {
@@ -157,7 +167,7 @@
     if (!explicit && !prefs.externalLookupConsent) { state.busy=false; return []; }
     if (status) status.textContent = 'Standort und Parks werden ermittelt …';
     try {
-      state.location = await requestLocation(); const radiusM = Number(panel?.querySelector('[data-radius]')?.value || preferences().parkRadiusM || 25000);
+      state.location ||= await requestLocation(); const radiusM = Number(panel?.querySelector('[data-radius]')?.value || preferences().parkRadiusM || 25000);
       savePreferences({parkRadiusM:radiusM}); state.mapZoom = radiusM <= 5000 ? 13 : radiusM <= 15000 ? 11 : radiusM <= 30000 ? 10 : 9;
       const engine = window.RideTrackerReferenceEngine; if (!engine?.nearbyParks) throw new Error('Parkdaten-Modul ist nicht verfügbar.');
       const found = await engine.nearbyParks(state.location, radiusM);
@@ -172,13 +182,13 @@
   }
 
   function ensureContextPanel() {
-    const preflight = document.getElementById('rtCommunityPreflight'); if (!preflight) return null;
+    const draft = document.getElementById('rtRideDraft61'); if (!draft) return null;
     let panel = document.getElementById('rtRideContext64'); if (panel) return panel;
     const prefs = preferences(); panel = document.createElement('section'); panel.id = 'rtRideContext64';
-    panel.innerHTML = `<div class="rt64-context-head"><div><h3>Park, Attraktion & Wetter</h3><p>Die Fahrt bleibt lokal. Externe Standortabrufe erfolgen nur mit deiner Auswahl.</p></div><button type="button" data-load>Parks im Umkreis suchen</button></div><div class="rt64-options"><label>Umkreis<select data-radius><option value="5000">5 km</option><option value="15000">15 km</option><option value="25000">25 km</option><option value="50000">50 km</option></select></label><label class="rt64-check"><input type="checkbox" data-weather ${prefs.weatherEnabled?'checked':''}> Wetter bei Start und Ende abrufen</label></div><div class="rt64-privacy">Beim Laden werden gerundete Koordinaten an OpenStreetMap/Overpass und – falls aktiviert – Open-Meteo übertragen. Die Aufnahme funktioniert auch ohne diese Dienste.</div><div class="rt64-status" data-status>Noch keine externen Standortdaten geladen.</div><div class="rt64-map" data-map></div><div class="rt64-parks" data-parks></div><label class="rt64-attraction">Attraktion<select data-attractions disabled><option>Attraktion auswählen …</option></select></label><div class="rt64-source"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">${OSM_ATTRIBUTION}</a> · <a href="https://open-meteo.com/" target="_blank" rel="noopener">${WEATHER_ATTRIBUTION}</a></div>`;
-    preflight.querySelector('[data-status]')?.after(panel); panel.querySelector('[data-radius]').value = String(prefs.parkRadiusM);
+    panel.innerHTML = `<div class="rt64-context-head"><div><h3>Park & Attraktion nach der Fahrt</h3><p>Erst jetzt wird die aufgezeichnete Route ausgewertet. Die Aufnahme wurde vorher ohne Parkabfrage gestartet.</p></div><button type="button" data-load>Parkkarte jetzt laden</button></div><div class="rt64-options"><label>Umkreis<select data-radius><option value="5000">5 km</option><option value="15000">15 km</option><option value="25000">25 km</option><option value="50000">50 km</option></select></label><label class="rt64-check"><input type="checkbox" data-weather ${prefs.weatherEnabled?'checked':''}> Wetter bei Start und Ende speichern</label></div><div class="rt64-privacy">Beim bewussten Laden werden gerundete Koordinaten an OpenStreetMap/Overpass und – falls aktiviert – Open-Meteo übertragen. Ohne Auswahl bleiben Route und Kontext lokal.</div><div class="rt64-status" data-status>Die Parkermittlung beginnt nach dem Beenden der Fahrt.</div><div class="rt64-map" data-map></div><div class="rt64-parks" data-parks></div><label class="rt64-attraction">Attraktion<select data-attractions disabled><option>Attraktion auswählen …</option></select></label><div class="rt64-source"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">${OSM_ATTRIBUTION}</a> · <a href="https://open-meteo.com/" target="_blank" rel="noopener">${WEATHER_ATTRIBUTION}</a></div>`;
+    draft.querySelector('.rt61-status')?.before(panel); panel.querySelector('[data-radius]').value = String(prefs.parkRadiusM);
     panel.querySelector('[data-load]').onclick = () => void loadNearbyParks({explicit:true}).catch(error => { panel.querySelector('[data-status]').textContent = `Parks konnten nicht geladen werden: ${error.message}`; });
-    panel.querySelector('[data-weather]').onchange = event => savePreferences({weatherEnabled:event.target.checked}); renderParkList(); return panel;
+    panel.querySelector('[data-weather]').onchange = event => {setWeatherEnabled(event.target.checked);if(event.target.checked&&state.postRide)void captureWeather('end').catch(error=>log('warn','End weather failed',{message:error.message}));}; renderParkList(); return panel;
   }
 
   function renderContextStatus() {
@@ -264,10 +274,21 @@
 
   async function prepareForRecording() {
     state.recordingStartedAt=new Date().toISOString();
-    try{state.location=await requestLocation();}catch(error){log('warn','Location unavailable before recording',{message:error.message});}
-    if(preferences().externalLookupConsent&&!state.parks.length&&state.location)try{await loadNearbyParks();}catch(error){log('warn','Automatic park lookup failed',{message:error.message});}
-    if(preferences().weatherEnabled&&state.location)try{await captureWeather('start');}catch(error){log('warn','Start weather failed',{message:error.message});}
-    savePending();return{location:Boolean(state.location),park:state.selectedPark?.name||null,attraction:state.selectedAttraction?.name||null,weather:Boolean(state.weather.start)};
+    if(preferences().weatherEnabled){
+      try{state.location=await requestLocation();}catch(error){log('warn','Location unavailable for start weather',{message:error.message});}
+      if(state.location)try{await captureWeather('start');}catch(error){log('warn','Start weather failed',{message:error.message});}
+    }
+    savePending();return{location:Boolean(state.location),parkLookup:'deferred-until-stop',weather:Boolean(state.weather.start)};
+  }
+
+  async function completeAfterRecording() {
+    state.recordingStoppedAt=new Date().toISOString();state.postRide=true;state.location=recordedLocation()||currentGpsPoint()||state.location;
+    const panel=ensureContextPanel(),status=panel?.querySelector('[data-status]');
+    if(status)status.textContent=state.location?`Fahrt beendet · ${state.location.pointCount||1} GPS-Punkt(e) stehen für die Parkermittlung bereit.`:'Fahrt beendet · kein GPS-Punkt vorhanden. Park und Attraktion können manuell eingetragen werden.';
+    if(preferences().weatherEnabled)try{await captureWeather('end');}catch(error){log('warn','End weather failed',{message:error.message});}
+    if(preferences().externalLookupConsent&&state.location)try{await loadNearbyParks({explicit:false});}catch(error){if(status)status.textContent=`Automatische Parkermittlung fehlgeschlagen: ${error.message}. Die manuelle Auswahl bleibt verfügbar.`;log('warn','Post-ride park lookup failed',{message:error.message});}
+    savePending();syncDraftFields();enhanceDraft();window.dispatchEvent(new CustomEvent('ridetracker:post-ride-context-ready',{detail:{location:Boolean(state.location),parks:state.parks.length,automatic:Boolean(preferences().externalLookupConsent)}}));
+    return{location:Boolean(state.location),parks:state.parks.length,park:state.selectedPark?.name||null,attraction:state.selectedAttraction?.name||null,weather:Boolean(state.weather.end)};
   }
 
   function ensureFaq() {
@@ -284,11 +305,11 @@
 
   function scheduleEnhancement(){if(state.observerScheduled)return;state.observerScheduled=true;requestAnimationFrame(()=>{state.observerScheduled=false;ensureContextPanel();enhanceDraft();addFaqEntry();});}
   function install(){restorePending();ensureContextPanel();enhanceDraft();ensureFaq();addFaqEntry();
-    window.addEventListener('ridetracker:recording-started',()=>{state.recordingStartedAt=new Date().toISOString();savePending();});
-    window.addEventListener('ridetracker:recording-stopped',()=>{if(preferences().weatherEnabled)void captureWeather('end').catch(error=>log('warn','End weather failed',{message:error.message}));setTimeout(()=>{syncDraftFields();enhanceDraft();},800);});
-    window.addEventListener('ridetracker:new-ride-session',()=>{state.weather={start:null,end:null};state.thumbnail=null;state.recordingStartedAt=null;sessionStorage.removeItem(PENDING_KEY);renderContextStatus();});
+    window.addEventListener('ridetracker:recording-started',()=>{state.recordingStartedAt=new Date().toISOString();state.recordingStoppedAt=null;state.postRide=false;savePending();});
+    window.addEventListener('ridetracker:recording-stopped',()=>{void completeAfterRecording();});
+    window.addEventListener('ridetracker:new-ride-session',()=>{state.location=null;state.parks=[];state.attractions=[];state.selectedPark=null;state.selectedAttraction=null;state.country=null;state.weather={start:null,end:null};state.thumbnail=null;state.recordingStartedAt=null;state.recordingStoppedAt=null;state.postRide=false;sessionStorage.removeItem(PENDING_KEY);renderParkList();renderContextStatus();});
     const observer=new MutationObserver(scheduleEnhancement);observer.observe(document.body,{childList:true,subtree:true});
-    window.RideTrackerRideContext={prepareForRecording,persistToRide,validateDraft,loadNearbyParks,captureWeather,selection:()=>pendingSnapshot(),openFaq};
+    window.RideTrackerRideContext={prepareForRecording,completeAfterRecording,persistToRide,validateDraft,loadNearbyParks,captureWeather,setWeatherEnabled,selection:()=>pendingSnapshot(),openFaq};
     log('info','Park map, weather, licensed thumbnails and FAQ installed',{privacyDefault:'local'});
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();

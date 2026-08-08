@@ -16,6 +16,7 @@ const required = [
   'update65.js',
   'shared/ride-engine/gps-speed.js',
   'shared/ride-engine/g-force-quality.js',
+  'shared/overlay/g-force-visualizer.js',
   'shared/ride-engine/browser-adapter.js',
   'shared/core/community-model.js',
   'shared/core/community-backend.js',
@@ -39,6 +40,9 @@ requireToken('shared/ride-engine/gps-speed.js', 'createEstimator', 'Canonical GP
 requireToken('shared/ride-engine/gps-speed.js', 'non-monotonic-browser-timestamp', 'GPS timestamp repair missing');
 requireToken('shared/ride-engine/gps-speed.js', 'position-uncertain', 'Uncertain shielded GPS state missing');
 requireToken('shared/ride-engine/g-force-quality.js', 'calibrationCompatibility', 'Calibration orientation validation missing');
+requireToken('shared/overlay/g-force-visualizer.js', 'createTrail', 'G-force history trail missing');
+requireToken('shared/overlay/g-force-visualizer.js', 'horizontalPoint', 'Horizontal G-force point missing');
+requireToken('shared/overlay/g-force-visualizer.js', 'verticalPoint', 'Vertical G-force point missing');
 requireToken('shared/ride-engine/gps-speed.js', 'mergeCanonicalGpsIntoSamples', 'Canonical GPS merge missing');
 requireToken('update54.js', 'RideTrackerGpsMath?.mergeCanonicalGpsIntoSamples', 'GPS persistence must use canonical speed');
 requireToken('update58.js', "ridetracker:canonical-gps", 'Filtered GPS event missing');
@@ -76,7 +80,9 @@ requireToken('shared/visualization/track-3d.js', 'mergeModels', 'Server-compatib
 requireToken('shared/visualization/track-3d.js', 'nearestProjectedPoint', '3D point picking missing');
 requireToken('update63.js', 'RideTrackerCompass', 'Compass runtime missing');
 requireToken('update63.js', 'webkitCompassHeading', 'iOS compass support missing');
-requireToken('update64.js', 'Parks im Umkreis suchen', 'Nearby park chooser missing');
+requireToken('update64.js', 'Parkkarte jetzt laden', 'Post-ride park chooser missing');
+requireToken('update64.js', 'completeAfterRecording', 'Park lookup must be deferred until recording stopped');
+rejectToken('update64.js', 'if(preferences().externalLookupConsent&&!state.parks.length&&state.location)', 'Park lookup must never run before recording');
 requireToken('update64.js', 'externalLookupConsent:false', 'External location calls must default to off');
 requireToken('update64.js', 'weatherEnabled:false', 'Weather lookup must default to off');
 requireToken('update64.js', 'allowedCommonsLicense', 'Stock image license filter missing');
@@ -92,6 +98,7 @@ requireToken('update38.js', "!document.body.classList.contains('rt-hud-editor-op
 const html = source['index.html'];
 const gpsPosition = html.indexOf('shared/ride-engine/gps-speed.js?v=');
 const adapterPosition = html.indexOf('shared/ride-engine/browser-adapter.js?v=');
+const visualizerPosition = html.indexOf('shared/overlay/g-force-visualizer.js?v=');
 const healthPosition = html.indexOf('update58.js?v=');
 const modelPosition = html.indexOf('shared/core/community-model.js?v=');
 const releasePosition = html.indexOf('shared/core/release-manifest.js?v=');
@@ -103,6 +110,9 @@ const contextPosition = html.indexOf('update64.js?v=');
 const built = gpsPosition >= 0 || adapterPosition >= 0 || healthPosition >= 0 || communityPosition >= 0;
 if (built && (gpsPosition < 0 || adapterPosition < 0 || healthPosition < 0 || gpsPosition > adapterPosition || gpsPosition > healthPosition)) {
   throw new Error('Canonical GPS math must load before the adapter and GPS health module');
+}
+if (built && (visualizerPosition < 0 || visualizerPosition > healthPosition)) {
+  throw new Error('G-force visualizer must load before the diagnostics runtime');
 }
 if (built && (modelPosition < 0 || releasePosition < 0 || communityPosition < 0 || modelPosition > communityPosition || releasePosition > communityPosition || communityPosition < healthPosition)) {
   throw new Error('Community model and release manifest must load before update61, after the GPS health runtime');

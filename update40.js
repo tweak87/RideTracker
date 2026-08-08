@@ -11,7 +11,7 @@
   `;
   document.head.appendChild(style);
 
-  const state = { busy: false };
+  const state = { busy: false, priming: null };
   const button = id => document.getElementById(id);
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   const recordingActive = () => button('stop')?.disabled === false;
@@ -47,6 +47,21 @@
     const toggle = button('videoMode');
     if (!toggle) return;
     if (enabled !== videoEnabled()) toggle.click();
+  }
+
+  function primeForUserGesture({ video = true, fullscreen = true } = {}) {
+    setVideoEnabled(video);
+    if (video && fullscreen) window.RideTrackerRecordingFullscreen?.beginPreparation?.();
+    const init = button('init');
+    if (!initialized() && init && !init.disabled) {
+      // This click must remain in the original tap stack on iOS so the motion,
+      // camera and microphone permission sheets are allowed to open.
+      init.click();
+    } else if (video && initialized() && !cameraReady() && !state.priming) {
+      state.priming = Promise.resolve(recoverCamera()).finally(() => { state.priming = null; });
+    }
+    void window.RideTrackerCompass?.requestPermission?.();
+    return state.priming || Promise.resolve(true);
   }
 
   async function recoverCamera() {
@@ -120,8 +135,10 @@
     if (state.busy || recordingActive()) return recordingActive();
     state.busy = true;
     try {
+      primeForUserGesture({ video, fullscreen:video && !minimize });
       const session = window.RideTrackerRecordingSession;
       if (session?.confirmReplaceBeforeStart && session.confirmReplaceBeforeStart() === false) {
+        await window.RideTrackerRecordingFullscreen?.abortPreparation?.();
         refresh();
         return false;
       }
@@ -130,10 +147,11 @@
 
       // Important on iOS: trigger the base permission flow immediately from the user action.
       const initialization = ensureInitialized({ video });
-      if (!(await initialization)) return false;
+      if (!(await initialization)) { await window.RideTrackerRecordingFullscreen?.abortPreparation?.(); return false; }
 
       const calibrationManager = window.RideTrackerCalibrationManager;
       if (calibrationManager && !(await calibrationManager.ensureForStart())) {
+        await window.RideTrackerRecordingFullscreen?.abortPreparation?.();
         refresh();
         return false;
       }
@@ -141,10 +159,12 @@
       const start = button('start');
       if (!start) {
         message('Aufnahme-Startschaltfläche fehlt.');
+        await window.RideTrackerRecordingFullscreen?.abortPreparation?.();
         return false;
       }
       if (start.disabled) {
         message('Aufnahme noch nicht startbereit. Initialisierung und Kalibrierung werden geprüft.');
+        await window.RideTrackerRecordingFullscreen?.abortPreparation?.();
         refresh();
         return false;
       }
@@ -154,6 +174,7 @@
       const started = await waitFor(recordingActive, 1800);
       if (!started) {
         message('Aufnahme konnte nicht gestartet werden.');
+        await window.RideTrackerRecordingFullscreen?.abortPreparation?.();
         refresh();
         return false;
       }
@@ -163,6 +184,7 @@
         if (!recorderStarted) {
           button('stop')?.click();
           message('Videoaufnahme konnte nicht gestartet werden. Kamera/MediaRecorder bitte erneut prüfen.');
+          await window.RideTrackerRecordingFullscreen?.abortPreparation?.();
           refresh();
           return false;
         }
@@ -175,6 +197,12 @@
       if (minimize) await window.RideTrackerRecordingFullscreen?.exit?.();
       refresh();
       return true;
+    } catch (error) {
+      if (recordingActive()) button('stop')?.click();
+      await window.RideTrackerRecordingFullscreen?.abortPreparation?.();
+      message(`Aufnahme konnte nicht gestartet werden: ${error?.message || error}`);
+      refresh();
+      return false;
     } finally {
       state.busy = false;
     }
@@ -270,6 +298,7 @@
     minimizeAndStartVideo: () => canonicalStart({ video: true, minimize: true }),
     ensureInitialized,
     recoverCamera,
+    primeForUserGesture,
     refresh
   };
 })();

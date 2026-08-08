@@ -2,8 +2,8 @@
   'use strict';
   globalThis.RideTrackerReleaseManifest = Object.freeze({
     product: 'RideTracker',
-    version: '2026.08.08-ice-telemetry-fire8.3',
-    channel: 'ice-gps-gforce-fire8',
+    version: '2026.08.08-video-gforce-trails.4',
+    channel: 'fullscreen-video-postride-context-gforce-trails',
     releasedAt: '2026-08-08T12:00:00.000Z',
     baseline: Object.freeze({
       label: 'Stable speed, compass and spatial inspector baseline before ride context and privacy hardening',
@@ -41,7 +41,11 @@
       'shielded-position-uncertainty',
       'calibration-orientation-validation',
       'horizontal-g-force-diagnostics',
-      'verified-fire-os-8-apk'
+      'verified-fire-os-8-apk',
+      'ios-user-gesture-recording-prime',
+      'fullscreen-video-hud-preparation',
+      'post-ride-only-park-detection',
+      'horizontal-vertical-g-force-trails'
     ])
   });
 })();

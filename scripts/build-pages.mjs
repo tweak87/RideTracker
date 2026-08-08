@@ -44,6 +44,7 @@ const tags = [
   scriptTag('core/storage/web-database-service.js'),
   scriptTag('shared/ride-engine/gps-speed.js'),
   scriptTag('shared/ride-engine/g-force-quality.js'),
+  scriptTag('shared/overlay/g-force-visualizer.js'),
   scriptTag('shared/core/community-model.js'),
   scriptTag('shared/core/community-backend.js'),
   scriptTag('shared/visualization/track-3d.js'),
