@@ -73,22 +73,28 @@
     if (exportDialog && !exportDialog.hidden) { exportDialog.hidden = true; closed.push('rtExportDialog'); }
 
     const hud = document.getElementById('rtStandaloneHudEditor');
-    try { await window.RideTrackerStandaloneHudEditor?.close?.(); }
-    catch (error) { add('warn','boot','HUD recovery failed',error); }
-    if (hud?.classList.contains('open')) { hud.classList.remove('open'); closed.push('rtStandaloneHudEditor'); }
+    const activeHud = hud?.classList.contains('open') && document.body.classList.contains('rt-hud-editor-open');
+    if (!activeHud || forceHome) {
+      try { await window.RideTrackerStandaloneHudEditor?.close?.(); }
+      catch (error) { add('warn','boot','HUD recovery failed',error); }
+      if (hud?.classList.contains('open')) { hud.classList.remove('open'); closed.push('rtStandaloneHudEditor'); }
+    }
     const device = document.getElementById('rtDeviceCenter');
     if (device?.classList.contains('open')) { device.classList.remove('open'); closed.push('rtDeviceCenter'); }
     document.querySelectorAll('.rt-home-panel.open').forEach(panel=>{panel.classList.remove('open');closed.push('rt-home-panel');});
 
-    document.body.classList.remove('rt-dialog-open','rt-navigation-open','rt-hud-editor-open');
-    try {
-      if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
-      else if (document.webkitFullscreenElement && document.webkitExitFullscreen) await document.webkitExitFullscreen();
-    } catch (error) { add('warn','boot','Fullscreen recovery failed',error); }
-    document.documentElement.style.removeProperty('overflow');
+    document.body.classList.remove('rt-dialog-open','rt-navigation-open');
+    if (!activeHud || forceHome) document.body.classList.remove('rt-hud-editor-open');
+    if (!activeHud || forceHome) {
+      try {
+        if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+        else if (document.webkitFullscreenElement && document.webkitExitFullscreen) await document.webkitExitFullscreen();
+      } catch (error) { add('warn','boot','Fullscreen recovery failed',error); }
+      document.documentElement.style.removeProperty('overflow');
+      document.body.style.removeProperty('overflow');
+    }
     document.documentElement.style.removeProperty('pointer-events');
     document.documentElement.removeAttribute('inert');
-    document.body.style.removeProperty('overflow');
     document.body.style.removeProperty('pointer-events');
     document.body.removeAttribute('inert');
 

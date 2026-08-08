@@ -50,8 +50,10 @@ requireToken('index.html', "ridetracker:recording-stopped", 'Recording-stop even
 requireToken('update46.js', 'ensureInlineDashboard', 'Recoverable home dashboard missing');
 requireToken('update46.js', "classList.toggle('rt-record-mode', route === 'record')", 'Canonical record route must own recording mode');
 requireToken('update49.js', "root.classList.add('open')", 'HUD manager must open the editor synchronously');
+requireToken('update49.js', "OverlayManager.routeChanged('hud')", 'HUD manager must own its active route');
 requireToken('update17.js', 'button:not(.rt-recording-stop)', 'Recording stop delegation must exclude its own control');
 requireToken('update60.js', 'RideTrackerFrontendNavigation?.ensureHome?.()', 'Safe boot must restore the home dashboard');
+requireToken('update60.js', "const activeHud = hud?.classList.contains('open')", 'Safe boot must preserve an intentionally opened HUD');
 requireToken('update60.js', "document.querySelectorAll('.rt-home-panel.open')", 'Safe boot must close stale home panels');
 requireToken('update61.js', 'rtCommunityBottomNav', 'Unified mobile navigation missing');
 requireToken('update61.js', 'RideTrackerPreflight', 'Recording preflight API missing');
