@@ -36,6 +36,7 @@ test('all home tools open and safe boot restores the start page', async ({ page 
     const recovery=await page.evaluate(()=>window.RideTrackerDiagnostics.safeBoot());
     expect(recovery).toMatchObject({activeDialog:null,fullscreen:false});
     expect(recovery.rootPointerEvents).not.toBe('none');
+    expect(recovery.homePointerEvents).not.toBe('none');
     await expect.poll(()=>page.evaluate(()=>window.RideTrackerDialogManager.active())).toBe(null);
     await expect(page.locator('#rtInlineDashboard')).toBeVisible();
   }

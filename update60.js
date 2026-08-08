@@ -99,13 +99,17 @@
         else if (window.RideTrackerNavigationRegistry?.navigate) void window.RideTrackerNavigationRegistry.navigate('home');
       } catch (error) { add('error','boot','Home recovery failed',error); }
       const inline = document.getElementById('rtInlineDashboard');
-      if (inline) inline.hidden = false;
+      if (inline) {
+        inline.hidden = false;
+        inline.style.setProperty('pointer-events','auto','important');
+        inline.removeAttribute('inert');
+      }
       document.body.dataset.rtRoute = 'home';
     }
 
     const actions = document.querySelectorAll('#rtInlineDashboard [data-registry-route],#rtInlineDashboard button');
     actions.forEach(button => {
-      button.style.removeProperty('pointer-events');
+      button.style.setProperty('pointer-events','auto','important');
       button.removeAttribute('inert');
       button.disabled = false;
     });

@@ -262,8 +262,8 @@
       closeFoundationViews();byId('rtRideDraft61')?.setAttribute('hidden','');
       const result=await original();
       renderHome();syncBottomNav();
-      const recovery={...result,activeDialog:window.RideTrackerDialogManager?.active?.()||null,fullscreen:Boolean(document.fullscreenElement||document.webkitFullscreenElement),rootPointerEvents:getComputedStyle(document.documentElement).pointerEvents};
-      log(recovery.activeDialog||recovery.fullscreen||recovery.rootPointerEvents==='none'?'warn':'info','boot','Safe boot completed',recovery);
+      const recovery={...result,activeDialog:window.RideTrackerDialogManager?.active?.()||null,fullscreen:Boolean(document.fullscreenElement||document.webkitFullscreenElement),rootPointerEvents:getComputedStyle(document.documentElement).pointerEvents,homePointerEvents:getComputedStyle(byId('rtInlineDashboard')).pointerEvents};
+      log(recovery.activeDialog||recovery.fullscreen||recovery.rootPointerEvents==='none'||recovery.homePointerEvents==='none'?'warn':'info','boot','Safe boot completed',recovery);
       return recovery;
     };safeBoot.__rt61=true;diagnostics.safeBoot=safeBoot;
   }

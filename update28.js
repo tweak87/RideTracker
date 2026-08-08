@@ -122,7 +122,9 @@
 
   async function enterEditorFullscreen(){
     root.classList.add('open'); document.documentElement.style.overflow='hidden'; document.body.style.overflow='hidden'; render();
-    try { if(root.requestFullscreen&&!document.fullscreenElement) await root.requestFullscreen({navigationUI:'hide'}); else if(root.webkitRequestFullscreen) root.webkitRequestFullscreen(); } catch(_) {}
+    // The editor already fills the visual viewport through CSS. Native fullscreen
+    // puts Chromium's top layer between the editor and the app and can leave the
+    // underlying navigation non-interactive after exit on some devices.
   }
   async function closeEditor(){
     try { if(document.fullscreenElement) await document.exitFullscreen(); else if(document.webkitFullscreenElement&&document.webkitExitFullscreen) document.webkitExitFullscreen(); } catch(_) {}
