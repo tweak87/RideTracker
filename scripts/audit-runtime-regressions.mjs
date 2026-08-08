@@ -6,8 +6,11 @@ const required = [
   'update54.js',
   'update58.js',
   'update60.js',
+  'update61.js',
   'shared/ride-engine/gps-speed.js',
   'shared/ride-engine/browser-adapter.js',
+  'shared/core/community-model.js',
+  'shared/core/release-manifest.js',
 ];
 for (const file of required) {
   if (!fs.existsSync(file)) throw new Error(`Missing runtime file: ${file}`);
@@ -39,14 +42,27 @@ requireToken('index.html', "ridetracker:recording-stopped", 'Recording-stop even
 requireToken('update46.js', 'ensureInlineDashboard', 'Recoverable home dashboard missing');
 requireToken('update60.js', 'RideTrackerFrontendNavigation?.ensureHome?.()', 'Safe boot must restore the home dashboard');
 requireToken('update60.js', "document.querySelectorAll('.rt-home-panel.open')", 'Safe boot must close stale home panels');
+requireToken('update61.js', 'rtCommunityBottomNav', 'Unified mobile navigation missing');
+requireToken('update61.js', 'RideTrackerPreflight', 'Recording preflight API missing');
+requireToken('update61.js', 'RideTrackerSupportCenter', 'Support center API missing');
+requireToken('update61.js', 'RideTrackerAdminCenter', 'Local admin center API missing');
+requireToken('shared/core/community-model.js', 'ready-for-backend', 'Community publication state missing');
+requireToken('shared/core/community-model.js', 'publicProjection', 'Privacy-safe community projection missing');
+requireToken('shared/core/release-manifest.js', 'rollback/pre-community-foundation-20260808', 'Documented rollback point missing');
 
 const html = source['index.html'];
 const gpsPosition = html.indexOf('shared/ride-engine/gps-speed.js?v=');
 const adapterPosition = html.indexOf('shared/ride-engine/browser-adapter.js?v=');
 const healthPosition = html.indexOf('update58.js?v=');
-const built = gpsPosition >= 0 || adapterPosition >= 0 || healthPosition >= 0;
+const modelPosition = html.indexOf('shared/core/community-model.js?v=');
+const releasePosition = html.indexOf('shared/core/release-manifest.js?v=');
+const communityPosition = html.indexOf('update61.js?v=');
+const built = gpsPosition >= 0 || adapterPosition >= 0 || healthPosition >= 0 || communityPosition >= 0;
 if (built && (gpsPosition < 0 || adapterPosition < 0 || healthPosition < 0 || gpsPosition > adapterPosition || gpsPosition > healthPosition)) {
   throw new Error('Canonical GPS math must load before the adapter and GPS health module');
+}
+if (built && (modelPosition < 0 || releasePosition < 0 || communityPosition < 0 || modelPosition > communityPosition || releasePosition > communityPosition || communityPosition < healthPosition)) {
+  throw new Error('Community model and release manifest must load before update61, after the GPS health runtime');
 }
 
 console.log('Runtime regression audit passed.');

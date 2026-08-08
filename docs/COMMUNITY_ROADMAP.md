@@ -15,6 +15,15 @@ RideTracker soll sich von einem persönlichen Sensorlogger zu einer Community-Pl
 
 ## Entwicklungsreihenfolge
 
+### Community Foundation — umgesetzt
+
+- einheitliche mobile Navigation
+- Aufnahme-Preflight und automatische Vorbereitung
+- lokales Sichtbarkeits- und Veröffentlichungsmodell
+- Support-/Logcenter und lokale Administration
+- dokumentierter Rollback-Punkt
+- Chromium-/WebKit-Browsertests für mobile Kernabläufe
+
 ### M1 — Stabile native Aufzeichnung
 
 - Sensoren, Video und Zeitbasis auf iOS und Android stabilisieren
