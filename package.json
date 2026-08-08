@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build:pages": "node scripts/build-pages.mjs dist",
-    "test:unit": "node shared/ride-engine/ride-engine.test.mjs && node shared/ride-engine/sensor-fusion.test.mjs && node shared/ride-engine/gps-speed.test.mjs && node shared/ride-engine/ride-package.test.mjs && node shared/overlay/overlay-core.test.mjs && node core/ridetracker-core.test.mjs && node core/plugin-capabilities.test.mjs && node shared/core/community-model.test.mjs",
+    "test:unit": "node shared/ride-engine/ride-engine.test.mjs && node shared/ride-engine/sensor-fusion.test.mjs && node shared/ride-engine/gps-speed.test.mjs && node shared/ride-engine/ride-package.test.mjs && node shared/overlay/overlay-core.test.mjs && node core/ridetracker-core.test.mjs && node core/plugin-capabilities.test.mjs && node shared/core/community-model.test.mjs && node shared/core/community-backend.test.mjs && node shared/visualization/track-3d.test.mjs && node backend/supabase/community-schema.test.mjs",
     "test:audit": "node scripts/audit-web-startup.mjs && node scripts/audit-frontend-managers.mjs && node scripts/audit-runtime-regressions.mjs",
     "test:e2e": "npm run build:pages && playwright test",
     "test": "npm run test:unit && npm run test:audit"

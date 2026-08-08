@@ -48,16 +48,16 @@ test('support self-test and rollback documentation are available', async ({ page
   expect(selfTest.results.map(result=>result.name)).toEqual(expect.arrayContaining(['Release-Manifest','Hauptnavigation','IndexedDB','Main-Thread','Aufnahmekette']));
   expect(selfTest.results.find(result=>result.name==='Main-Thread')?.state).not.toBe('fail');
   await page.evaluate(()=>window.RideTrackerAdminCenter.open());
-  await expect(page.locator('#rtAdminCenter61')).toContainText('rollback/pre-community-foundation-20260808');
+  await expect(page.locator('#rtAdminCenter61')).toContainText('rollback/pre-community-backend-20260808');
   const release=await page.evaluate(()=>window.RideTrackerRelease.manifest());
-  expect(release.baseline.commit).toBe('8485df203665f8e93558fcbcac72a890fc6e9c3b');
+  expect(release.baseline.commit).toBe('3bd0175b93c7babe515f91555352e7711020fa7f');
 });
 
 test('navigation remains usable after orientation changes', async ({ page }) => {
   await page.setViewportSize({width:844,height:390});
   await expect(page.locator('#rtCommunityBottomNav')).toBeVisible();
   await page.locator('#rtCommunityBottomNav [data-community-route="community"]').click();
-  await expect(page.locator('#rtCommunityDiscover')).toBeVisible();
+  await expect(page.locator('#rtCommunityHub62')).toBeVisible();
   await page.setViewportSize({width:390,height:844});
   const box=await page.locator('#rtCommunityBottomNav').boundingBox();
   expect(box).not.toBeNull();expect(box.y+box.height).toBeLessThanOrEqual(845);

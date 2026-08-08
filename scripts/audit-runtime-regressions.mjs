@@ -7,10 +7,13 @@ const required = [
   'update58.js',
   'update60.js',
   'update61.js',
+  'update62.js',
   'shared/ride-engine/gps-speed.js',
   'shared/ride-engine/browser-adapter.js',
   'shared/core/community-model.js',
+  'shared/core/community-backend.js',
   'shared/core/release-manifest.js',
+  'shared/visualization/track-3d.js',
 ];
 for (const file of required) {
   if (!fs.existsSync(file)) throw new Error(`Missing runtime file: ${file}`);
@@ -48,7 +51,12 @@ requireToken('update61.js', 'RideTrackerSupportCenter', 'Support center API miss
 requireToken('update61.js', 'RideTrackerAdminCenter', 'Local admin center API missing');
 requireToken('shared/core/community-model.js', 'ready-for-backend', 'Community publication state missing');
 requireToken('shared/core/community-model.js', 'publicProjection', 'Privacy-safe community projection missing');
-requireToken('shared/core/release-manifest.js', 'rollback/pre-community-foundation-20260808', 'Documented rollback point missing');
+requireToken('shared/core/release-manifest.js', 'rollback/pre-community-backend-20260808', 'Documented rollback point missing');
+requireToken('update61.js', 'RideTrackerCommunityHub?.open', 'Community navigation must delegate to the full hub');
+requireToken('update62.js', 'RideTrackerCommunityHub', 'Community backend/3D hub missing');
+requireToken('shared/core/community-backend.js', 'SERVICE_ROLE_REJECTED', 'Service-role browser protection missing');
+requireToken('shared/core/community-backend.js', 'RAW_GPS_REJECTED', 'Raw GPS upload protection missing');
+requireToken('shared/visualization/track-3d.js', 'mergeModels', 'Server-compatible multi-ride model merge missing');
 
 const html = source['index.html'];
 const gpsPosition = html.indexOf('shared/ride-engine/gps-speed.js?v=');
@@ -57,12 +65,18 @@ const healthPosition = html.indexOf('update58.js?v=');
 const modelPosition = html.indexOf('shared/core/community-model.js?v=');
 const releasePosition = html.indexOf('shared/core/release-manifest.js?v=');
 const communityPosition = html.indexOf('update61.js?v=');
+const backendPosition = html.indexOf('shared/core/community-backend.js?v=');
+const track3dPosition = html.indexOf('shared/visualization/track-3d.js?v=');
+const community3dPosition = html.indexOf('update62.js?v=');
 const built = gpsPosition >= 0 || adapterPosition >= 0 || healthPosition >= 0 || communityPosition >= 0;
 if (built && (gpsPosition < 0 || adapterPosition < 0 || healthPosition < 0 || gpsPosition > adapterPosition || gpsPosition > healthPosition)) {
   throw new Error('Canonical GPS math must load before the adapter and GPS health module');
 }
 if (built && (modelPosition < 0 || releasePosition < 0 || communityPosition < 0 || modelPosition > communityPosition || releasePosition > communityPosition || communityPosition < healthPosition)) {
   throw new Error('Community model and release manifest must load before update61, after the GPS health runtime');
+}
+if (built && (backendPosition < 0 || track3dPosition < 0 || community3dPosition < 0 || backendPosition > community3dPosition || track3dPosition > community3dPosition || community3dPosition < communityPosition)) {
+  throw new Error('Community backend and 3D runtime must load before update62, after the community foundation');
 }
 
 console.log('Runtime regression audit passed.');

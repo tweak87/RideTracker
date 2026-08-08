@@ -1,0 +1,174 @@
+(() => {
+  'use strict';
+
+  const META_KEY='rideTracker.savedRides.v2';
+  const backend=window.RideTrackerCommunityBackend?.client;
+  const track3d=window.RideTrackerTrack3D;
+  const state={tab:'feed',catalog:[],feed:[],friends:[],moderation:[],role:'member',renderer:null,busy:false};
+  const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  const key=value=>String(value||'').trim().toLocaleLowerCase('de-DE')||'__unbekannt__';
+  const readJson=(storageKey,fallback)=>{try{return JSON.parse(localStorage.getItem(storageKey)||JSON.stringify(fallback));}catch(_){return fallback;}};
+  const metadata=()=>readJson(META_KEY,[]);
+  const fmtDate=value=>{try{return new Intl.DateTimeFormat('de-DE',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value));}catch(_){return '–';}};
+  const fmtDistance=value=>`${((Number(value)||0)/1000).toFixed(2)} km`;
+  const fmtDuration=value=>{const seconds=Math.max(0,Number(value)||0);return `${Math.floor(seconds/60)}:${String(Math.round(seconds%60)).padStart(2,'0')} min`;};
+  const log=(level,area,message,data)=>window.RideTrackerSupportCenter?.log?.(level,area,message,data);
+
+  const style=document.createElement('style');
+  style.textContent=`
+    #rtCommunityHub62{position:fixed;inset:calc(max(env(safe-area-inset-top),12px) + 58px) 0 0;z-index:2485500;overflow:auto;padding:16px 12px calc(92px + env(safe-area-inset-bottom));background:#07111f;color:#f5fbff}#rtCommunityHub62[hidden],.rt62-modal[hidden]{display:none!important}.rt62-shell{width:min(1040px,100%);margin:auto}.rt62-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px}.rt62-head h2{margin:0;font-size:clamp(26px,7vw,40px)}.rt62-head p{margin:5px 0 0;color:#96aac1}.rt62-head-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.rt62-status{display:inline-flex;align-items:center;gap:6px;border:1px solid #29435f;background:#0c1b2d;border-radius:999px;padding:7px 10px;color:#b8c9da;font-size:11px}.rt62-status i{width:7px;height:7px;border-radius:50%;background:#64748b}.rt62-status.online i{background:#5ee0a0}.rt62-tabs{display:flex;gap:7px;overflow:auto;padding:2px 0 13px;scrollbar-width:none}.rt62-tabs button{white-space:nowrap;padding:9px 12px}.rt62-tabs button[data-active=true]{background:#5fd0ff;color:#001522;border-color:#5fd0ff}.rt62-content{display:grid;gap:12px}.rt62-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}.rt62-card{overflow:hidden;border:1px solid #29435f;border-radius:18px;background:linear-gradient(180deg,#102238,#0a1727)}.rt62-card img{width:100%;height:150px;display:block;object-fit:cover;background:#08111f}.rt62-card-body{padding:13px}.rt62-card h3{margin:0;font-size:17px}.rt62-card p{margin:6px 0;color:#96aac1;line-height:1.45;font-size:13px}.rt62-meta{display:flex;gap:7px;align-items:center;justify-content:space-between;color:#8fa7bf;font-size:11px}.rt62-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}.rt62-actions button{padding:8px 10px;font-size:12px}.rt62-empty{padding:34px 18px;border:1px dashed #35536f;border-radius:18px;text-align:center;color:#96aac1}.rt62-empty b{display:block;color:#e8f4ff;margin-bottom:6px}.rt62-info{padding:13px;border:1px solid #29435f;border-radius:15px;background:#0b192a;color:#b8c9da;font-size:13px;line-height:1.55}.rt62-mini{width:94px;height:58px;object-fit:cover;border-radius:10px;border:1px solid #29435f;grid-row:1;justify-self:end}.rt-summary-row:has(.rt62-mini){grid-template-columns:minmax(0,1fr) 94px auto}.rt62-detail-model{margin-top:12px;border:1px solid #29435f;border-radius:17px;background:#0a1727;padding:14px}.rt62-detail-model img{width:100%;max-height:220px;object-fit:cover;border-radius:12px}.rt62-modal{position:fixed;inset:0;z-index:3000000;display:grid;place-items:center;padding:16px;background:rgba(1,5,12,.82);backdrop-filter:blur(8px)}.rt62-dialog{width:min(760px,100%);max-height:92vh;overflow:auto;border:1px solid #35536f;border-radius:20px;background:#0b192a;color:#f5fbff;padding:16px;box-shadow:0 24px 90px #000}.rt62-dialog.wide{width:min(1120px,100%)}.rt62-dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}.rt62-dialog-head h3{margin:0;font-size:22px}.rt62-dialog-head p{margin:5px 0 0;color:#96aac1}.rt62-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.rt62-form label{display:grid;gap:5px;color:#9db1c7;font-size:12px}.rt62-form input,.rt62-form textarea,.rt62-form select{width:100%;border:1px solid #29435f;border-radius:10px;background:#07111f;color:#f5fbff;padding:10px}.rt62-form textarea{min-height:82px}.rt62-span{grid-column:1/-1}.rt62-form-status{grid-column:1/-1;min-height:20px;color:#96aac1;font-size:12px}.rt62-canvas{width:100%;height:min(58vh,540px);display:block;touch-action:none;border-radius:15px;border:1px solid #29435f;background:#07111f}.rt62-viewer-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px}.rt62-viewer-tools label{display:grid;gap:4px;color:#96aac1;font-size:11px}.rt62-viewer-tools select{min-width:190px}.rt62-legend{height:9px;flex:1;min-width:120px;border-radius:99px;background:linear-gradient(90deg,#2563eb,#14b8a6,#facc15,#ef4444)}.rt62-admin-block{margin-top:12px;padding:13px;border:1px solid #35536f;border-radius:15px;background:#0a1727}.rt62-admin-block h3{margin:0 0 6px}.rt62-admin-block p{margin:0 0 10px;color:#96aac1;font-size:12px}.rt62-badge{display:inline-block;border-radius:999px;padding:4px 7px;background:#17334b;color:#5fd0ff;font-size:10px}.rt62-feed-author{display:flex;justify-content:space-between;gap:8px;margin-bottom:8px;color:#a9bfd3;font-size:12px}
+    @media(max-width:640px){.rt62-head{display:grid}.rt62-head-actions{justify-content:flex-start}.rt62-form{grid-template-columns:1fr}.rt62-span{grid-column:auto}.rt62-canvas{height:52vh}.rt-summary-row:has(.rt62-mini){grid-template-columns:minmax(0,1fr) 72px}.rt62-mini{width:72px;height:50px}.rt-summary-row:has(.rt62-mini) .rt-summary-count{grid-column:1/-1}}
+  `;
+  document.head.appendChild(style);
+
+  async function packages(){
+    try{
+      if(window.RideTrackerLibrary?.getRides)return await window.RideTrackerLibrary.getRides();
+      const db=window.RideTrackerDatabase;return db?await db.getAll(db.stores.ridePackages):[];
+    }catch(error){log('error','community-3d','RidePackages konnten nicht geladen werden',{message:error.message});return[];}
+  }
+
+  function rideContext(pkg,meta={}){
+    const document=pkg?.document||{};const context=document.context||{};const community=document.community||{};
+    return {
+      park:String(meta.park||pkg?.parkName||context.parkName||community.parkName||'Unbekannter Park').trim(),
+      track:String(meta.track||pkg?.rideName||context.rideName||community.rideName||meta.title||'Unbenannte Achterbahn').trim()
+    };
+  }
+
+  async function buildCatalog(){
+    const metaList=metadata();const packageList=await packages();const metaMap=new Map(metaList.map(item=>[String(item.id),item]));const packageMap=new Map(packageList.map(item=>[String(item.id),item]));
+    const ids=new Set([...metaMap.keys(),...packageMap.keys()]);
+    state.catalog=[...ids].map(id=>{
+      const meta=metaMap.get(id)||{};const pkg=packageMap.get(id)||null;const context=rideContext(pkg,meta);const model=pkg?track3d?.deriveTrackModel?.(pkg):null;
+      return {id,meta,package:pkg,model,park:context.park,track:context.track,title:meta.title||context.track,createdAt:meta.createdAt||pkg?.createdAt||new Date(0).toISOString(),visibility:pkg?.document?.community?.visibility||meta.visibility||'private'};
+    }).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+    return state.catalog;
+  }
+
+  function group(items,getter){const map=new Map();for(const item of items){const label=getter(item);const groupKey=key(label);if(!map.has(groupKey))map.set(groupKey,{key:groupKey,label,items:[]});map.get(groupKey).items.push(item);}return [...map.values()].sort((a,b)=>a.label.localeCompare(b.label,'de'));}
+  function modelFor(items){const models=items.map(item=>item.model).filter(Boolean);return models.length>1?track3d?.mergeModels?.(models):models[0]||null;}
+  function thumb(model,title,metric='speedKmh'){return track3d?.thumbnailDataUri?.(model,{title,metric})||'';}
+  function metricOptions(selected='speedKmh'){return Object.entries(track3d?.METRICS||{}).map(([id,item])=>`<option value="${id}" ${selected===id?'selected':''}>${esc(item.label)}</option>`).join('');}
+
+  function ensureHub(){let view=document.getElementById('rtCommunityHub62');if(view)return view;view=document.createElement('section');view.id='rtCommunityHub62';view.hidden=true;document.body.appendChild(view);return view;}
+  function backendLabel(){const status=backend?.getStatus?.()||{};return status.authenticated?'Synchronisiert':status.configured?'Anmeldung nötig':'Lokal';}
+
+  function shell(){
+    const view=ensureHub();const status=backend?.getStatus?.()||{};const moderator=['moderator','admin'].includes(state.role);
+    view.innerHTML=`<div class="rt62-shell"><header class="rt62-head"><div><h2>Community</h2><p>Fahrten entdecken, vergleichen und als datenschutzfreundliches 3D-Modell erleben.</p></div><div class="rt62-head-actions"><span class="rt62-status ${status.authenticated?'online':''}"><i></i>${esc(backendLabel())}</span><button type="button" data-rt62-auth>${status.authenticated?'Konto':'Anmelden'}</button><button type="button" data-rt62-backend>Backend</button></div></header><nav class="rt62-tabs" aria-label="Community-Bereiche">${[['feed','Feed'],['parks','Parks'],['tracks','Bahnen'],['rides','Fahrten'],['friends','Freunde'],...(moderator?[['moderation','Moderation']]:[])].map(([id,label])=>`<button type="button" data-rt62-tab="${id}" data-active="${state.tab===id}">${label}</button>`).join('')}</nav><main class="rt62-content" data-rt62-content></main></div>`;
+    view.querySelectorAll('[data-rt62-tab]').forEach(button=>button.onclick=()=>{state.tab=button.dataset.rt62Tab;render();});
+    view.querySelector('[data-rt62-auth]').onclick=openAuth;
+    view.querySelector('[data-rt62-backend]').onclick=openBackend;
+    return view;
+  }
+
+  function rideCard(ride,{feed=false}={}){
+    const image=thumb(ride.model,ride.track);const modelButton=ride.model?`<button type="button" data-rt62-model="${esc(ride.id)}">3D & Heatmap</button>`:'';
+    return `<article class="rt62-card">${image?`<img src="${image}" alt="Streckenminiatur ${esc(ride.track)}">`:''}<div class="rt62-card-body">${feed?`<div class="rt62-feed-author"><span>${esc(ride.author||'RideTracker Community')}</span><span>${fmtDate(ride.createdAt)}</span></div>`:''}<h3>${esc(ride.title||ride.track)}</h3><p>${esc(ride.park)} · ${esc(ride.track)}</p><div class="rt62-meta"><span>${ride.model?`${fmtDistance(ride.model.distanceM)} · ${fmtDuration((ride.model.durationMs||0)/1000)}`:'Noch keine GPS-Geometrie'}</span><span class="rt62-badge">${esc(ride.visibility||'privat')}</span></div><div class="rt62-actions">${modelButton}<button type="button" data-rt62-open-ride="${esc(ride.id)}">Details</button>${feed&&ride.remoteId?`<button type="button" data-rt62-report="${esc(ride.remoteId)}">Melden</button>`:''}</div></div></article>`;
+  }
+
+  function bindCards(host){
+    host.querySelectorAll('[data-rt62-model]').forEach(button=>button.onclick=()=>{const ride=state.catalog.find(item=>item.id===button.dataset.rt62Model);if(ride?.model)openViewer(ride.model,`${ride.track} · ${ride.park}`);});
+    host.querySelectorAll('[data-rt62-open-ride]').forEach(button=>button.onclick=()=>window.RideTrackerRideLibrary?.openDetail?.(button.dataset.rt62OpenRide));
+    host.querySelectorAll('[data-rt62-report]').forEach(button=>button.onclick=()=>openReport(button.dataset.rt62Report));
+  }
+
+  function renderFeed(host){
+    const localCommunity=window.RideTrackerCommunity?.store?.load?.();const entries=Object.values(localCommunity?.rides||{}).filter(item=>item.visibility==='public'||item.visibility==='friends');
+    const local=entries.map(entry=>{const ride=state.catalog.find(item=>String(item.id)===String(entry.id));return ride?{...ride,title:entry.title||ride.title,visibility:entry.visibility,author:localCommunity?.profile?.pseudonym}:{id:entry.id,title:entry.title,park:entry.parkName||'Unbekannter Park',track:entry.rideName||'Unbekannte Bahn',createdAt:entry.createdAt,visibility:entry.visibility,author:localCommunity?.profile?.pseudonym};});
+    const remote=state.feed.map(item=>({id:`remote-${item.id}`,remoteId:item.id,title:item.title,park:item.park?.name||'Unbekannter Park',track:item.attraction?.name||'Unbekannte Bahn',createdAt:item.createdAt,visibility:item.visibility,author:item.author?.displayName,model:item.attraction?.model?track3d?.deriveTrackModel?.(item.attraction.model):null}));
+    const items=[...remote,...local];host.innerHTML=items.length?`<div class="rt62-grid">${items.map(item=>rideCard(item,{feed:true})).join('')}</div>`:`<div class="rt62-empty"><b>Dein Feed ist noch leer.</b>Öffentliche oder mit Freunden geteilte Fahrten erscheinen hier. Lokal gespeicherte Fahrten bleiben unverändert geschützt.</div>`;bindCards(host);
+  }
+
+  function catalogCard(item,type){const model=modelFor(item.items);const title=item.label;const subtitle=type==='park'?`${group(item.items,ride=>ride.track).length} Bahnen · ${item.items.length} Fahrten`:`${item.items.length} aufgezeichnete Fahrt${item.items.length===1?'':'en'}`;return `<article class="rt62-card"><img src="${thumb(model,title)}" alt="Miniatur ${esc(title)}"><div class="rt62-card-body"><h3>${esc(title)}</h3><p>${subtitle}</p><div class="rt62-actions">${model?`<button type="button" data-rt62-group-model data-rt62-kind="${esc(type)}" data-rt62-group-key="${esc(item.key)}">3D-Modell</button>`:''}${type==='park'?`<button type="button" data-rt62-filter="${esc(item.key)}">Bahnen anzeigen</button>`:''}</div></div></article>`;}
+  function renderCatalog(host,type){
+    if(type==='rides'){host.innerHTML=state.catalog.length?`<div class="rt62-grid">${state.catalog.map(ride=>rideCard(ride)).join('')}</div>`:`<div class="rt62-empty"><b>Noch keine Fahrt gespeichert.</b>Nach der ersten Aufnahme entsteht automatisch eine Miniatur und – bei GPS-Punkten – ein 3D-Modell.</div>`;bindCards(host);return;}
+    const groups=type==='parks'?group(state.catalog,ride=>ride.park):group(state.catalog,ride=>ride.track);host.innerHTML=groups.length?`<div class="rt62-grid">${groups.map(item=>catalogCard(item,type==='parks'?'park':'track')).join('')}</div>`:'<div class="rt62-empty"><b>Noch keine Daten.</b>Miniaturen werden aus deinen lokalen Fahrten erzeugt.</div>';
+    host.querySelectorAll('[data-rt62-group-model]').forEach(button=>button.onclick=()=>{const kind=button.dataset.rt62Kind,groupKey=button.dataset.rt62GroupKey;const items=kind==='park'?state.catalog.filter(ride=>key(ride.park)===groupKey):state.catalog.filter(ride=>key(ride.track)===groupKey);const label=kind==='park'?items[0]?.park:items[0]?.track;const model=modelFor(items);if(model)openViewer(model,label);});
+    host.querySelectorAll('[data-rt62-filter]').forEach(button=>button.onclick=()=>{state.tab='tracks';state.parkFilter=button.dataset.rt62Filter;render();});
+  }
+
+  function renderFriends(host){
+    const status=backend?.getStatus?.()||{};if(!status.authenticated){host.innerHTML='<div class="rt62-empty"><b>Für Freunde ist eine Anmeldung erforderlich.</b>Deine lokalen Fahrten bleiben auch ohne Konto vollständig nutzbar.</div>';return;}
+    host.innerHTML=`<div class="rt62-info"><b>Person suchen</b><div class="rt62-actions"><input data-rt62-search placeholder="Pseudonym" maxlength="80"><button data-rt62-search-button>Suchen</button></div><div data-rt62-search-results></div></div>${state.friends.length?`<div class="rt62-grid">${state.friends.map(item=>`<article class="rt62-card"><div class="rt62-card-body"><h3>${esc(item.profile?.displayName)}</h3><p>${item.status==='accepted'?'Freund':item.direction==='incoming'?'Anfrage erhalten':'Anfrage gesendet'}</p><div class="rt62-actions">${item.status==='pending'&&item.direction==='incoming'?`<button data-rt62-friend-answer="${item.friendshipId}" data-accept="true">Annehmen</button><button data-rt62-friend-answer="${item.friendshipId}" data-accept="false">Ablehnen</button>`:''}</div></div></article>`).join('')}</div>`:'<div class="rt62-empty"><b>Noch keine Freunde verbunden.</b>Suche nach einem Pseudonym und sende eine Anfrage.</div>'}`;
+    host.querySelector('[data-rt62-search-button]').onclick=async()=>{const output=host.querySelector('[data-rt62-search-results]');output.textContent='Suche …';try{const results=await backend.searchProfiles(host.querySelector('[data-rt62-search]').value);output.innerHTML=(results||[]).map(item=>`<div class="rt62-actions"><span>${esc(item.displayName)}</span><button data-profile="${item.id}">Anfrage senden</button></div>`).join('')||'Keine Treffer.';output.querySelectorAll('[data-profile]').forEach(button=>button.onclick=async()=>{await backend.sendFriendRequest(button.dataset.profile);button.textContent='Gesendet ✓';button.disabled=true;});}catch(error){output.textContent=error.message;}};
+    host.querySelectorAll('[data-rt62-friend-answer]').forEach(button=>button.onclick=async()=>{await backend.respondFriendRequest(button.dataset.rt62FriendAnswer,button.dataset.accept==='true');await refreshRemote();render();});
+  }
+
+  function renderModeration(host){host.innerHTML=state.moderation.length?state.moderation.map(item=>`<article class="rt62-card"><div class="rt62-card-body"><div class="rt62-feed-author"><span>${esc(item.targetType)}</span><span>${fmtDate(item.createdAt)}</span></div><h3>${esc(item.reason)}</h3><p>${esc(item.details)}</p><div class="rt62-actions"><button data-report="${item.id}" data-decision="reviewing">Prüfung starten</button><button data-report="${item.id}" data-decision="hide">Ausblenden</button><button data-report="${item.id}" data-decision="dismiss">Verwerfen</button></div></div></article>`).join(''):'<div class="rt62-empty"><b>Moderationsliste leer.</b>Es liegen keine offenen Meldungen vor.</div>';host.querySelectorAll('[data-report]').forEach(button=>button.onclick=async()=>{await backend.moderateReport({reportId:button.dataset.report,decision:button.dataset.decision});await refreshRemote();render();});}
+
+  function render(){const view=shell();const host=view.querySelector('[data-rt62-content]');if(state.tab==='feed')renderFeed(host);else if(state.tab==='parks')renderCatalog(host,'parks');else if(state.tab==='tracks'){const original=state.catalog;if(state.parkFilter)state.catalog=original.filter(ride=>key(ride.park)===state.parkFilter);renderCatalog(host,'tracks');state.catalog=original;state.parkFilter=null;}else if(state.tab==='rides')renderCatalog(host,'rides');else if(state.tab==='friends')renderFriends(host);else renderModeration(host);}
+
+  async function refreshRemote(){
+    const status=backend?.getStatus?.()||{};if(!status.authenticated){state.feed=[];state.friends=[];state.moderation=[];state.role='member';return;}
+    const results=await Promise.allSettled([backend.listFeed(),backend.listFriends(),backend.getMyRole()]);
+    state.feed=results[0].status==='fulfilled'?(results[0].value||[]):[];state.friends=results[1].status==='fulfilled'?(results[1].value||[]):[];state.role=results[2].status==='fulfilled'?(results[2].value||'member'):'member';
+    if(['moderator','admin'].includes(state.role)){try{state.moderation=await backend.listModerationQueue()||[];}catch(error){log('warn','moderation','Moderationsliste nicht verfügbar',{message:error.message});}}
+  }
+
+  async function open(){
+    document.querySelectorAll('.rt61-view,#rtRideLibrary,.rt-tool-view,#rtSettingsView').forEach(view=>view.hidden=true);document.getElementById('rtInlineDashboard')?.setAttribute('hidden','');document.getElementById('rideDashboard')?.style.setProperty('display','none');document.body.dataset.rtRoute='community';
+    const view=ensureHub();view.hidden=false;view.innerHTML='<div class="rt62-shell"><div class="rt62-empty"><b>Community wird geladen …</b>Lokale Modelle und Synchronisierungsstatus werden geprüft.</div></div>';
+    await buildCatalog();await refreshRemote();render();view.scrollTo({top:0,behavior:'auto'});log('info','community-backend','Community Hub opened',{rides:state.catalog.length,authenticated:backend?.getStatus?.().authenticated});
+  }
+
+  function ensureModal(id,wide=false){let modal=document.getElementById(id);if(modal)return modal;modal=document.createElement('div');modal.id=id;modal.className='rt62-modal';modal.hidden=true;modal.innerHTML=`<section class="rt62-dialog ${wide?'wide':''}"></section>`;modal.addEventListener('click',event=>{if(event.target===modal)closeModal(modal);});document.body.appendChild(modal);return modal;}
+  function closeModal(modal){if(modal.id==='rtTrackViewer62'){state.renderer?.destroy?.();state.renderer=null;}modal.hidden=true;}
+
+  function openViewer(model,title){
+    const modal=ensureModal('rtTrackViewer62',true);const dialog=modal.querySelector('.rt62-dialog');dialog.innerHTML=`<header class="rt62-dialog-head"><div><h3>${esc(title)}</h3><p>Interaktives 3D-Modell · Heatmap basiert auf den ermittelten Messwerten.</p></div><button data-close aria-label="Schließen">✕</button></header><div class="rt62-viewer-tools"><label>Heatmap<select data-metric>${metricOptions()}</select></label><button data-reset>Ansicht zurücksetzen</button><button data-download>PNG speichern</button><div class="rt62-legend" data-legend></div></div><canvas class="rt62-canvas" data-canvas aria-label="Interaktives 3D-Streckenmodell"></canvas><div class="rt62-info">Das Modell verwendet lokale x/y/z-Koordinaten. Ziehen dreht die Strecke, Mausrad oder Pinch zoomt. Die Heatmap kann zwischen Geschwindigkeit, Kräften, Höhe und Modellgüte umgeschaltet werden.</div>`;
+    modal.hidden=false;state.renderer?.destroy?.();state.renderer=track3d.createRenderer(dialog.querySelector('[data-canvas]'),model,{metric:'speedKmh'});
+    dialog.querySelector('[data-close]').onclick=()=>closeModal(modal);dialog.querySelector('[data-reset]').onclick=()=>state.renderer.reset();dialog.querySelector('[data-metric]').onchange=event=>{state.renderer.setMetric(event.target.value);const palette=track3d.METRICS[event.target.value].palette;dialog.querySelector('[data-legend]').style.background=`linear-gradient(90deg,${palette.join(',')})`;};dialog.querySelector('[data-download]').onclick=()=>{const link=document.createElement('a');link.download=`RideTracker-${String(title).replace(/[^a-z0-9]+/gi,'-')}-3D.png`;link.href=state.renderer.toDataUrl();link.click();};
+  }
+
+  function openAuth(){
+    const modal=ensureModal('rtCommunityAuth62');const dialog=modal.querySelector('.rt62-dialog');const status=backend?.getStatus?.()||{};
+    if(status.authenticated){
+      dialog.innerHTML=`<header class="rt62-dialog-head"><div><h3>Community-Konto</h3><p>${esc(status.user?.email||'Angemeldet')}</p></div><button data-close>✕</button></header><div class="rt62-info">Deine Anmeldung ist aktiv. Fahrten werden nur synchronisiert, wenn du dies bewusst auslöst oder sie für Freunde/öffentlich freigibst.</div><div class="rt62-actions"><button data-sync>Freigegebene Fahrten synchronisieren</button><button data-signout>Abmelden</button></div><div class="rt62-form-status" data-status></div>`;
+      dialog.querySelector('[data-sync]').onclick=()=>syncAll(dialog.querySelector('[data-status]'));
+      dialog.querySelector('[data-signout]').onclick=async()=>{await backend.signOut();closeModal(modal);await open();};
+    }else{
+      dialog.innerHTML=`<header class="rt62-dialog-head"><div><h3>Anmelden oder registrieren</h3><p>Das Konto ist optional; der lokale Modus bleibt vollständig erhalten.</p></div><button data-close>✕</button></header><div class="rt62-form"><label>Anzeigename<input data-name maxlength="60" autocomplete="nickname"></label><label>E-Mail<input data-email type="email" autocomplete="email"></label><label class="rt62-span">Passwort<input data-password type="password" minlength="8" autocomplete="current-password"></label><div class="rt62-form-status" data-status>${status.configured?'':'Bitte zuerst das Backend konfigurieren.'}</div></div><div class="rt62-actions"><button data-signin class="primary" ${status.configured?'':'disabled'}>Anmelden</button><button data-signup ${status.configured?'':'disabled'}>Neues Konto</button></div>`;
+      const run=async mode=>{const output=dialog.querySelector('[data-status]');output.textContent=mode==='in'?'Anmeldung läuft …':'Konto wird angelegt …';try{const input={email:dialog.querySelector('[data-email]').value,password:dialog.querySelector('[data-password]').value,displayName:dialog.querySelector('[data-name]').value};if(mode==='in')await backend.signIn(input);else await backend.signUp(input);output.textContent=backend.getStatus().authenticated?'Erfolgreich angemeldet ✓':'Registrierung gespeichert. Bitte bestätige gegebenenfalls die E-Mail.';if(backend.getStatus().authenticated){setTimeout(async()=>{closeModal(modal);await open();},500);}}catch(error){output.textContent=error.message;log('error','community-auth','Authentication failed',{code:error.code,message:error.message});}};
+      dialog.querySelector('[data-signin]').onclick=()=>run('in');dialog.querySelector('[data-signup]').onclick=()=>run('up');
+    }
+    dialog.querySelector('[data-close]').onclick=()=>closeModal(modal);
+    modal.hidden=false;
+  }
+
+  function openBackend(){
+    const modal=ensureModal('rtCommunityBackend62');const dialog=modal.querySelector('.rt62-dialog');const cfg=backend?._debug?.getConfig?.()||{};
+    dialog.innerHTML=`<header class="rt62-dialog-head"><div><h3>Community-Backend</h3><p>Supabase-kompatible, optionale Synchronisierung.</p></div><button data-close>✕</button></header><div class="rt62-form"><label class="rt62-span">Projekt-URL<input data-url type="url" placeholder="https://projekt.supabase.co" value="${esc(cfg.url||'')}"></label><label class="rt62-span">Publishable-/Anon-Key<input data-key type="password" autocomplete="off" value="${esc(cfg.publishableKey||'')}"></label><div class="rt62-form-status" data-status>Service-Role-Schlüssel werden aus Sicherheitsgründen abgewiesen. Rohe GPS-Koordinaten werden nicht hochgeladen.</div></div><div class="rt62-actions"><button class="primary" data-save>Speichern & prüfen</button><button data-disable>Lokalen Modus verwenden</button></div><div class="rt62-info">Einrichtung: SQL-Migration aus <code>backend/supabase/001_community_backend.sql</code> im eigenen Projekt ausführen, anschließend hier URL und clientseitigen Schlüssel eintragen.</div>`;
+    dialog.querySelector('[data-close]').onclick=()=>closeModal(modal);dialog.querySelector('[data-save]').onclick=async()=>{const output=dialog.querySelector('[data-status]');try{backend.configure({url:dialog.querySelector('[data-url]').value,publishableKey:dialog.querySelector('[data-key]').value});output.textContent='Verbindung wird geprüft …';const result=await backend.health();output.textContent=result.ok?`Backend erreichbar (${result.latencyMs} ms) ✓`:`Gespeichert, aber nicht erreichbar: ${result.message}`;log(result.ok?'info':'warn','community-backend','Backend health check',result);}catch(error){output.textContent=error.message;}};dialog.querySelector('[data-disable]').onclick=()=>{backend.configure({});dialog.querySelector('[data-status]').textContent='Lokaler Modus aktiv ✓';};modal.hidden=false;
+  }
+
+  function openReport(postId){const modal=ensureModal('rtCommunityReport62');const dialog=modal.querySelector('.rt62-dialog');dialog.innerHTML=`<header class="rt62-dialog-head"><div><h3>Inhalt melden</h3><p>Die Meldung wird nur an Moderatoren übermittelt.</p></div><button data-close>✕</button></header><div class="rt62-form"><label>Grund<select data-reason><option>Unangemessener Inhalt</option><option>Spam</option><option>Gefährliche Falschinformation</option><option>Datenschutz</option></select></label><label class="rt62-span">Details<textarea data-details maxlength="1000"></textarea></label><div class="rt62-form-status" data-status></div></div><div class="rt62-actions"><button class="primary" data-send>Meldung senden</button></div>`;dialog.querySelector('[data-close]').onclick=()=>closeModal(modal);dialog.querySelector('[data-send]').onclick=async()=>{const output=dialog.querySelector('[data-status]');try{await backend.reportContent({targetType:'post',targetId:postId,reason:dialog.querySelector('[data-reason]').value,details:dialog.querySelector('[data-details]').value});output.textContent='Meldung wurde übermittelt ✓';}catch(error){output.textContent=error.message;}};modal.hidden=false;}
+
+  async function syncRide(ride){if(!ride?.model)return null;return backend.syncRide({ride:{...ride.package,id:ride.id,metadata:{...ride.meta,parkName:ride.park,trackName:ride.track,visibility:ride.visibility}},profile:window.RideTrackerCommunity?.store?.load?.().profile||{},trackModel:ride.model});}
+  async function syncAll(output){
+    if(state.busy)return;state.busy=true;const eligible=state.catalog.filter(ride=>ride.model&&!['private','draft'].includes(ride.visibility));let success=0;let failed=0;
+    for(const ride of eligible){try{await syncRide(ride);success+=1;}catch(error){failed+=1;log('error','community-sync','Ride sync failed',{rideId:ride.id,code:error.code,message:error.message});}if(output)output.textContent=`Synchronisierung: ${success} erfolgreich · ${failed} fehlgeschlagen`;}
+    state.busy=false;if(!failed){await refreshRemote();render();}return{success,failed};
+  }
+
+  async function decorateLibrary({host,level,rides,park,track,rideId}){
+    if(!host||!track3d)return;const catalog=await buildCatalog();
+    if(level==='parks')host.querySelectorAll('[data-park]').forEach(row=>{const items=catalog.filter(ride=>key(ride.park)===key(row.dataset.park));const image=thumb(modelFor(items),row.dataset.park);if(image&&!row.querySelector('.rt62-mini')){const img=document.createElement('img');img.className='rt62-mini';img.src=image;img.alt=`Miniatur ${row.dataset.park}`;row.querySelector('.rt-summary-count')?.before(img);}});
+    if(level==='tracks')host.querySelectorAll('[data-track]').forEach(row=>{const items=catalog.filter(ride=>key(ride.park)===key(park)&&key(ride.track)===key(row.dataset.track));const image=thumb(modelFor(items),row.dataset.track);if(image&&!row.querySelector('.rt62-mini')){const img=document.createElement('img');img.className='rt62-mini';img.src=image;img.alt=`Miniatur ${row.dataset.track}`;row.querySelector('.rt-summary-count')?.before(img);}});
+    if(level==='rides')host.querySelectorAll('[data-ride-id]').forEach(row=>{const ride=catalog.find(item=>item.id===row.dataset.rideId);const image=thumb(ride?.model,ride?.track);if(image&&!row.querySelector('.rt62-mini')){const img=document.createElement('img');img.className='rt62-mini';img.src=image;img.alt='Fahrtminiatur';row.querySelector('.rt-summary-count')?.before(img);}});
+    if(level==='detail'){const ride=catalog.find(item=>item.id===String(rideId));if(ride?.model&&!host.querySelector('.rt62-detail-model')){const section=document.createElement('section');section.className='rt62-detail-model';section.innerHTML=`<img src="${thumb(ride.model,ride.track,'totalG')}" alt="Kräfte-Heatmap der Fahrt"><div class="rt62-actions"><button type="button" class="primary">3D-Modell & Heatmaps öffnen</button><span class="rt62-badge">${ride.model.points.length} Modellpunkte</span></div>`;section.querySelector('button').onclick=()=>openViewer(ride.model,`${ride.track} · ${ride.park}`);host.querySelector('.rt-ride-detail')?.appendChild(section);}}
+  }
+
+  function decorateAdmin(){const modal=document.getElementById('rtAdminCenter61');if(!modal||modal.querySelector('.rt62-admin-block'))return;const host=modal.querySelector('.rt61-modal-card,.rt61-shell')||modal.firstElementChild;if(!host)return;const block=document.createElement('section');block.className='rt62-admin-block';block.innerHTML=`<h3>Community-Backend & 3D</h3><p>${esc(backendLabel())} · ${state.catalog.filter(ride=>ride.model).length} lokale 3D-Modelle. Absolute GPS-Punkte werden nicht synchronisiert.</p><div class="rt62-actions"><button data-config>Backend konfigurieren</button><button data-community>Community öffnen</button></div>`;block.querySelector('[data-config]').onclick=openBackend;block.querySelector('[data-community]').onclick=()=>{modal.hidden=true;void open();};host.appendChild(block);}
+
+  async function autoSyncRide(id){const status=backend?.getStatus?.()||{};if(!status.authenticated)return;await buildCatalog();const ride=state.catalog.find(item=>String(item.id)===String(id));if(!ride||['private','draft'].includes(ride.visibility)||!ride.model)return;try{await syncRide(ride);log('info','community-sync','Freigegebene Fahrt automatisch synchronisiert',{rideId:id});}catch(error){log('error','community-sync','Automatische Synchronisierung fehlgeschlagen',{rideId:id,code:error.code,message:error.message});}}
+
+  function install(){
+    window.RideTrackerCommunityHub={open,render,buildCatalog,decorateLibrary,openViewer,syncAll,backend};
+    window.addEventListener('ridetracker:ride-saved',event=>void autoSyncRide(event.detail?.rideId));window.addEventListener('ridetracker:community-ride-updated',event=>void autoSyncRide(event.detail?.rideId));
+    const observer=new MutationObserver(()=>{if(!document.getElementById('rtAdminCenter61')?.hidden)decorateAdmin();});observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden']});
+    log('info','boot','Community backend and 3D module installed',{version:'2026.08.08-community-backend-3d.1'});
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
+})();

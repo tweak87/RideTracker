@@ -35,6 +35,12 @@ jobs:
         run: node shared/ride-engine/gps-speed.test.mjs
       - name: Run community model tests
         run: node shared/core/community-model.test.mjs
+      - name: Run community backend security tests
+        run: node shared/core/community-backend.test.mjs
+      - name: Run 3D track model tests
+        run: node shared/visualization/track-3d.test.mjs
+      - name: Validate community SQL schema
+        run: node backend/supabase/community-schema.test.mjs
       - name: Run RidePackage contract tests
         run: node shared/ride-engine/ride-package.test.mjs
       - name: Run overlay specification tests

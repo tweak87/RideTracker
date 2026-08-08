@@ -2,9 +2,9 @@
 
 ## Aktuelle Web-Version
 
-Die Community-Grundlage ist als Version `2026.08.08-community-foundation.1` dokumentiert. Sie umfasst die mobile Hauptnavigation, Aufnahme-Preflight, Fahrt-Sichtbarkeit, Support-/Logcenter, lokale Administration und Chromium-/WebKit-UX-Tests.
+Die aktuelle Version `2026.08.08-community-backend-3d.1` erweitert die lokale Community-Grundlage um ein optionales Backend für Anmeldung, Synchronisierung, Freunde, Feed, Meldungen und Moderation. Parks, Bahnen und Fahrten besitzen Miniaturen; aus GPS-, Geschwindigkeits-, Höhen- und Kraftdaten entstehen interaktive 3D-Streckenmodelle mit umschaltbaren Heatmaps.
 
-Der unmittelbar vorherige stabile Produktionsstand bleibt unter Commit `8485df203665f8e93558fcbcac72a890fc6e9c3b` und Branch [`rollback/pre-community-foundation-20260808`](https://github.com/tweak87/RideTracker/tree/rollback/pre-community-foundation-20260808) erhalten. Details stehen in [`docs/COMMUNITY_FOUNDATION.md`](docs/COMMUNITY_FOUNDATION.md).
+Der unmittelbar vorherige stabile Produktionsstand bleibt unter Commit `3bd0175b93c7babe515f91555352e7711020fa7f` und Branch [`rollback/pre-community-backend-20260808`](https://github.com/tweak87/RideTracker/tree/rollback/pre-community-backend-20260808) erhalten. Einrichtung, Datenschutz, Bedienung und Rollback sind in [`docs/COMMUNITY_BACKEND_3D.md`](docs/COMMUNITY_BACKEND_3D.md) dokumentiert.
 
 Plattformübergreifende Telemetrie- und Analyseplattform für Achterbahnen und Fahrgeschäfte.
 
@@ -16,6 +16,7 @@ Vor einer Fortsetzung in einem neuen Chat zuerst lesen:
 - `docs/DIAGNOSTICS_AND_SENSOR_MATH.md` – G-Kraft-/Sensorlogik, GPS-Qualität und Diagnose-/Admin-Konzept
 - `docs/ARCHITECTURE.md` – allgemeine Architektur und Sensorstrategie
 - `docs/COMMUNITY_ROADMAP.md` – Community-Zielbild
+- `docs/COMMUNITY_BACKEND_3D.md` – Backend, Rollen, Synchronisierung, Miniaturen, 3D und Rollback
 - `docs/park-track-identification.md` – Park-/Bahn-Erkennung
 
 ## Anwendungen
