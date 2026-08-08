@@ -10,6 +10,11 @@ on:
       - "native-android/**"
       - "shared/**"
       - ".github/workflows/android-build.yml"
+  pull_request:
+    paths:
+      - "native-android/**"
+      - "shared/**"
+      - ".github/workflows/android-build.yml"
 
 jobs:
   build:
