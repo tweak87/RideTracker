@@ -54,9 +54,14 @@
     return document.getElementById('stop')?.disabled === false || Boolean(window.RideTrackerRecordingFullscreen?.isRecording?.());
   }
 
-  function closeKnownBlockers({ forceHome = false } = {}) {
+  async function closeKnownBlockers({ forceHome = false } = {}) {
     if (isRecording()) return { skipped:'recording' };
     const closed = [];
+    const activeDialog = window.RideTrackerDialogManager?.active?.() || null;
+    try {
+      await window.RideTrackerDialogManager?.closeAll?.('safe-boot');
+      if (activeDialog) closed.push(`dialog:${activeDialog}`);
+    } catch (error) { add('warn','boot','Dialog recovery failed',error); }
     const removeOpen = id => {
       const node = document.getElementById(id);
       if (!node) return;
@@ -68,16 +73,24 @@
     if (exportDialog && !exportDialog.hidden) { exportDialog.hidden = true; closed.push('rtExportDialog'); }
 
     const hud = document.getElementById('rtStandaloneHudEditor');
+    try { await window.RideTrackerStandaloneHudEditor?.close?.(); }
+    catch (error) { add('warn','boot','HUD recovery failed',error); }
     if (hud?.classList.contains('open')) { hud.classList.remove('open'); closed.push('rtStandaloneHudEditor'); }
     const device = document.getElementById('rtDeviceCenter');
     if (device?.classList.contains('open')) { device.classList.remove('open'); closed.push('rtDeviceCenter'); }
     document.querySelectorAll('.rt-home-panel.open').forEach(panel=>{panel.classList.remove('open');closed.push('rt-home-panel');});
 
     document.body.classList.remove('rt-dialog-open','rt-navigation-open','rt-hud-editor-open');
-    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-      document.documentElement.style.removeProperty('overflow');
-      document.body.style.removeProperty('overflow');
-    }
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+      else if (document.webkitFullscreenElement && document.webkitExitFullscreen) await document.webkitExitFullscreen();
+    } catch (error) { add('warn','boot','Fullscreen recovery failed',error); }
+    document.documentElement.style.removeProperty('overflow');
+    document.documentElement.style.removeProperty('pointer-events');
+    document.documentElement.removeAttribute('inert');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('pointer-events');
+    document.body.removeAttribute('inert');
 
     if (forceHome) {
       try {
@@ -187,7 +200,7 @@
     panel.innerHTML = `<div class="rt60-card"><div class="rt60-head"><div><b>RideTracker Diagnose</b><small>Runtime, Navigation, GPS, Plugins und Storage</small></div><button data-close>×</button></div><div class="rt60-status" data-status></div><div class="rt60-actions"><button data-audit>Prüfen & UI freigeben</button><button data-export>Diagnose exportieren</button><button data-clear>Log leeren</button><button data-disable>Diagnosemodus aus</button></div><pre data-log></pre></div>`;
     document.body.appendChild(panel);
     panel.querySelector('[data-close]').onclick=()=>{panel.hidden=true};
-    panel.querySelector('[data-audit]').onclick=()=>{state.bootRecovery=closeKnownBlockers({forceHome:true});bootAudit();renderPanel();};
+    panel.querySelector('[data-audit]').onclick=async()=>{state.bootRecovery=await closeKnownBlockers({forceHome:true});bootAudit();renderPanel();};
     panel.querySelector('[data-export]').onclick=()=>void exportReport();
     panel.querySelector('[data-clear]').onclick=()=>{state.logs=[];persist();renderPanel();};
     panel.querySelector('[data-disable]').onclick=()=>disable();
@@ -244,17 +257,17 @@
 
   function boot() {
     // Give all legacy layers time to install, then normalize stale state once.
-    setTimeout(()=>{
+    setTimeout(async()=>{
       const route=document.body.dataset.rtRoute || 'home';
       const shouldRecover=!isRecording() && (route==='home' || !route);
-      state.bootRecovery=closeKnownBlockers({forceHome:shouldRecover});
+      state.bootRecovery=await closeKnownBlockers({forceHome:shouldRecover});
       add('info','boot','Boot recovery',state.bootRecovery);
       bootAudit(); ensureUi();
     },700);
     setTimeout(()=>{bootAudit();ensureUi();},2500);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
-  window.addEventListener('pageshow',()=>setTimeout(()=>{state.bootRecovery=closeKnownBlockers({forceHome:!isRecording() && (document.body.dataset.rtRoute||'home')==='home'});bootAudit();},120));
+  window.addEventListener('pageshow',()=>setTimeout(async()=>{state.bootRecovery=await closeKnownBlockers({forceHome:!isRecording() && (document.body.dataset.rtRoute||'home')==='home'});bootAudit();},120));
 
   window.RideTrackerDiagnostics={enable,disable,open:()=>{enable();const panel=ensurePanel();panel.hidden=false;renderPanel();},export:exportReport,snapshot,safeBoot:()=>closeKnownBlockers({forceHome:true}),log:add,isEnabled:()=>state.enabled};
 })();

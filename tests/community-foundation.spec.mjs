@@ -33,7 +33,10 @@ test('all home tools open and safe boot restores the start page', async ({ page 
     expect(await eventLoopLag(page)).toBeLessThan(500);
     if(route==='support')await expect(page.locator('#rtSupportCenter61')).toBeVisible();
     if(route==='admin')await expect(page.locator('#rtAdminCenter61')).toBeVisible();
-    await page.evaluate(()=>window.RideTrackerDiagnostics.safeBoot());
+    const recovery=await page.evaluate(()=>window.RideTrackerDiagnostics.safeBoot());
+    expect(recovery).toMatchObject({activeDialog:null,fullscreen:false});
+    expect(recovery.rootPointerEvents).not.toBe('none');
+    await expect.poll(()=>page.evaluate(()=>window.RideTrackerDialogManager.active())).toBe(null);
     await expect(page.locator('#rtInlineDashboard')).toBeVisible();
   }
   expect(page.__rideTrackerErrors).toEqual([]);
