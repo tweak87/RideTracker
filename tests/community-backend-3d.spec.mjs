@@ -24,7 +24,8 @@ async function seedRide(page) {
     window.RideTrackerCommunity.store.upsertRide({id,title:meta.title,parkName:meta.park,rideName:meta.track,visibility:'public',createdAt:meta.createdAt});
     await window.RideTrackerDatabase.put(window.RideTrackerDatabase.stores.ridePackages,id,{
       id,createdAt:meta.createdAt,parkName:meta.park,rideName:meta.track,distanceMeters:740,durationSeconds:7.1,sampleCount:samples.length,
-      document:{samples,context:{parkName:meta.park,rideName:meta.track},community:{visibility:'public'}}
+      thumbnail:{kind:'stock',dataUrl:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540"><rect width="100%" height="100%" fill="%231c7599"/></svg>',attribution:'Testbild · Ride Artist · CC BY 4.0',sourceUrl:'https://commons.wikimedia.org/wiki/File:Test',license:'CC BY 4.0',licenseUrl:'https://creativecommons.org/licenses/by/4.0/',provider:'Wikimedia Commons'},
+      document:{samples,context:{parkName:meta.park,rideName:meta.track},community:{visibility:'public'},environment:{weather:{start:{condition:{label:'Leicht bewölkt'},temperatureC:24.2,wind:{speedKmh:14}}}}}
     });
   });
 }
@@ -53,6 +54,9 @@ test('park, track and ride miniatures lead to an interactive heatmap viewer', as
     await hub.locator(`[data-rt62-tab="${tab}"]`).click();
     await expect(hub.locator('.rt62-card img').first()).toBeVisible();
   }
+  await expect(hub.locator('.rt62-image-credit').first()).toContainText('CC BY 4.0');
+  await expect(hub.locator('.rt62-image-credit a').first()).toContainText('Quelle');
+  await expect(hub.locator('.rt62-card').first()).toContainText('Wind 14 km/h');
   await hub.locator('[data-rt62-model]').first().click();
   const viewer=page.locator('#rtTrackViewer62');await expect(viewer).toBeVisible();
   await expect(viewer.locator('canvas')).toBeVisible();

@@ -1,6 +1,7 @@
 package de.ridetracker
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.widget.MediaController
@@ -34,6 +35,10 @@ data class AndroidRideMediaItem(
     val rideFile: File,
     val imageFile: File?,
     val videoFile: File?,
+    val imageCredit: String?,
+    val imageSourceUrl: String?,
+    val weatherSummary: String?,
+    val trackPoints: List<AndroidTrackPoint>,
 )
 
 private fun loadRideMedia(context: Context, profileId: String): List<AndroidRideMediaItem> {
@@ -47,20 +52,31 @@ private fun loadRideMedia(context: Context, profileId: String): List<AndroidRide
             val contextNode = root.optJSONObject("context")
             val noteNode = root.optJSONObject("notes")
             val videoNode = root.optJSONObject("video")
+            val thumbnailNode = root.optJSONObject("thumbnail")
+            val weather = root.optJSONObject("environment")?.optJSONObject("weather")?.optJSONObject("start")
             val title = contextNode?.optString("rideName")?.takeIf { it.isNotBlank() } ?: "Unbenannte Bahn"
             val park = contextNode?.optString("parkName")?.takeIf { it.isNotBlank() } ?: "Park nicht erkannt"
-            val imageName = prefs.getString("image.$profileId.$id", null)
+            val editedImageName = prefs.getString("image.$profileId.$id", null)
+            val imageName = editedImageName ?: thumbnailNode?.optString("fileName")?.takeIf { it.isNotBlank() }
             val videoName = videoNode?.optString("filename")?.takeIf { it.isNotBlank() }
             AndroidRideMediaItem(
                 id = id,
                 title = title,
                 park = park,
                 rating = prefs.getInt("rating.$profileId.$id", 0),
-                notes = noteNode?.optString("privateNote") ?: "",
-                comment = noteNode?.optString("communityComment") ?: "",
+                notes = noteNode?.optString("privateNote")?.takeIf { it.isNotBlank() } ?: noteNode?.optString("private").orEmpty(),
+                comment = noteNode?.optString("communityComment")?.takeIf { it.isNotBlank() } ?: noteNode?.optString("comment").orEmpty(),
                 rideFile = file,
                 imageFile = imageName?.let { File(context.filesDir, it) }?.takeIf(File::exists),
                 videoFile = videoName?.let { File(context.filesDir, it) }?.takeIf(File::exists),
+                imageCredit = if (editedImageName != null) "Eigenes Nutzerbild" else thumbnailNode?.optString("attribution")?.takeIf { it.isNotBlank() },
+                imageSourceUrl = if (editedImageName != null) null else thumbnailNode?.optString("sourceUrl")?.takeIf { it.startsWith("https://") },
+                weatherSummary = weather?.let {
+                    val condition = it.optJSONObject("condition")?.optString("label") ?: "Wetter"
+                    val wind = it.optJSONObject("wind")
+                    "$condition · ${"%.1f".format(it.optDouble("temperatureC"))} °C · Wind ${wind?.optDouble("speedKmh")?.toInt() ?: 0} km/h"
+                },
+                trackPoints = deriveAndroidTrackPoints(root),
             )
         }.getOrNull()
     }?.sortedByDescending { it.id } ?: emptyList()
@@ -114,6 +130,7 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
                         Column(Modifier.weight(1f)) {
                             Text(ride.title, style = MaterialTheme.typography.titleMedium)
                             Text(ride.park, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            ride.weatherSummary?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             Row {
                                 (1..5).forEach { value ->
                                     TextButton(onClick = {
@@ -126,6 +143,10 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
                         }
                     }
                     if (expanded) {
+                        ride.imageCredit?.let { credit ->
+                            Text(credit, style = MaterialTheme.typography.labelSmall)
+                            ride.imageSourceUrl?.let { source -> TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(source))) }) { Text("Bildquelle öffnen") } }
+                        }
                         ride.videoFile?.let { file ->
                             AndroidView(
                                 factory = { ctx -> VideoView(ctx).apply { setMediaController(MediaController(ctx).also { it.setAnchorView(this) }); setVideoURI(Uri.fromFile(file)) } },
@@ -133,6 +154,7 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
                                 modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
                             )
                         } ?: Text("Für diese Fahrt ist keine Videodatei verfügbar.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        AndroidTrack3DViewer(ride.trackPoints, Modifier.fillMaxWidth())
                         OutlinedTextField(title, { title = it }, label = { Text("Bahn / Titel") }, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(park, { park = it }, label = { Text("Freizeitpark") }, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(notes, { notes = it }, label = { Text("Private Notiz") }, minLines = 3, modifier = Modifier.fillMaxWidth())

@@ -4,6 +4,8 @@ Stand: 2026-08-08
 
 Dieses Dokument ist die verbindliche Übergabe für einen neuen Chat. Vor Änderungen zuerst `main`, die letzten Actions und dieses Dokument lesen. Danach nur auf Basis des tatsächlichen Repository-Stands weiterarbeiten.
 
+Aktuelle Zielversion: `2026.08.08-context-map-weather.1`. Der vorherige Stand ist am Commit `5a4f178947b144694543161e1f8a459ab19a07b5` und Branch `rollback/pre-park-map-weather-20260808` dokumentiert. Neu sind die wählbare Parkkarte, optionale Wetter-/Wind-Snapshots, lizenzierte Thumbnails, der automatische Aufnahme-Dialog, der strengere Stillstandfilter, die Sensor-FAQ und Supabase-Migration 002 mit Datenschutz-Gate, Export und Löschung.
+
 ## 1. Produktziel
 
 RideTracker ist eine plattformübergreifende Telemetrie-/Community-App für Achterbahnen und Fahrgeschäfte mit Web/PWA, nativer iOS-App und nativer Android-App.
@@ -216,13 +218,13 @@ Zukünftige Admin-Erweiterung:
 - zusätzliche technische Daten nur im Adminmodus,
 - niemals Security durch ein im Frontend hartcodiertes Passwort vortäuschen; echter privilegierter Adminzugriff benötigt serverseitige Authentifizierung. Für lokale Diagnose kann ein PIN nur UI-Schutz sein.
 
-## 10. Aktueller kritischer Web-Bug beim Handoff
+## 10. Historischer Web-Bug und heutige Absicherung
 
-User meldete unmittelbar vor diesem Handoff:
+Der User meldete in einem früheren Stand:
 
 > Seite neu geladen; Bild/Startseite hängt, Startseiten-Menüpunkte lassen sich nicht auswählen.
 
-Actions waren dabei grün – deshalb Runtime-/Overlay-/Navigation-Problem, kein Buildfehler.
+Die rekursive Fehlerbehandlung und blockierende Overlay-Zustände wurden danach abgesichert. Der automatische Aufnahme-Dialog liegt nun oberhalb der Bottom-Navigation und blendet die konkurrierenden manuellen Start-/Kalibrierungsaktionen im Aufnahmeweg aus. Regressionstests prüfen Klickbarkeit, Safe Boot, Runtime-Fehler-Deduplizierung und die neue Park-/Wetter-/FAQ-Oberfläche.
 
 Letzter bekannter erfolgreicher Stand vor Diagnose-Härtung:
 
@@ -231,7 +233,7 @@ Letzter bekannter erfolgreicher Stand vor Diagnose-Härtung:
 - Android Build #116: success (`055e2e98...`).
 - iOS Build #100: success (`055e2e98...`).
 
-Danach wurde `update60.js` + Pages-Publish-Verdrahtung hinzugefügt. Im neuen Chat zuerst den finalen Publish/Deploy nach diesen Commits prüfen und dann auf dem iPhone testen, ob die Startseiten-Buttons nach Reload wieder reagieren.
+Bei einem erneuten Auftreten zuerst den aktuellen Publish/Deploy prüfen und dann auf dem betroffenen iPhone testen, ob Startseiten-Buttons und Aufnahme-Dialog nach Reload reagieren.
 
 Wenn weiterhin blockiert:
 
@@ -262,16 +264,16 @@ Siehe `docs/DIAGNOSTICS_AND_SENSOR_MATH.md`.
 
 ## 12. Nächste Prioritäten – Reihenfolge
 
-1. Web-Reload/Home-Navigation mit `update60` praktisch verifizieren und ggf. verbleibenden Blocker aus Diagnosebericht entfernen.
-2. GPS im realen Außen-Test verifizieren: Fix-Punkte, Accuracy, Speed-Derivation, RidePackage-Persistenz.
-3. GPS-Diagnose um klare Qualitätsampel erweitern; Browser bietet auf iOS keine verlässliche Satellitenanzahl, daher nicht erfinden.
-4. Sensor-Channel-Discovery vollständig in Device Center und HUD-Konfigurator integrieren.
-5. Dynamische Widgets: erkannte Kanäle automatisch vorschlagen, User kann Metriken/Units/Widgettyp/Position konfigurieren.
-6. Externe IMU niemals ungekalibriert direkt als Ride-Achsen verwenden; pro Gerät Bias, Scale und Orientation Matrix/Quaternion speichern.
-7. Park/Bahn-Provider weiter robust machen (Caching, Fallback, Rate Limits, Quellenangabe, Confidence).
-8. Mehrere Fahrten derselben Bahn aggregieren: Median, Streuung, typische Geschwindigkeit/G-Kräfte, Ausreißer.
+1. GPS in realen Stillstands- und Außenfahrtests verifizieren: keine Einzelfix-Sprünge, saubere Freigabe beim Anfahren, RidePackage-Persistenz.
+2. Supabase-Testprojekt in EU-Region anlegen, Migration 001 und 002 ausführen und die Abnahmetests aus `PRIVACY_AND_BACKEND_ROLLOUT.md` durchlaufen.
+3. Betreiberangaben, Datenschutztext, Community-Regeln, Aufbewahrungsfristen und Alterskonzept rechtlich prüfen und veröffentlichen.
+4. GPS-Diagnose um eine klare Qualitätsampel erweitern; Browser bietet auf iOS keine verlässliche Satellitenanzahl, daher nicht erfinden.
+5. Sensor-Channel-Discovery vollständig in Device Center und HUD-Konfigurator integrieren.
+6. Dynamische Widgets: erkannte Kanäle automatisch vorschlagen, User kann Metriken/Units/Widgettyp/Position konfigurieren.
+7. Externe IMU niemals ungekalibriert direkt als Ride-Achsen verwenden; pro Gerät Bias, Scale und Orientation Matrix/Quaternion speichern.
+8. Park/Bahn-Provider um Cache, Provider-Fallback, Rate Limits und transparentere Confidence erweitern.
 9. Native iOS/Android funktional mit Webänderungen nachziehen.
-10. Langfristig Community-Backend, Accounts, Uploads, serverseitige Admin-/Auth-Schicht.
+10. Für Wachstum serverseitige Kontolöschung, Abuse-Rate-Limits, Admin-Audit-Log und Medienstrategie ergänzen.
 
 ## 13. Arbeitsweise im nächsten Chat
 

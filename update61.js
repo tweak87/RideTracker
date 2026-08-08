@@ -164,17 +164,22 @@
     anchor.before(panel);panel.querySelector('[data-refresh]').onclick=()=>void inspectPreflight();panel.querySelector('[data-only-check]').onclick=()=>void inspectPreflight();panel.querySelector('[data-start]').onclick=()=>void startPreparedRide();void inspectPreflight();return panel;
   }
   async function startPreparedRide() {
-    if(state.busy||isRecording())return;state.busy=true;const panel=ensurePreflight(),button=panel?.querySelector('[data-start]'),withVideo=Boolean(panel?.querySelector('[data-video]')?.checked);
+    if(state.busy||isRecording())return isRecording();state.busy=true;let successful=false;const panel=ensurePreflight(),button=panel?.querySelector('[data-start]'),withVideo=Boolean(panel?.querySelector('[data-video]')?.checked);
     if(button){button.disabled=true;button.textContent='Berechtigungen & Sensoren werden vorbereitet …';}
     log('info','preflight','Automatic preparation started',{withVideo});
     try{
-      const before=await inspectPreflight();
+      const before=state.lastPreflight||await inspectPreflight();
       if(before.blocking.includes('database')||before.blocking.includes('storage'))throw new Error('Datenbank oder Speicher ist nicht aufnahmebereit.');
-      const started=withVideo?await window.RideTrackerRecordingActions?.startWithVideo?.():await window.RideTrackerRecordingActions?.startWithoutVideo?.();
+      const contextPreparation=Promise.resolve(window.RideTrackerRideContext?.prepareForRecording?.()).catch(contextError=>{log('warn','ride-context','Park/Wetter-Kontext konnte nicht vorbereitet werden',{message:contextError?.message||String(contextError)});return null;});
+      const startAction=withVideo?window.RideTrackerRecordingActions?.startWithVideo?.():window.RideTrackerRecordingActions?.startWithoutVideo?.();
+      const started=await startAction;
       if(!started)throw new Error('Die Aufnahme konnte nach der automatischen Vorbereitung nicht gestartet werden.');
+      void contextPreparation;
+      successful=true;
       log('info','preflight','Recording started successfully',{withVideo});
     }catch(error){log('error','preflight','Recording preparation failed',error);if(panel?.querySelector('[data-status]'))panel.querySelector('[data-status]').textContent=`Start fehlgeschlagen: ${error.message}`;}
     finally{state.busy=false;if(button){button.disabled=false;button.textContent='Prüfen & Fahrt starten';}void inspectPreflight();}
+    return successful;
   }
 
   function ensureRideDraft() {
@@ -188,11 +193,13 @@
   async function saveRideDraft(modal) {
     const save=modal.querySelector('[data-save]'),status=modal.querySelector('[data-status]');save.disabled=true;status.textContent='Video, Messwerte und Community-Metadaten werden gespeichert …';
     try{
+      await window.RideTrackerRideContext?.validateDraft?.({visibility:modal.querySelector('[data-visibility]').value});
       const ride=await window.RideTrackerRideLibrary?.savePendingRide?.();if(!ride?.id)throw new Error('Fahrt konnte nicht gespeichert werden.');
       const patch={title:modal.querySelector('[data-title]').value.trim()||ride.title,park:modal.querySelector('[data-park]').value.trim(),track:modal.querySelector('[data-ride]').value.trim(),comment:modal.querySelector('[data-description]').value.trim(),visibility:modal.querySelector('[data-visibility]').value,shareExactTrack:modal.querySelector('[data-exact]').checked,updatedAt:new Date().toISOString()};
       const all=rides(),meta=all.find(item=>item.id===ride.id);if(meta)Object.assign(meta,patch);writeJson(META_KEY,all);
       const entry=community?.upsertRide?.({id:ride.id,title:patch.title,parkName:patch.park,rideName:patch.track,description:patch.comment,visibility:patch.visibility,shareExactTrack:patch.shareExactTrack,createdAt:ride.createdAt,updatedAt:patch.updatedAt});
       const db=window.RideTrackerDatabase,pkg=await db?.get?.(db.stores.ridePackages,ride.id).catch(()=>null);if(pkg){pkg.document=pkg.document||{};pkg.document.community={...entry};pkg.document.context={...(pkg.document.context||{}),parkName:patch.park,rideName:patch.track};pkg.parkName=patch.park;pkg.rideName=patch.track;await db.put(db.stores.ridePackages,ride.id,pkg);}
+      await window.RideTrackerRideContext?.persistToRide?.(ride.id,{parkName:patch.park,rideName:patch.track,visibility:patch.visibility});
       await window.RideTrackerRideLibrary?.render?.();modal.hidden=true;renderHome();window.dispatchEvent(new CustomEvent('ridetracker:community-ride-updated',{detail:{rideId:ride.id,visibility:patch.visibility}}));log('info','ride-draft','Ride saved',{rideId:ride.id,visibility:patch.visibility,shareExactTrack:patch.shareExactTrack});
     }catch(error){status.textContent=`Speichern fehlgeschlagen: ${error.message}`;log('error','ride-draft','Ride save failed',error);}finally{save.disabled=false;}
   }

@@ -1,13 +1,13 @@
 {
   "product": "RideTracker",
-  "version": "2026.08.08-speed-compass-3d.1",
-  "channel": "speed-compass-spatial-inspector",
-  "releasedAt": "2026-08-08T08:00:00.000Z",
+  "version": "2026.08.08-context-map-weather.1",
+  "channel": "park-map-weather-auto-record",
+  "releasedAt": "2026-08-08T12:00:00.000Z",
   "baseline": {
-    "label": "Stable community backend and 3D baseline before speed, compass and spatial inspector",
-    "commit": "9a0d225bd291f1c5c3b65cb4f507f898dcf5a83b",
-    "rollbackBranch": "rollback/pre-speed-compass-3d-20260808",
-    "url": "https://github.com/tweak87/RideTracker/tree/rollback/pre-speed-compass-3d-20260808"
+    "label": "Stable speed, compass and spatial inspector baseline before ride context and privacy hardening",
+    "commit": "5a4f178947b144694543161e1f8a459ab19a07b5",
+    "rollbackBranch": "rollback/pre-park-map-weather-20260808",
+    "url": "https://github.com/tweak87/RideTracker/tree/rollback/pre-park-map-weather-20260808"
   },
   "features": [
     "community-navigation",
@@ -24,6 +24,16 @@
     "windowed-ios-gps-speed",
     "configurable-compass-widget",
     "xyz-track-point-inspector",
-    "recursion-safe-runtime-errors"
+    "recursion-safe-runtime-errors",
+    "nearby-park-map-selection",
+    "automatic-recording-bottom-dialog",
+    "optional-weather-snapshots",
+    "licensed-ride-thumbnails",
+    "stationary-gps-lock",
+    "sensor-math-faq",
+    "versioned-community-privacy-consent",
+    "community-data-export-erasure",
+    "android-native-feature-parity",
+    "direct-android-test-apk"
   ]
 }

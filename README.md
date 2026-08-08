@@ -2,9 +2,9 @@
 
 ## Aktuelle Web-Version
 
-Die aktuelle Version `2026.08.08-speed-compass-3d.1` erweitert die Community-Grundlage um eine robuste iOS-GPS-Geschwindigkeit, ein konfigurierbares Kompass-HUD und einen räumlichen XYZ-Streckeninspektor. Jeder Modellpunkt kann ausgewählt werden und zeigt dort Geschwindigkeit, Kräfte, Höhe, Strecke und Modellgüte. Das optionale Backend für Anmeldung, Synchronisierung, Freunde, Feed, Meldungen und Moderation bleibt enthalten.
+Die aktuelle Version `2026.08.08-context-map-weather.1` ergänzt Web und Android um eine wählbare Parkkarte im Umkreis, optionale Wetter-/Wind-Snapshots, lizenzierte Fahrtbilder als Miniaturen, einen automatischen Aufnahme-Dialog und einen strengeren Stillstandfilter gegen GPS-Sprünge. FAQ, Kompass und frei navigierbares XYZ-Modell mit Punktinspektor sind in beiden Oberflächen verfügbar. Das Supabase-Backend erhält versionierte Datenschutzzustimmung, serverseitige Synchronisierungssperre sowie Export und Löschung der eigenen Community-Daten.
 
-Der unmittelbar vorherige stabile Produktionsstand bleibt unter Commit `9a0d225bd291f1c5c3b65cb4f507f898dcf5a83b` und Branch [`rollback/pre-speed-compass-3d-20260808`](https://github.com/tweak87/RideTracker/tree/rollback/pre-speed-compass-3d-20260808) erhalten. Sensormathematik und Bedienung sind in [`docs/SPEED_COMPASS_3D.md`](docs/SPEED_COMPASS_3D.md) dokumentiert; Backend und Datenschutz stehen in [`docs/COMMUNITY_BACKEND_3D.md`](docs/COMMUNITY_BACKEND_3D.md).
+Der unmittelbar vorherige stabile Produktionsstand bleibt unter Commit `5a4f178947b144694543161e1f8a459ab19a07b5` und Branch [`rollback/pre-park-map-weather-20260808`](https://github.com/tweak87/RideTracker/tree/rollback/pre-park-map-weather-20260808) erhalten. Sensormathematik und Bedienung sind in [`docs/SPEED_COMPASS_3D.md`](docs/SPEED_COMPASS_3D.md) dokumentiert; die sichere Backend-Aktivierung steht in [`docs/PRIVACY_AND_BACKEND_ROLLOUT.md`](docs/PRIVACY_AND_BACKEND_ROLLOUT.md).
 
 Plattformübergreifende Telemetrie- und Analyseplattform für Achterbahnen und Fahrgeschäfte.
 
@@ -45,4 +45,4 @@ Unter **Actions** können folgende Workflows manuell gestartet werden:
 - `Build iOS`
 - `Build Android`
 
-Der Android-Workflow erzeugt eine Debug-APK als Artefakt. Der iOS-Workflow prüft den Swift-Code mit einem Simulator-Build; für die Installation auf einem realen iPhone ist später Signierung erforderlich.
+Der Android-Workflow testet und prüft die App, erzeugt eine Debug-APK als Artefakt und veröffentlicht Builds von `main` zusätzlich als Vorab-Release unter [`android-v2026.08.08.1`](https://github.com/tweak87/RideTracker/releases/tag/android-v2026.08.08.1). Die Test-APK ist nicht für den Play Store signiert; für wiederholte Updates und eine öffentliche Verteilung wird später ein geschützter Release-Key benötigt. Der iOS-Workflow prüft den Swift-Code mit einem Simulator-Build; für die Installation auf einem realen iPhone ist ebenfalls Signierung erforderlich.

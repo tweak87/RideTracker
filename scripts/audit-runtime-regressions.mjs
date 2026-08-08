@@ -10,6 +10,7 @@ const required = [
   'update61.js',
   'update62.js',
   'update63.js',
+  'update64.js',
   'shared/ride-engine/gps-speed.js',
   'shared/ride-engine/browser-adapter.js',
   'shared/core/community-model.js',
@@ -53,7 +54,7 @@ requireToken('update61.js', 'RideTrackerSupportCenter', 'Support center API miss
 requireToken('update61.js', 'RideTrackerAdminCenter', 'Local admin center API missing');
 requireToken('shared/core/community-model.js', 'ready-for-backend', 'Community publication state missing');
 requireToken('shared/core/community-model.js', 'publicProjection', 'Privacy-safe community projection missing');
-requireToken('shared/core/release-manifest.js', 'rollback/pre-speed-compass-3d-20260808', 'Documented rollback point missing');
+requireToken('shared/core/release-manifest.js', 'rollback/pre-park-map-weather-20260808', 'Documented rollback point missing');
 requireToken('update61.js', 'RideTrackerCommunityHub?.open', 'Community navigation must delegate to the full hub');
 requireToken('update62.js', 'RideTrackerCommunityHub', 'Community backend/3D hub missing');
 requireToken('shared/core/community-backend.js', 'SERVICE_ROLE_REJECTED', 'Service-role browser protection missing');
@@ -62,6 +63,13 @@ requireToken('shared/visualization/track-3d.js', 'mergeModels', 'Server-compatib
 requireToken('shared/visualization/track-3d.js', 'nearestProjectedPoint', '3D point picking missing');
 requireToken('update63.js', 'RideTrackerCompass', 'Compass runtime missing');
 requireToken('update63.js', 'webkitCompassHeading', 'iOS compass support missing');
+requireToken('update64.js', 'Parks im Umkreis suchen', 'Nearby park chooser missing');
+requireToken('update64.js', 'externalLookupConsent:false', 'External location calls must default to off');
+requireToken('update64.js', 'weatherEnabled:false', 'Weather lookup must default to off');
+requireToken('update64.js', 'allowedCommonsLicense', 'Stock image license filter missing');
+requireToken('update64.js', 'BY-(?:SA|NC|ND)', 'Restrictive Commons licenses must be excluded');
+requireToken('update64.js', 'RideTrackerRideContext', 'Ride context integration API missing');
+rejectToken('update64.js', 'if(host){renderDraftEnhancement();return host;}', 'Ride context observer must not rerender its own existing draft subtree');
 requireToken('update38.js', 'runtimeErrors.handling', 'Runtime error recursion guard missing');
 
 const html = source['index.html'];
@@ -74,6 +82,7 @@ const communityPosition = html.indexOf('update61.js?v=');
 const backendPosition = html.indexOf('shared/core/community-backend.js?v=');
 const track3dPosition = html.indexOf('shared/visualization/track-3d.js?v=');
 const community3dPosition = html.indexOf('update62.js?v=');
+const contextPosition = html.indexOf('update64.js?v=');
 const built = gpsPosition >= 0 || adapterPosition >= 0 || healthPosition >= 0 || communityPosition >= 0;
 if (built && (gpsPosition < 0 || adapterPosition < 0 || healthPosition < 0 || gpsPosition > adapterPosition || gpsPosition > healthPosition)) {
   throw new Error('Canonical GPS math must load before the adapter and GPS health module');
@@ -83,6 +92,9 @@ if (built && (modelPosition < 0 || releasePosition < 0 || communityPosition < 0 
 }
 if (built && (backendPosition < 0 || track3dPosition < 0 || community3dPosition < 0 || backendPosition > community3dPosition || track3dPosition > community3dPosition || community3dPosition < communityPosition)) {
   throw new Error('Community backend and 3D runtime must load before update62, after the community foundation');
+}
+if (built && (contextPosition < 0 || contextPosition < community3dPosition)) {
+  throw new Error('Ride context runtime must load after the community and 3D modules');
 }
 
 console.log('Runtime regression audit passed.');

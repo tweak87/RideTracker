@@ -29,6 +29,8 @@ class AndroidVideoRecorder(
 ) {
     var isRecording by mutableStateOf(false)
         private set
+    var isStarting by mutableStateOf(false)
+        private set
     var status by mutableStateOf("Video bereit zur Initialisierung")
         private set
     var lastVideoFile by mutableStateOf<File?>(null)
@@ -86,6 +88,7 @@ class AndroidVideoRecorder(
     }
 
     fun start(sessionId: String, sensorStartNs: Long) {
+        if (activeRecording != null || isStarting || isRecording) return
         val capture = videoCapture ?: run {
             status = "Kamera noch nicht initialisiert"
             return
@@ -106,13 +109,16 @@ class AndroidVideoRecorder(
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             pending = pending.withAudioEnabled()
         }
+        isStarting = true
         activeRecording = pending.start(ContextCompat.getMainExecutor(context)) { event ->
             when (event) {
                 is VideoRecordEvent.Start -> {
+                    isStarting = false
                     isRecording = true
                     status = "Videoaufnahme läuft"
                 }
                 is VideoRecordEvent.Finalize -> {
+                    isStarting = false
                     isRecording = false
                     activeRecording = null
                     status = if (event.hasError()) "Videofehler: ${event.error}" else "Video gespeichert: ${file.name}"
