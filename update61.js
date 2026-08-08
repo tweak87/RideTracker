@@ -2,8 +2,8 @@
   'use strict';
 
   const RELEASE = window.RideTrackerReleaseManifest || {
-    version:'2026.08.08-community-foundation.1',
-    baseline:{commit:'8485df203665f8e93558fcbcac72a890fc6e9c3b',rollbackBranch:'rollback/pre-community-foundation-20260808'}
+    version:'2026.08.08-community-backend-3d.1',
+    baseline:{commit:'3bd0175b93c7babe515f91555352e7711020fa7f',rollbackBranch:'rollback/pre-community-backend-20260808'}
   };
   const META_KEY = 'rideTracker.savedRides.v2';
   const LOG_KEY = 'rideTracker.supportLog.v1';
@@ -83,6 +83,7 @@
   async function navigate(route) {
     log('info','navigation',`Navigate ${route}`);
     closeFoundationViews();
+    if(route==='community'&&window.RideTrackerCommunityHub?.open)return window.RideTrackerCommunityHub.open();
     if(route==='community')return showCommunity();
     if(route==='profile')return showProfile();
     if(route==='support')return showSupport();
