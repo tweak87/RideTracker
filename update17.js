@@ -71,11 +71,11 @@
   function isRecording() {
     const stop = document.getElementById('stop');
     if (stop && !stop.disabled) return true;
-    return [...document.querySelectorAll('button')].some(b => !b.disabled && /Aufnahme stoppen|Fahrt stoppen|Stoppen/.test(b.textContent || ''));
+    return Boolean(window.RideTrackerRecordingFullscreen?.isRecording?.());
   }
 
   function stopRecording() {
-    const candidates = [document.getElementById('stop'), ...document.querySelectorAll('button')].filter(Boolean);
+    const candidates = [document.getElementById('stop'), ...document.querySelectorAll('button:not(.rt-recording-stop)')].filter(Boolean);
     const button = candidates.find(b => !b.disabled && /Aufnahme stoppen|Fahrt stoppen|Stoppen/.test(b.textContent || ''));
     button?.click();
   }
