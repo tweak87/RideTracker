@@ -5,6 +5,7 @@ window.RideTrackerEngine = engine;
 
 const originalWatch = navigator.geolocation?.watchPosition?.bind(navigator.geolocation);
 const originalGet = navigator.geolocation?.getCurrentPosition?.bind(navigator.geolocation);
+let lastObservedTimestamp = null;
 
 function normalize(position) {
   const c = position.coords;
@@ -31,17 +32,24 @@ function updateBadge() {
   if (badge) badge.textContent = `Engine: ${summary.acceptedLocations} GPS ✓ / ${summary.rejectedLocations} verworfen`;
 }
 
-function filteredCallback(callback) {
+function observedCallback(callback) {
   return position => {
-    const result = engine.processLocation(normalize(position));
-    updateBadge();
-    if (result.accepted) callback?.(position);
+    const timestamp = Number(position?.timestamp);
+    if (!Number.isFinite(timestamp) || timestamp !== lastObservedTimestamp) {
+      lastObservedTimestamp = Number.isFinite(timestamp) ? timestamp : null;
+      engine.processLocation(normalize(position));
+      updateBadge();
+    }
+    // The engine observes quality but must never starve another GPS consumer.
+    // A separate watch (for example Device Center diagnostics) may receive the
+    // same OS fix and still needs its callback.
+    callback?.(position);
   };
 }
 
 if (originalWatch) {
   navigator.geolocation.watchPosition = (success, error, options) =>
-    originalWatch(filteredCallback(success), error, options);
+    originalWatch(observedCallback(success), error, options);
 }
 
 if (originalGet) {

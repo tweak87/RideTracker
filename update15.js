@@ -30,7 +30,7 @@
       distance: rides.reduce((sum, r) => sum + num(r.distanceMeters), 0),
       duration: rides.reduce((sum, r) => sum + num(r.durationSeconds), 0),
       bestQuality: rides.reduce((best, r) => Math.max(best, num(r.qualityScore)), 0),
-      maxSpeed: rides.reduce((best, r) => Math.max(best, ...(r.document?.samples || []).map(s => num(s.speedMS ?? s.speed) * 3.6)), 0),
+      maxSpeed: rides.reduce((best, r) => Math.max(best, window.RideTrackerGpsMath?.packageMaxSpeedKmh?.(r) || 0, ...(r.document?.samples || []).map(s => Number.isFinite(Number(s.speedKmh)) ? Number(s.speedKmh) : num(s.speedMS ?? s.speed) * 3.6)), 0),
       maxG: rides.reduce((best, r) => Math.max(best, ...(r.document?.samples || []).map(s => num(s.totalG ?? s.total))), 0)
     };
   }
