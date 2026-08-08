@@ -4,10 +4,10 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Location
 import android.net.Uri
-import android.text.Html
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.text.HtmlCompat
 import de.ridetracker.location.AndroidPlatformLocationProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -384,7 +384,7 @@ class AndroidRideContextStore(private val context: Context) {
         return output.toByteArray()
     }
 
-    private fun plain(value: String): String = Html.fromHtml(value, Html.FROM_HTML_MODE_LEGACY).toString().replace(Regex("\\s+"), " ").trim()
+    private fun plain(value: String): String = HtmlCompat.fromHtml(value, HtmlCompat.FROM_HTML_MODE_LEGACY).toString().replace(Regex("\\s+"), " ").trim()
     private fun allowedLicense(value: String): Boolean = Regex("^(CC0|Public domain|Public Domain|CC BY(?:\\s|-|$))", RegexOption.IGNORE_CASE).containsMatchIn(value) && !Regex("BY-(SA|NC|ND)", RegexOption.IGNORE_CASE).containsMatchIn(value)
     private fun weatherCodeText(code: Int) = when {
         code == 0 -> "Klar"
