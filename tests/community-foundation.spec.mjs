@@ -20,8 +20,9 @@ test('five primary mobile destinations stay clickable and responsive', async ({ 
     await expect.poll(()=>page.evaluate(()=>document.body.dataset.rtRoute)).toBe(route);
     expect(await eventLoopLag(page)).toBeLessThan(500);
   }
-  await expect(page.locator('#rtCommunityPreflight')).toBeVisible();
-  await expect(page.locator('#rtCommunityPreflight .rt61-check')).toHaveCount(7);
+  await expect(page.locator('#rtCommunityPreflight')).toBeHidden();
+  await expect(page.locator('#rtRecordingBanner')).toBeVisible();
+  await expect(page.locator('#rtRecordingBanner .rt-recording-auto')).toContainText('Automatisch starten');
   expect(page.__rideTrackerErrors).toEqual([]);
 });
 
