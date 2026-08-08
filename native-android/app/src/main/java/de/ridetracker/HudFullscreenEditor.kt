@@ -1,7 +1,9 @@
 package de.ridetracker
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
-import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -27,8 +29,8 @@ private enum class HudMode { Portrait, Landscape }
 
 @Composable
 fun AndroidHudFullscreenEditor(modifier: Modifier = Modifier) {
-    val activity = LocalActivity.current
     val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
     var editing by remember { mutableStateOf(false) }
     if (!editing) {
         Column(modifier.fillMaxSize().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -82,6 +84,12 @@ fun AndroidHudFullscreenEditor(modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 @Composable

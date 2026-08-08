@@ -4,15 +4,12 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Location
 import android.net.Uri
-import android.text.Html
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
+import androidx.core.text.HtmlCompat
+import de.ridetracker.location.AndroidPlatformLocationProvider
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -22,8 +19,6 @@ import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Instant
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 import kotlin.math.roundToInt
 
 data class GeoPoint(
@@ -103,7 +98,7 @@ data class AndroidRideContextSnapshot(
 
 class AndroidRideContextStore(private val context: Context) {
     private val preferences = context.getSharedPreferences("ridetracker_context_v1", Context.MODE_PRIVATE)
-    private val locationClient = LocationServices.getFusedLocationProviderClient(context)
+    private val locationProvider = AndroidPlatformLocationProvider(context)
 
     var currentLocation by mutableStateOf<GeoPoint?>(null); private set
     var parks by mutableStateOf<List<NearbyPark>>(emptyList()); private set
@@ -158,16 +153,8 @@ class AndroidRideContextStore(private val context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    suspend fun requestCurrentLocation(): GeoPoint = suspendCancellableCoroutine { continuation ->
-        val cancellation = CancellationTokenSource()
-        continuation.invokeOnCancellation { cancellation.cancel() }
-        locationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellation.token)
-            .addOnSuccessListener { location ->
-                if (!continuation.isActive) return@addOnSuccessListener
-                if (location == null) continuation.resumeWithException(IllegalStateException("Standort konnte nicht ermittelt werden."))
-                else continuation.resume(GeoPoint(location.latitude, location.longitude, location.accuracy.toDouble()))
-            }
-            .addOnFailureListener { error -> if (continuation.isActive) continuation.resumeWithException(error) }
+    suspend fun requestCurrentLocation(): GeoPoint = locationProvider.currentLocation().let { location ->
+        GeoPoint(location.latitude, location.longitude, location.accuracy.toDouble())
     }
 
     suspend fun loadNearbyParks() {
@@ -397,7 +384,7 @@ class AndroidRideContextStore(private val context: Context) {
         return output.toByteArray()
     }
 
-    private fun plain(value: String): String = Html.fromHtml(value, Html.FROM_HTML_MODE_LEGACY).toString().replace(Regex("\\s+"), " ").trim()
+    private fun plain(value: String): String = HtmlCompat.fromHtml(value, HtmlCompat.FROM_HTML_MODE_LEGACY).toString().replace(Regex("\\s+"), " ").trim()
     private fun allowedLicense(value: String): Boolean = Regex("^(CC0|Public domain|Public Domain|CC BY(?:\\s|-|$))", RegexOption.IGNORE_CASE).containsMatchIn(value) && !Regex("BY-(SA|NC|ND)", RegexOption.IGNORE_CASE).containsMatchIn(value)
     private fun weatherCodeText(code: Int) = when {
         code == 0 -> "Klar"

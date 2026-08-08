@@ -1,5 +1,7 @@
 package de.ridetracker
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -212,13 +214,18 @@ private fun RoutingEditor(registry: AndroidDeviceRegistry) {
 
 @Composable
 private fun DeviceList(registry: AndroidDeviceRegistry, heartRate: AndroidHeartRateManager, openRouting: () -> Unit) {
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        if (heartRate.permissionsGranted()) heartRate.scan()
+    }
     Card {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("BLE Herzfrequenz", style = MaterialTheme.typography.titleMedium)
             Text(heartRate.status)
             heartRate.latestHeartRate?.let { Text("$it BPM") }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = heartRate::scan) { Text("Suchen") }
+                Button(onClick = {
+                    if (heartRate.permissionsGranted()) heartRate.scan() else permissionLauncher.launch(heartRate.requiredPermissions())
+                }) { Text("Suchen") }
                 Button(onClick = heartRate::connect) { Text("Verbinden") }
             }
         }
