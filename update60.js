@@ -71,6 +71,7 @@
     if (hud?.classList.contains('open')) { hud.classList.remove('open'); closed.push('rtStandaloneHudEditor'); }
     const device = document.getElementById('rtDeviceCenter');
     if (device?.classList.contains('open')) { device.classList.remove('open'); closed.push('rtDeviceCenter'); }
+    document.querySelectorAll('.rt-home-panel.open').forEach(panel=>{panel.classList.remove('open');closed.push('rt-home-panel');});
 
     document.body.classList.remove('rt-dialog-open','rt-navigation-open','rt-hud-editor-open');
     if (!document.fullscreenElement && !document.webkitFullscreenElement) {
@@ -80,8 +81,9 @@
 
     if (forceHome) {
       try {
-        if (window.RideTrackerNavigationRegistry?.navigate) window.RideTrackerNavigationRegistry.navigate('home');
-        else if (window.RideTrackerFrontendNavigation?.home) window.RideTrackerFrontendNavigation.home();
+        window.RideTrackerFrontendNavigation?.ensureHome?.();
+        if (window.RideTrackerFrontendNavigation?.home) window.RideTrackerFrontendNavigation.home();
+        else if (window.RideTrackerNavigationRegistry?.navigate) void window.RideTrackerNavigationRegistry.navigate('home');
       } catch (error) { add('error','boot','Home recovery failed',error); }
       const inline = document.getElementById('rtInlineDashboard');
       if (inline) inline.hidden = false;

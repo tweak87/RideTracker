@@ -16,10 +16,13 @@
     validation:null,
   };
 
-  const finite = value => Number.isFinite(Number(value));
+  const finite = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+  const gpsMath = window.RideTrackerGpsMath;
+  const estimator = gpsMath?.createEstimator?.() || null;
   const clamp = (value,min,max) => Math.max(min,Math.min(max,value));
   const rad = value => Number(value) * Math.PI / 180;
   function distanceMeters(a,b){
+    if(gpsMath?.distanceMeters)return gpsMath.distanceMeters(a,b);
     const R=6371000;
     const dLat=rad(Number(b.latitude)-Number(a.latitude));
     const dLon=rad(Number(b.longitude)-Number(a.longitude));
@@ -41,8 +44,9 @@
   }
 
   function deriveSpeed(point){
+    if(estimator)return estimator.update(point);
     const prev=state.previous;
-    const nativeMS=finite(point.speedMS)?Math.max(0,Number(point.speedMS)):null;
+    const nativeMS=finite(point.nativeSpeedMS??point.speedMS)?Math.max(0,Number(point.nativeSpeedMS??point.speedMS)):null;
     let derivedMS=null;
     if(prev && finite(prev.latitude) && finite(prev.longitude)){
       const dtMs=(Number(point.gpsTimestampMs)||Date.now())-(Number(prev.gpsTimestampMs)||0);
@@ -76,7 +80,7 @@
     const alpha=raw>state.smoothedSpeedMS?0.58:0.34;
     state.smoothedSpeedMS=state.points<2?raw:(state.smoothedSpeedMS+(raw-state.smoothedSpeedMS)*alpha);
     if(state.smoothedSpeedMS<0.3)state.smoothedSpeedMS=0;
-    return { speedMS:state.smoothedSpeedMS, speedKmh:state.smoothedSpeedMS*3.6, source, nativeMS, derivedMS };
+    return { speedMS:state.smoothedSpeedMS, speedKmh:state.smoothedSpeedMS*3.6, source, nativeSpeedMS:nativeMS, derivedSpeedMS:derivedMS };
   }
 
   function updateSpeedDom(){
@@ -84,20 +88,27 @@
     const kmh=state.smoothedSpeedMS*3.6;
     state.maxSpeedKmh=Math.max(state.maxSpeedKmh,kmh);
     const speed=document.getElementById('speed');
-    if(speed)speed.innerHTML=`${kmh.toFixed(1)} <span class="unit">km/h</span>`;
+    const speedHtml=`${kmh.toFixed(1)} <span class="unit">km/h</span>`;
+    if(speed&&speed.innerHTML!==speedHtml)speed.innerHTML=speedHtml;
     const max=document.getElementById('speedMax');
-    if(max)max.textContent=`${state.maxSpeedKmh.toFixed(1)} km/h`;
+    const maxText=`${state.maxSpeedKmh.toFixed(1)} km/h`;
+    if(max&&max.textContent!==maxText)max.textContent=maxText;
     const legacyHud=document.getElementById('hudSpeed');
-    if(legacyHud)legacyHud.textContent=String(Math.round(kmh));
+    const hudText=String(Math.round(kmh));
+    if(legacyHud&&legacyHud.textContent!==hudText)legacyHud.textContent=hudText;
   }
 
   function onGps(event){
     const point=event.detail;
     if(!point || !finite(point.latitude) || !finite(point.longitude))return;
+    if(!finite(point.nativeSpeedMS) && finite(point.speedMS))point.nativeSpeedMS=Number(point.speedMS);
     const speed=deriveSpeed(point);
+    state.smoothedSpeedMS=speed.speedMS;
     point.speedMS=speed.speedMS;
     point.speedKmh=speed.speedKmh;
     point.speedSource=speed.source;
+    point.nativeSpeedMS=speed.nativeSpeedMS;
+    point.derivedSpeedMS=speed.derivedSpeedMS;
     point.quality=qualityFor(point,speed.source);
     state.points+=1;
     state.lastFixAt=performance.now();
@@ -117,6 +128,7 @@
       source:'phone-gps',
       speedSource:speed.source,
     }}));
+    window.dispatchEvent(new CustomEvent('ridetracker:canonical-gps',{detail:{...point}}));
     window.dispatchEvent(new CustomEvent('ridetracker:gps-health',{detail:snapshot()}));
     render();
   }
@@ -128,6 +140,7 @@
   }
 
   function resetSession(){
+    estimator?.reset?.();
     state.previous=null;
     state.smoothedSpeedMS=0;
     state.maxSpeedKmh=0;
@@ -147,6 +160,7 @@
     if(next===state.recording){if(next)updateSpeedDom();return;}
     state.recording=next;
     if(next){
+      estimator?.reset?.();
       state.previous=null;
       state.smoothedSpeedMS=0;
       state.maxSpeedKmh=0;
@@ -161,6 +175,7 @@
   }
 
   function packageGpsPoints(pkg){
+    if(gpsMath?.gpsPointsFromPackage)return gpsMath.gpsPointsFromPackage(pkg);
     const direct=Array.isArray(pkg?.document?.gps?.points)?pkg.document.gps.points:[];
     if(direct.length)return direct;
     return (Array.isArray(pkg?.document?.samples)?pkg.document.samples:[]).filter(s=>finite(s.latitude)&&finite(s.longitude));
@@ -188,9 +203,13 @@
     let pkg=await database.get(database.stores.ridePackages,rideId);
     if(!pkg)return null;
     const points=packageGpsPoints(pkg);
+    pkg.document=pkg.document||{};
+    if(points.length && gpsMath?.mergeCanonicalGpsIntoSamples){
+      pkg.document.samples=gpsMath.mergeCanonicalGpsIntoSamples(Array.isArray(pkg.document.samples)?pkg.document.samples:[],points);
+    }
     const distance=distanceFromPoints(points);
     const samples=Array.isArray(pkg?.document?.samples)?pkg.document.samples:[];
-    let maxSpeed=0;
+    let maxSpeed=gpsMath?.packageMaxSpeedKmh?.(pkg)||0;
     for(const sample of samples){
       const speed=finite(sample.speedKmh)?Number(sample.speedKmh):(finite(sample.speedMS)?Number(sample.speedMS)*3.6:0);
       maxSpeed=Math.max(maxSpeed,speed);
@@ -203,7 +222,6 @@
       pkg.distanceMeters=distance>0?distance:Number(pkg.distanceMeters||0);
       pkg.maxSpeedKmh=Math.max(Number(pkg.maxSpeedKmh||0),maxSpeed);
       pkg.gpsPointCount=points.length;
-      pkg.document=pkg.document||{};
       pkg.document.summary={...(pkg.document.summary||{}),distanceMeters:pkg.distanceMeters,maxSpeedKmh:pkg.maxSpeedKmh,gpsPointCount:points.length};
     }
     const video=await database.get(database.stores.videos,rideId).catch(()=>null);
@@ -292,11 +310,12 @@
   function render(){
     const panel=ensurePanel();if(!panel)return;
     const snap=snapshot();
-    panel.querySelector('[data-status]').textContent=statusText();
-    panel.querySelector('[data-speed]').textContent=`${Number(snap.speedKmh||0).toFixed(1)} km/h`;
-    panel.querySelector('[data-accuracy]').textContent=finite(snap.accuracyM)?`±${Math.round(snap.accuracyM)} m`:'–';
-    panel.querySelector('[data-points]').textContent=String(snap.points||snap.persistedPoints||0);
-    panel.querySelector('[data-source]').textContent=snap.source==='native+derived'?'GPS + Strecke':snap.source==='derived'?'aus GPS-Strecke':snap.source==='native'?'GPS direkt':snap.source;
+    const set=(selector,value)=>{const node=panel.querySelector(selector);if(node&&node.textContent!==value)node.textContent=value;};
+    set('[data-status]',statusText());
+    set('[data-speed]',`${Number(snap.speedKmh||0).toFixed(1)} km/h`);
+    set('[data-accuracy]',finite(snap.accuracyM)?`±${Math.round(snap.accuracyM)} m`:'–');
+    set('[data-points]',String(snap.points||snap.persistedPoints||0));
+    set('[data-source]',snap.source==='native+derived'?'GPS + Strecke':snap.source==='derived'?'aus GPS-Strecke':snap.source==='native'?'GPS direkt':snap.source);
   }
 
   window.addEventListener('ridetracker:recording-gps',onGps);
@@ -305,8 +324,6 @@
   window.addEventListener('ridetracker:ride-saved',event=>void onRideSaved(event));
   window.addEventListener('ridetracker:recording-started',()=>setTimeout(syncRecording,0));
   window.addEventListener('ridetracker:recording-stopped',()=>setTimeout(syncRecording,0));
-  const observer=new MutationObserver(()=>render());
-  observer.observe(document.body,{childList:true,subtree:true});
   setInterval(()=>{syncRecording();render();},250);
   render();
 

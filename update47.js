@@ -58,8 +58,9 @@
   }
 
   function gpsPoints(pkg) {
-    const samples = Array.isArray(pkg?.document?.samples) ? pkg.document.samples : [];
-    return samples.filter(s => Number.isFinite(Number(s.latitude)) && Number.isFinite(Number(s.longitude))).map(s => ({ lat:Number(s.latitude), lon:Number(s.longitude) }));
+    const points = window.RideTrackerGpsMath?.gpsPointsFromPackage?.(pkg)
+      || (Array.isArray(pkg?.document?.samples) ? pkg.document.samples : []);
+    return points.filter(s => Number.isFinite(Number(s.latitude)) && Number.isFinite(Number(s.longitude))).map(s => ({ lat:Number(s.latitude), lon:Number(s.longitude) }));
   }
 
   function drawTrack(canvas, points) {
