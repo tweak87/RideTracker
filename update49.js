@@ -182,6 +182,7 @@
     const originalClose = window.RideTrackerStandaloneHudEditor?.close;
     if (window.RideTrackerStandaloneHudEditor && !window.RideTrackerStandaloneHudEditor.__managed49) {
       window.RideTrackerStandaloneHudEditor.open = async () => {
+        OverlayManager.routeChanged('hud');
         root.classList.add('open');
         document.body.classList.add('rt-hud-editor-open');
         try {

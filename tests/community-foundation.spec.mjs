@@ -135,6 +135,8 @@ test('compass is configurable and uses GPS course as fallback', async ({page}) =
   expect(compass.headingDeg).toBeCloseTo(72,1);
   expect(compass.source).toBe('gps-course');
   await page.evaluate(()=>window.RideTrackerStandaloneHudEditor.open());
+  await expect.poll(()=>page.evaluate(()=>document.body.dataset.rtRoute)).toBe('hud');
+  await page.waitForTimeout(900);
   await expect(page.locator('#rtStandaloneHudEditor [data-control="compass"]')).toBeVisible();
   await expect(page.locator('#rtStandaloneHudEditor .rt-hud-item[data-key="compass"]')).toBeVisible();
 });

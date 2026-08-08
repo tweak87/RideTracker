@@ -158,8 +158,9 @@
     ensureVisibleShell();
     ensureCanonicalShell();
     const dashboard = document.getElementById('rideDashboard');
-    const activeTool = document.querySelector('.rt-tool-view:not([hidden]),#rtSettingsView:not([hidden]),#rtRideLibrary:not([hidden]),.rt-view');
+    const activeTool = document.querySelector('.rt-tool-view:not([hidden]),#rtSettingsView:not([hidden]),#rtRideLibrary:not([hidden]),.rt-view,#rtStandaloneHudEditor.open,#rtDeviceCenter.open');
     const recording = window.RideTrackerRecordingState?.isRecording?.() === true || document.getElementById('stop')?.disabled === false;
+    if (forceHome && activeTool) forceHome = false;
     if (forceHome || (!recording && !activeTool && dashboard && getComputedStyle(dashboard).display === 'none')) goHome();
   }
 
@@ -203,7 +204,7 @@
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once:true}); else boot();
   window.addEventListener('pageshow', event => {
-    closeStaleTransientViews();
+    if (!document.body.classList.contains('rt-hud-editor-open')) closeStaleTransientViews();
     recoverIfNeeded(event.persisted === true);
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) recoverIfNeeded(false); });
