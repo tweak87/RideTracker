@@ -14,6 +14,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,7 +39,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
 
-enum class FunctionalSection { HOME, RECORD, RIDES, MAP, DEVICES, SETTINGS, HUD, STATISTICS, ACHIEVEMENTS, FAQ }
+enum class FunctionalSection { HOME, RECORD, RIDES, COMMUNITY, PROFILE, MAP, DEVICES, SETTINGS, HUD, STATISTICS, ACHIEVEMENTS, FAQ, COMPATIBILITY }
 private enum class PendingPermissionAction { NONE, START, PARK_SEARCH }
 
 data class AndroidRideEntry(val file: File, val title: String, val distanceMeters: Double, val durationSeconds: Double, val latitude: Double?, val longitude: Double?)
@@ -241,7 +247,7 @@ fun FunctionalRideTrackerApp(activity: Activity) {
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
-                title = { Column { Text("RideTracker"); Text(profiles.activeProfile.name, style = MaterialTheme.typography.labelSmall) } },
+                title = { Column { Text("RideTracker"); Text("Lokales Profil · ${profiles.activeProfile.name}", style = MaterialTheme.typography.labelSmall) } },
                 navigationIcon = { IconButton(onClick = { menuOpen = true }) { Text("☰") } },
             )
         },
@@ -261,12 +267,12 @@ fun FunctionalRideTrackerApp(activity: Activity) {
                 )
                 NavigationBar {
                     listOf(
-                        FunctionalSection.HOME to "Start",
-                        FunctionalSection.RECORD to "Aufzeichnen",
-                        FunctionalSection.DEVICES to "Geräte",
-                        FunctionalSection.RIDES to "Fahrten",
-                        FunctionalSection.SETTINGS to "Einstellungen",
-                    ).forEach { (target, label) -> NavigationBarItem(section == target, { navigate(target) }, { Text(label.take(1)) }, label = { Text(label) }) }
+                        Triple(FunctionalSection.HOME, "Start", Icons.Filled.Home),
+                        Triple(FunctionalSection.RECORD, "Aufnahme", Icons.Filled.FiberManualRecord),
+                        Triple(FunctionalSection.RIDES, "Fahrten", Icons.Filled.Folder),
+                        Triple(FunctionalSection.COMMUNITY, "Community", Icons.Filled.Groups),
+                        Triple(FunctionalSection.PROFILE, "Profil", Icons.Filled.Person),
+                    ).forEach { (target, label, icon) -> NavigationBarItem(section == target, { navigate(target) }, { Icon(icon, contentDescription = label) }, label = { Text(label) }) }
                 }
             }
         },
@@ -275,20 +281,29 @@ fun FunctionalRideTrackerApp(activity: Activity) {
             FunctionalSection.HOME -> AndroidDashboard(Modifier.padding(padding), profiles.activeProfile.name, navigate)
             FunctionalSection.RECORD -> AndroidRecording(Modifier.padding(padding), recorder, videoRecorder, rideContext, stopping, ::requestParkSearch, ::saveRide)
             FunctionalSection.RIDES -> RideMediaScreen(Modifier.padding(padding), profiles)
+            FunctionalSection.COMMUNITY -> AndroidCommunityOverview(Modifier.padding(padding), profiles.activeProfile.name)
+            FunctionalSection.PROFILE -> AndroidProfileScreen(Modifier.padding(padding), profiles)
             FunctionalSection.MAP -> AndroidRideMapList(Modifier.padding(padding), context)
             FunctionalSection.DEVICES -> AndroidDeviceCenter(Modifier.padding(padding), devices, heartRate)
-            FunctionalSection.SETTINGS -> AndroidSettings(Modifier.padding(padding), recorder, heartRate, { navigate(FunctionalSection.HUD) }, { navigate(FunctionalSection.DEVICES) })
+            FunctionalSection.SETTINGS -> AndroidSettings(Modifier.padding(padding), recorder, heartRate, { navigate(FunctionalSection.HUD) }, { navigate(FunctionalSection.DEVICES) }, { navigate(FunctionalSection.COMPATIBILITY) })
             FunctionalSection.HUD -> AndroidHudFullscreenEditor(Modifier.padding(padding))
             FunctionalSection.STATISTICS -> StatisticsScreen(Modifier.padding(padding))
             FunctionalSection.ACHIEVEMENTS -> AchievementsScreen(Modifier.padding(padding))
             FunctionalSection.FAQ -> AndroidSensorFaq(Modifier.padding(padding))
+            FunctionalSection.COMPATIBILITY -> AndroidCompatibilityScreen(Modifier.padding(padding))
         }
     }
 
     if (menuOpen) ModalBottomSheet(onDismissRequest = { menuOpen = false }) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Hauptmenü", style = MaterialTheme.typography.headlineSmall)
-            FunctionalSection.entries.forEach { target ->
+            Text("Hauptbereiche", style = MaterialTheme.typography.titleMedium)
+            listOf(FunctionalSection.HOME, FunctionalSection.RECORD, FunctionalSection.RIDES, FunctionalSection.COMMUNITY, FunctionalSection.PROFILE).forEach { target ->
+                TextButton(onClick = { navigate(target) }, modifier = Modifier.fillMaxWidth()) { Text(target.displayName(), modifier = Modifier.fillMaxWidth()) }
+            }
+            HorizontalDivider()
+            Text("Werkzeuge & Einstellungen", style = MaterialTheme.typography.titleMedium)
+            FunctionalSection.entries.filterNot { it in setOf(FunctionalSection.HOME, FunctionalSection.RECORD, FunctionalSection.RIDES, FunctionalSection.COMMUNITY, FunctionalSection.PROFILE) }.forEach { target ->
                 TextButton(onClick = { navigate(target) }, modifier = Modifier.fillMaxWidth()) { Text(target.displayName(), modifier = Modifier.fillMaxWidth()) }
             }
         }
@@ -340,6 +355,8 @@ private fun FunctionalSection.displayName() = when (this) {
     FunctionalSection.HOME -> "Start"
     FunctionalSection.RECORD -> "Neue Fahrt"
     FunctionalSection.RIDES -> "Meine Fahrten"
+    FunctionalSection.COMMUNITY -> "Community"
+    FunctionalSection.PROFILE -> "Profile"
     FunctionalSection.MAP -> "Parks & Strecken"
     FunctionalSection.DEVICES -> "Geräte & Sensoren"
     FunctionalSection.SETTINGS -> "Einstellungen"
@@ -347,15 +364,18 @@ private fun FunctionalSection.displayName() = when (this) {
     FunctionalSection.STATISTICS -> "Statistiken"
     FunctionalSection.ACHIEVEMENTS -> "Achievements"
     FunctionalSection.FAQ -> "FAQ & Messmethode"
+    FunctionalSection.COMPATIBILITY -> "Kompatibilität & Diagnose"
 }
 
 @Composable
 private fun AndroidDashboard(modifier: Modifier, profile: String, select: (FunctionalSection) -> Unit) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Übersicht", style = MaterialTheme.typography.headlineLarge)
-        Text("Angemeldet: $profile")
+        Text("Lokales Profil: $profile")
         DashboardCard("Neue Fahrt", "Automatisch kalibrieren, Park wählen, Wetter und Telemetrie aufzeichnen") { select(FunctionalSection.RECORD) }
         DashboardCard("Meine Fahrten", "Thumbnails, Wetter, Videos und räumliche 3D-Auswertung") { select(FunctionalSection.RIDES) }
+        DashboardCard("Community", "Lokaler Datenschutzstatus und vorbereitete Online-Funktionen") { select(FunctionalSection.COMMUNITY) }
+        DashboardCard("Profile", "Lokale Nutzer anlegen und Fahrten sauber trennen") { select(FunctionalSection.PROFILE) }
         DashboardCard("Parks & Strecken", "GPS-Fahrten und Startpositionen") { select(FunctionalSection.MAP) }
         DashboardCard("Geräte & Sensoren", "Interne und externe Quellen konfigurieren") { select(FunctionalSection.DEVICES) }
         DashboardCard("Einstellungen", "Manuelle Kalibrierung, Sensoren und Berechtigungen") { select(FunctionalSection.SETTINGS) }
@@ -363,6 +383,7 @@ private fun AndroidDashboard(modifier: Modifier, profile: String, select: (Funct
         DashboardCard("FAQ & Messmethode", "G-Kräfte, GPS-Filter, Kompass und Messqualität") { select(FunctionalSection.FAQ) }
         DashboardCard("Statistiken", "Kilometer, Fahrzeit und Rekorde") { select(FunctionalSection.STATISTICS) }
         DashboardCard("Achievements", "Persönliche Meilensteine") { select(FunctionalSection.ACHIEVEMENTS) }
+        DashboardCard("Kompatibilität & Diagnose", "Fire OS, Standortanbieter, Speicher und Sensoren prüfen") { select(FunctionalSection.COMPATIBILITY) }
     }
 }
 
@@ -426,6 +447,7 @@ private fun AndroidSettings(
     heartRate: AndroidHeartRateManager,
     openHud: () -> Unit,
     openDevices: () -> Unit,
+    openCompatibility: () -> Unit,
 ) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Einstellungen", style = MaterialTheme.typography.headlineMedium)
@@ -446,6 +468,7 @@ private fun AndroidSettings(
         }
         Button(onClick = openDevices, modifier = Modifier.fillMaxWidth()) { Text("Geräte & Sensoren konfigurieren") }
         Button(onClick = openHud, modifier = Modifier.fillMaxWidth()) { Text("HUD-Konfiguration öffnen") }
+        OutlinedButton(onClick = openCompatibility, modifier = Modifier.fillMaxWidth()) { Text("Kompatibilität & Diagnose") }
     }
 }
 

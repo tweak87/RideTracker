@@ -23,7 +23,7 @@ Vor einer Fortsetzung in einem neuen Chat zuerst lesen:
 
 - Web/PWA: aktuelle Testversion über GitHub Pages
 - iOS: SwiftUI, Core Motion, Core Location, CMAltimeter und BLE
-- Android: Jetpack Compose, Android-Sensoren, Fused Location und BLE
+- Android/Fire OS: Jetpack Compose, Android-Sensoren, Google-unabhängiger Systemstandort und BLE
 
 ## Gemeinsame Architektur
 
@@ -45,4 +45,4 @@ Unter **Actions** können folgende Workflows manuell gestartet werden:
 - `Build iOS`
 - `Build Android`
 
-Der Android-Workflow testet und prüft die App, erzeugt eine Debug-APK als Artefakt und veröffentlicht Builds von `main` zusätzlich als Vorab-Release unter [`android-v2026.08.08.1`](https://github.com/tweak87/RideTracker/releases/tag/android-v2026.08.08.1). Die Test-APK ist nicht für den Play Store signiert; für wiederholte Updates und eine öffentliche Verteilung wird später ein geschützter Release-Key benötigt. Der iOS-Workflow prüft den Swift-Code mit einem Simulator-Build; für die Installation auf einem realen iPhone ist ebenfalls Signierung erforderlich.
+Der Android-Workflow testet und prüft die App, erzeugt eine normale sowie eine separat installierbare Fire-Test-APK und veröffentlicht Builds von `main` zusätzlich als Vorab-Release unter [`android-v2026.08.08.2`](https://github.com/tweak87/RideTracker/releases/tag/android-v2026.08.08.2). Die Test-APKs sind nicht für einen App-Store signiert; für wiederholte Updates und eine öffentliche Verteilung wird ein geschützter Release-Key benötigt. Fire-Hinweise stehen in [`docs/ANDROID_FIRE_INSTALL.md`](docs/ANDROID_FIRE_INSTALL.md). Der iOS-Workflow prüft den Swift-Code mit einem Simulator-Build; für die Installation auf einem realen iPhone ist ebenfalls Signierung erforderlich.

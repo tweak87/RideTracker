@@ -2,12 +2,12 @@
 
 Native RideTracker-App mit Jetpack Compose und einer Kotlin-Portierung der Ride Engine.
 
-Die Version `2026.08.08.1` enthält den automatischen Aufnahme-Dialog, Park-/Attraktionskarte, optionale Wetterdaten, lizenzierte Fahrtbilder, Stillstandfilter, Kompass, FAQ und ein frei dreh-/zoombares XYZ-Modell mit Punktinspektor.
+Die Version `2026.08.08.2` enthält zusätzlich einen Google-unabhängigen Standortdienst für Fire OS, einen separat installierbaren Fire-Testbuild, eine Geräte-/Sensordiagnose sowie direkte Community- und Profilbereiche. Automatischer Aufnahme-Dialog, Park-/Attraktionskarte, optionale Wetterdaten, lizenzierte Fahrtbilder, Stillstandfilter, Kompass, FAQ und das frei dreh-/zoombare XYZ-Modell mit Punktinspektor bleiben erhalten.
 
 ## Vorgesehene Sensoren
 
 - `SensorManager`: Beschleunigung, Gyroskop, Rotation Vector, Luftdruck
-- Fused Location Provider: GPS X/Y und Geschwindigkeit
+- Android `LocationManager`: GPS/Netzwerk X/Y und Geschwindigkeit, ohne Google Play Services
 - CameraX: Video
 - AudioRecord: relativer Audiopegel
 - Bluetooth LE: externe IMU/GNSS-Sensoren
@@ -15,7 +15,7 @@ Die Version `2026.08.08.1` enthält den automatischen Aufnahme-Dialog, Park-/Att
 
 ## Build ohne Android Studio
 
-Der GitHub-Workflow `Build Android` kann über die GitHub-App oder Safari gestartet werden. Er testet die Kotlin-Logik, führt Android-Lint aus und erzeugt eine Debug-APK. Builds von `main` werden zusätzlich als Vorab-Release `android-v2026.08.08.1` veröffentlicht. Auf dem Testgerät muss die Installation aus dieser Browser-/Dateiquelle bewusst erlaubt werden.
+Der GitHub-Workflow `Build Android` kann über die GitHub-App oder Safari gestartet werden. Er testet die Kotlin-Logik, führt Android-Lint aus und erzeugt eine normale sowie eine separat installierbare Fire-Test-APK. Builds von `main` werden zusätzlich als Vorab-Release `android-v2026.08.08.2` veröffentlicht. Auf dem Testgerät muss die Installation aus dieser Browser-/Dateiquelle bewusst erlaubt werden. Hinweise für Amazon-Tablets stehen in [`../docs/ANDROID_FIRE_INSTALL.md`](../docs/ANDROID_FIRE_INSTALL.md).
 
 ## Architektur
 

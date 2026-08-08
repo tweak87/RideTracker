@@ -10,6 +10,12 @@ const files = {
   viewer: 'native-android/app/src/main/java/de/ridetracker/Track3DViewer.kt',
   media: 'native-android/app/src/main/java/de/ridetracker/RideMediaScreen.kt',
   workflow: '.github/workflows/android-build.yml',
+  gradle: 'native-android/app/build.gradle.kts',
+  platformLocation: 'native-android/app/src/main/java/de/ridetracker/location/AndroidPlatformLocationProvider.kt',
+  communityProfile: 'native-android/app/src/main/java/de/ridetracker/CommunityProfileScreens.kt',
+  compatibility: 'native-android/app/src/main/java/de/ridetracker/AndroidCompatibilityScreen.kt',
+  heartRate: 'native-android/app/src/main/java/de/ridetracker/sensors/AndroidHeartRateManager.kt',
+  deviceScreen: 'native-android/app/src/main/java/de/ridetracker/DeviceCenterScreen.kt',
 };
 
 const source = Object.fromEntries(Object.entries(files).map(([name, file]) => {
@@ -19,12 +25,27 @@ const source = Object.fromEntries(Object.entries(files).map(([name, file]) => {
 const requireToken = (name, token, message) => {
   if (!source[name].includes(token)) throw new Error(message);
 };
+const rejectToken = (name, token, message) => {
+  if (source[name].includes(token)) throw new Error(message);
+};
 
 requireToken('manifest', 'android.permission.INTERNET', 'Android map/weather/image access needs INTERNET permission');
 requireToken('manifest', 'android:allowBackup="false"', 'Private ride data must not enter automatic Android cloud backups');
+requireToken('manifest', 'android.hardware.location.gps', 'GPS must remain optional on Fire tablets');
 requireToken('app', 'beginAutomaticRecording', 'Android automatic recording flow missing');
 requireToken('app', 'Automatisch starten', 'Android bottom recording control missing');
 requireToken('app', 'recorder.lastSavedPath == null', 'Android unsaved-ride guard missing');
+requireToken('app', 'FunctionalSection.COMMUNITY', 'Community must be a primary Android destination');
+requireToken('app', 'FunctionalSection.PROFILE', 'Profile must be a primary Android destination');
+requireToken('app', 'Icons.Filled.Groups', 'Primary Android navigation needs recognizable icons');
+requireToken('communityProfile', 'Lokaler, datenschutzorientierter Modus', 'Truthful local community status missing');
+requireToken('communityProfile', 'Profil anlegen und auswählen', 'Android profile management missing');
+requireToken('compatibility', 'Amazon Fire OS erkannt', 'Fire OS diagnostics missing');
+requireToken('compatibility', 'Standort ohne Google-Dienste', 'Google-independent location diagnostics missing');
+requireToken('compatibility', 'Diagnosebericht kopieren', 'Shareable Fire diagnostics missing');
+requireToken('heartRate', 'requiredPermissions()', 'BLE permission compatibility guard missing');
+requireToken('heartRate', 'runCatching { adapter?.bluetoothLeScanner', 'BLE scan must not crash when Fire OS rejects access');
+requireToken('deviceScreen', 'permissionLauncher.launch(heartRate.requiredPermissions())', 'BLE permission request UI missing');
 requireToken('context', 'open-meteo.com', 'Android weather snapshots missing');
 requireToken('context', 'commons.wikimedia.org', 'Android licensed stock image lookup missing');
 requireToken('context', 'externalLookupConsent', 'External location lookup consent missing');
@@ -32,11 +53,21 @@ requireToken('contextScreen', 'NearbyParkMap', 'Android nearby park map missing'
 requireToken('contextScreen', 'AndroidSensorFaq', 'Android sensor FAQ missing');
 requireToken('recorder', 'GpsSpeedEstimator', 'Android recorder must use canonical stationary speed filtering');
 requireToken('recorder', 'TYPE_ROTATION_VECTOR', 'Android compass source missing');
+requireToken('recorder', 'AndroidPlatformLocationProvider', 'Recorder must use the Google-independent system location provider');
+requireToken('context', 'AndroidPlatformLocationProvider', 'Park and weather context must use system location on Fire OS');
+requireToken('platformLocation', 'LocationManager.GPS_PROVIDER', 'Platform GPS provider missing');
+requireToken('platformLocation', 'LocationManager.NETWORK_PROVIDER', 'Platform network location fallback missing');
+requireToken('gradle', 'minSdk = 21', 'Fire OS 5 compatibility floor missing');
+requireToken('gradle', 'applicationIdSuffix = ".firetest"', 'Side-by-side Fire test package missing');
+requireToken('gradle', '"armeabi-v7a", "arm64-v8a"', 'Fire APK must only package compatible ARM variants');
+rejectToken('gradle', 'play-services-location', 'Fire OS build must not depend on Google Play Services location');
 requireToken('speed', 'stationaryLocked', 'Android stationary GPS lock missing');
 requireToken('viewer', 'Räumliches XYZ-Modell', 'Android spatial XYZ viewer missing');
 requireToken('viewer', 'detectTapGestures', 'Android 3D point inspector missing');
 requireToken('media', 'thumbnailNode', 'Android ride thumbnails missing');
 requireToken('workflow', 'assembleDebug', 'Android APK build missing');
+requireToken('workflow', 'assembleFireTest', 'Dedicated Fire OS APK build missing');
+requireToken('workflow', 'RideTracker-Fire-2026.08.08.2-fireTest.apk', 'Direct Fire APK artifact missing');
 requireToken('workflow', 'gh release create', 'Direct Android APK release missing');
 
 console.log('Android parity audit passed.');

@@ -38,23 +38,27 @@ jobs:
 
       - name: Android lint
         working-directory: native-android
-        run: gradle :app:lintDebug --stacktrace
+        run: gradle :app:lintDebug :app:lintFireTest --stacktrace
 
-      - name: Build debug APK
+      - name: Build standard and Fire OS APKs
         working-directory: native-android
-        run: gradle :app:assembleDebug --stacktrace
+        run: gradle :app:assembleDebug :app:assembleFireTest --stacktrace
 
       - name: Prepare installable APK
         run: |
           mkdir -p dist
-          cp native-android/app/build/outputs/apk/debug/app-debug.apk dist/RideTracker-Android-2026.08.08.1-debug.apk
-          test -s dist/RideTracker-Android-2026.08.08.1-debug.apk
+          cp native-android/app/build/outputs/apk/debug/app-debug.apk dist/RideTracker-Android-2026.08.08.2-debug.apk
+          cp native-android/app/build/outputs/apk/fireTest/app-fireTest.apk dist/RideTracker-Fire-2026.08.08.2-fireTest.apk
+          test -s dist/RideTracker-Android-2026.08.08.2-debug.apk
+          test -s dist/RideTracker-Fire-2026.08.08.2-fireTest.apk
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: RideTracker-Android-debug
-          path: dist/RideTracker-Android-2026.08.08.1-debug.apk
+          path: |
+            dist/RideTracker-Android-2026.08.08.2-debug.apk
+            dist/RideTracker-Fire-2026.08.08.2-fireTest.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -62,13 +66,14 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
-          APK_TAG: android-v2026.08.08.1
-          APK_FILE: dist/RideTracker-Android-2026.08.08.1-debug.apk
+          APK_TAG: android-v2026.08.08.2
+          STANDARD_APK: dist/RideTracker-Android-2026.08.08.2-debug.apk
+          FIRE_APK: dist/RideTracker-Fire-2026.08.08.2-fireTest.apk
         run: |
           if gh release view "$APK_TAG" >/dev/null 2>&1; then
-            gh release upload "$APK_TAG" "$APK_FILE" --clobber
+            gh release upload "$APK_TAG" "$STANDARD_APK" "$FIRE_APK" --clobber
           else
-            gh release create "$APK_TAG" "$APK_FILE" --target "$GITHUB_SHA" --prerelease --title "RideTracker Android 2026.08.08.1 (Test)" --notes "Nicht signierter Play-Store-Build: Debug-APK für direkte Tests. Installation aus unbekannten Quellen muss auf dem Testgerät bewusst erlaubt werden."
+            gh release create "$APK_TAG" "$STANDARD_APK" "$FIRE_APK" --target "$GITHUB_SHA" --prerelease --title "RideTracker Android 2026.08.08.2 (Fire-Test)" --notes "Die Fire-Test-APK verwendet die separate Paket-ID de.ridetracker.firetest und kann deshalb neben einer älteren RideTracker-Testinstallation installiert werden. GPS läuft ohne Google Play Services über Android LocationManager. Beide Dateien sind Debug-Testbuilds; Installation aus unbekannten Quellen muss bewusst erlaubt werden."
           fi
 
       - name: Upload test and lint reports
@@ -80,5 +85,7 @@ jobs:
             native-android/app/build/reports/tests/
             native-android/app/build/reports/lint-results-debug.html
             native-android/app/build/reports/lint-results-debug.xml
+            native-android/app/build/reports/lint-results-fireTest.html
+            native-android/app/build/reports/lint-results-fireTest.xml
           if-no-files-found: ignore
           retention-days: 14

@@ -10,18 +10,31 @@ android {
 
     defaultConfig {
         applicationId = "de.ridetracker"
-        minSdk = 28
+        minSdk = 21
         targetSdk = 35
-        versionCode = 202608081
-        versionName = "2026.08.08.1"
+        versionCode = 202608082
+        versionName = "2026.08.08.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["appLabel"] = "RideTracker"
     }
 
     buildFeatures { compose = true }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    buildTypes {
+        create("fireTest") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".firetest"
+            versionNameSuffix = "-fire"
+            matchingFallbacks += listOf("debug")
+            manifestPlaceholders["appLabel"] = "RideTracker Fire Test"
+            ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
+        }
     }
 
     kotlinOptions {
@@ -43,13 +56,13 @@ android {
 kotlin { jvmToolchain(17) }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
-    implementation("androidx.activity:activity-compose:1.10.0")
+    implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     val cameraXVersion = "1.4.1"

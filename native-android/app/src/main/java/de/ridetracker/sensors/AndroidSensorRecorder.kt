@@ -11,16 +11,12 @@ import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult as GoogleLocationResult
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
 import de.ridetracker.context.AndroidRideContextSnapshot
 import de.ridetracker.core.CoreNativeSourceRoutingSnapshot
 import de.ridetracker.core.RideTrackerCoreAdapter
 import de.ridetracker.engine.*
 import de.ridetracker.hud.AndroidHudConfigurationStore
+import de.ridetracker.location.AndroidPlatformLocationProvider
 import de.ridetracker.session.*
 import de.ridetracker.video.CameraSourceManager
 import java.io.File
@@ -51,11 +47,12 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     var communityComment by mutableStateOf("")
     var latestHeartRateBpm by mutableStateOf<Int?>(null); private set
     var heartRateSource by mutableStateOf<String?>(null); private set
+    var locationProviderStatus by mutableStateOf("Android-Systemstandort bereit"); private set
 
     val coreAdapter = RideTrackerCoreAdapter()
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    private val locationClient = LocationServices.getFusedLocationProviderClient(context)
+    private val locationProvider = AndroidPlatformLocationProvider(context)
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private val gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
     private val pressure = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
@@ -84,10 +81,6 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     private var videoStartOffsetSeconds = 0.0
     private var rideContextSnapshot: AndroidRideContextSnapshot? = null
 
-    private val locationCallback = object : LocationCallback() {
-        override fun onLocationResult(result: GoogleLocationResult) { result.locations.forEach(::handleLocation) }
-    }
-
     init {
         accelerometer?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
         rotationVector?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
@@ -113,8 +106,9 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
         if (calibration != null) rideEngine.calibration = calibration
         sessionId = UUID.randomUUID().toString(); recordingStartNs = SystemClock.elapsedRealtimeNanos(); startedAtInstant = Instant.now(); isRecording = true
         coreAdapter.recordingStarted(sessionId, recordingStartNs / 1_000_000L)
-        status = "Aufnahme läuft · Session ${sessionId.take(8)}"
-        locationClient.requestLocationUpdates(LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500L).setMinUpdateIntervalMillis(200L).build(), locationCallback, null)
+        val providers = runCatching { locationProvider.startUpdates(::handleLocation) }.getOrDefault(emptyList())
+        locationProviderStatus = if (providers.isEmpty()) "Kein GPS/Netzwerk-Standort; Kraftsensoren laufen weiter" else "Systemstandort: ${providers.joinToString()}"
+        status = "Aufnahme läuft · Session ${sessionId.take(8)} · $locationProviderStatus"
         gyroscope?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
         pressure?.also { hasBarometer = true; sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
     }
@@ -124,7 +118,7 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
 
     fun stop() {
         if (!isRecording) return
-        isRecording = false; locationClient.removeLocationUpdates(locationCallback)
+        isRecording = false; locationProvider.stopUpdates()
         gyroscope?.let { sensorManager.unregisterListener(this, it) }; pressure?.let { sensorManager.unregisterListener(this, it) }
         coreAdapter.recordingStopped()
         updateQuality(); status = "Beendet: $sampleCount Samples"
