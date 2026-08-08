@@ -2,9 +2,9 @@
 
 ## Aktuelle Web-Version
 
-Die aktuelle Version `2026.08.08-community-backend-3d.1` erweitert die lokale Community-Grundlage um ein optionales Backend für Anmeldung, Synchronisierung, Freunde, Feed, Meldungen und Moderation. Parks, Bahnen und Fahrten besitzen Miniaturen; aus GPS-, Geschwindigkeits-, Höhen- und Kraftdaten entstehen interaktive 3D-Streckenmodelle mit umschaltbaren Heatmaps.
+Die aktuelle Version `2026.08.08-speed-compass-3d.1` erweitert die Community-Grundlage um eine robuste iOS-GPS-Geschwindigkeit, ein konfigurierbares Kompass-HUD und einen räumlichen XYZ-Streckeninspektor. Jeder Modellpunkt kann ausgewählt werden und zeigt dort Geschwindigkeit, Kräfte, Höhe, Strecke und Modellgüte. Das optionale Backend für Anmeldung, Synchronisierung, Freunde, Feed, Meldungen und Moderation bleibt enthalten.
 
-Der unmittelbar vorherige stabile Produktionsstand bleibt unter Commit `3bd0175b93c7babe515f91555352e7711020fa7f` und Branch [`rollback/pre-community-backend-20260808`](https://github.com/tweak87/RideTracker/tree/rollback/pre-community-backend-20260808) erhalten. Einrichtung, Datenschutz, Bedienung und Rollback sind in [`docs/COMMUNITY_BACKEND_3D.md`](docs/COMMUNITY_BACKEND_3D.md) dokumentiert.
+Der unmittelbar vorherige stabile Produktionsstand bleibt unter Commit `9a0d225bd291f1c5c3b65cb4f507f898dcf5a83b` und Branch [`rollback/pre-speed-compass-3d-20260808`](https://github.com/tweak87/RideTracker/tree/rollback/pre-speed-compass-3d-20260808) erhalten. Sensormathematik und Bedienung sind in [`docs/SPEED_COMPASS_3D.md`](docs/SPEED_COMPASS_3D.md) dokumentiert; Backend und Datenschutz stehen in [`docs/COMMUNITY_BACKEND_3D.md`](docs/COMMUNITY_BACKEND_3D.md).
 
 Plattformübergreifende Telemetrie- und Analyseplattform für Achterbahnen und Fahrgeschäfte.
 

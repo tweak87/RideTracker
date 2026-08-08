@@ -2,11 +2,11 @@
 
 ## Version und Rollback
 
-- Produktversion: `2026.08.08-community-backend-3d.1`
-- Gesicherter Ausgangsstand: `3bd0175b93c7babe515f91555352e7711020fa7f`
-- Remote-Rollback-Branch: `rollback/pre-community-backend-20260808`
-- Lokales Tag: `community-backend-baseline-20260808`
-- Rollback-Link: <https://github.com/tweak87/RideTracker/tree/rollback/pre-community-backend-20260808>
+- Produktversion: `2026.08.08-speed-compass-3d.1`
+- Gesicherter Ausgangsstand: `9a0d225bd291f1c5c3b65cb4f507f898dcf5a83b`
+- Remote-Rollback-Branch: `rollback/pre-speed-compass-3d-20260808`
+- Lokales Tag: `speed-compass-3d-baseline-20260808`
+- Rollback-Link: <https://github.com/tweak87/RideTracker/tree/rollback/pre-speed-compass-3d-20260808>
 
 Der Ausgangsstand bleibt unverändert. Ein Rollback erfolgt über einen neuen Branch oder Pull Request auf Basis des genannten Commits. Lokal gespeicherte Fahrten werden durch einen Code-Rollback nicht automatisch gelöscht oder verändert.
 
@@ -55,7 +55,7 @@ Aus einer Fahrt werden geglättete und abstandsnormalisierte Modellpunkte erzeug
 | Höhe | relative Höhe in Metern |
 | Modellgüte | Konfidenz aus der Zahl zusammengeführter Fahrten |
 
-Die serverseitige Zusammenführung bildet pro normalisiertem Streckenindex den Median der Position und Telemetrie. Ausreißer einzelner Telefone beeinflussen das Gemeinschaftsmodell dadurch weniger stark. Der Viewer unterstützt Drehen, Zoomen, Heatmap-Wechsel, Zurücksetzen und PNG-Export.
+Die serverseitige Zusammenführung bildet pro normalisiertem Streckenindex den Median der Position und Telemetrie. Ausreißer einzelner Telefone beeinflussen das Gemeinschaftsmodell dadurch weniger stark. Der Viewer zeigt sichtbare X-/Y-/Z-Achsen und unterstützt Drehen, Verschieben, Zoomen, feste Ansichten, Heatmap-Wechsel, Zurücksetzen und PNG-Export. Ein Klick oder Tipp auf einen Streckenpunkt öffnet Geschwindigkeit, vertikale/laterale/longitudinale und gesamte G-Kraft, lokale XYZ-Position, Höhe, Streckenfortschritt, Zeit und Modellgüte.
 
 ## Miniaturansichten
 

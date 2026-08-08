@@ -56,13 +56,16 @@ jobs:
           grep -q 'RideTrackerPreflight' dist/update61.js
           grep -q 'RideTrackerSupportCenter' dist/update61.js
           grep -q 'RideTrackerCommunityHub' dist/update62.js
+          grep -q 'RideTrackerCompass' dist/update63.js
           grep -q 'RideTrackerCommunityBackend' dist/shared/core/community-backend.js
           grep -q 'RideTrackerTrack3D' dist/shared/visualization/track-3d.js
-          grep -q 'rollback/pre-community-backend-20260808' dist/shared/core/release-manifest.js
+          grep -q 'rollback/pre-speed-compass-3d-20260808' dist/shared/core/release-manifest.js
           grep -q 'shared/core/community-backend.js?v=' dist/index.html
           grep -q 'shared/visualization/track-3d.js?v=' dist/index.html
           grep -q 'update62.js?v=' dist/index.html
+          grep -q 'update63.js?v=' dist/index.html
           test -f dist/update62.js
+          test -f dist/update63.js
           test -f dist/shared/core/community-backend.js
           test -f dist/shared/visualization/track-3d.js
           ! test -f dist/update6.js

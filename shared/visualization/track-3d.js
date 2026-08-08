@@ -17,7 +17,7 @@
   };
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-  const finite = (value, fallback = null) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+  const finite = (value, fallback = null) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)) ? Number(value) : fallback;
   const lerp = (a, b, t) => a + (b - a) * t;
 
   function quantile(values, q) {
@@ -177,18 +177,22 @@
     const root = source?.document || source || {};
     const durationFromPoints = points.length > 1 && points[0].timestamp !== null && points.at(-1).timestamp !== null ? Math.max(0, points.at(-1).timestamp - points[0].timestamp) : 0;
     let distanceM = 0;
-    for (let index = 1; index < points.length; index += 1) distanceM += Math.hypot(points[index].x-points[index-1].x, points[index].y-points[index-1].y, points[index].z-points[index-1].z);
+    const enrichedPoints=points.map((point,index)=>{
+      if(index>0)distanceM+=Math.hypot(point.x-points[index-1].x,point.y-points[index-1].y,point.z-points[index-1].z);
+      return{...point,i:index,distanceM};
+    });
+    enrichedPoints.forEach(point=>{point.progress=distanceM>0?point.distanceM/distanceM:0;});
     const ranges = {};
-    Object.keys(METRICS).forEach((metric) => { ranges[metric] = metricRange(points, metric); });
+    Object.keys(METRICS).forEach((metric) => { ranges[metric] = metricRange(enrichedPoints, metric); });
     return {
-      version: 1, points, bounds: calculateBounds(points), ranges,
+      version: 2, points:enrichedPoints, bounds: calculateBounds(enrichedPoints), ranges,
       distanceM: finite(source.distanceM, finite(root.metadata?.distanceM, distanceM)),
       durationMs: finite(source.durationMs, finite(root.metadata?.durationMs, durationFromPoints)),
       sourceCount,
       summary: {
-        maxSpeedKmh: Math.max(0, ...points.map((point) => finite(point.speedKmh, 0))),
-        maxTotalG: Math.max(0, ...points.map((point) => finite(point.totalG, 0))),
-        elevationRangeM: metricRange(points, 'elevationM')
+        maxSpeedKmh: Math.max(0, ...enrichedPoints.map((point) => finite(point.speedKmh, 0))),
+        maxTotalG: Math.max(0, ...enrichedPoints.map((point) => finite(point.totalG, 0))),
+        elevationRangeM: metricRange(enrichedPoints, 'elevationM')
       }
     };
   }
@@ -245,13 +249,19 @@
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(thumbnailSvg(model, options))}`;
   }
 
+  function nearestProjectedPoint(projected, x, y, radius = 22) {
+    let best=null;let bestDistance=radius;
+    (projected||[]).forEach((point,index)=>{const distance=Math.hypot(Number(point.x)-x,Number(point.y)-y);if(distance<=bestDistance){bestDistance=distance;best={index,distance,point};}});
+    return best;
+  }
+
   function createRenderer(canvas, initialModel, options = {}) {
     if (!canvas?.getContext) throw new Error('Für den 3D-Viewer wird ein Canvas-Element benötigt.');
     const context = canvas.getContext('2d');
     let model = initialModel;
     let metric = METRICS[options.metric] ? options.metric : 'speedKmh';
-    let yaw = -0.65; let pitch = -0.52; let zoom = 1;
-    let drag = null; let pinchDistance = null; let animationFrame = null; let destroyed = false;
+    let yaw = -0.65; let pitch = -0.52; let zoom = 1;let panX=0;let panY=0;let selectedIndex=null;
+    let drag = null; let gesture = null; let animationFrame = null; let destroyed = false;let lastProjected=[];
     const pointers = new Map();
 
     function resize() {
@@ -274,7 +284,16 @@
       const extent=Math.max(1,bounds.maxX-bounds.minX,bounds.maxZ-bounds.minZ,(bounds.maxY-bounds.minY)*2);
       const scale=Math.min(width,height)*0.72/extent*zoom;
       const perspective=1/(1+depth/Math.max(200,extent*5));
-      return { x:width/2+x1*scale*perspective, y:height*.52-y1*scale*perspective, depth };
+      return { x:width/2+panX+x1*scale*perspective, y:height*.52+panY-y1*scale*perspective, depth };
+    }
+
+    function drawAxes(width,height){
+      const bounds=model.bounds||calculateBounds(model.points);const extent=Math.max(1,bounds.maxX-bounds.minX,bounds.maxZ-bounds.minZ,(bounds.maxY-bounds.minY)*2);const length=extent*.22;
+      const origin={x:bounds.minX,y:bounds.minY,z:bounds.maxZ};
+      const axes=[['X',{x:origin.x+length,y:origin.y,z:origin.z},'#ff5a67','Ost'],['Y',{x:origin.x,y:origin.y+length/1.8,z:origin.z},'#65f0b7','Höhe'],['Z',{x:origin.x,y:origin.y,z:origin.z-length},'#5fd0ff','Nord']];
+      const start=transform(origin,width,height);context.font='800 11px system-ui';context.textAlign='left';
+      axes.forEach(([label,end,color,name])=>{const target=transform(end,width,height);context.strokeStyle=color;context.lineWidth=2.5;context.beginPath();context.moveTo(start.x,start.y);context.lineTo(target.x,target.y);context.stroke();context.fillStyle=color;context.fillText(`${label} · ${name}`,target.x+5,target.y-4);});
+      context.fillStyle='#e2e8f0';context.beginPath();context.arc(start.x,start.y,3,0,Math.PI*2);context.fill();
     }
 
     function render() {
@@ -286,32 +305,40 @@
       if (!model?.points?.length) { context.fillStyle='#cbd5e1'; context.font='600 16px system-ui'; context.textAlign='center'; context.fillText('Keine Streckendaten verfügbar',width/2,height/2); return; }
       context.strokeStyle='rgba(148,163,184,.14)'; context.lineWidth=1;
       for(let line=1;line<6;line+=1){context.beginPath();context.moveTo(width*.1,height*(.2+line*.11));context.lineTo(width*.9,height*(.2+line*.11));context.stroke();}
-      const projected=model.points.map((point)=>transform(point,width,height));
+      drawAxes(width,height);
+      const projected=model.points.map((point)=>transform(point,width,height));lastProjected=projected;
       context.lineCap='round'; context.lineJoin='round'; context.globalAlpha=.35; context.strokeStyle='#000'; context.lineWidth=10;
       context.beginPath(); context.moveTo(projected[0].x+3,projected[0].y+5); projected.slice(1).forEach((point)=>context.lineTo(point.x+3,point.y+5)); context.stroke(); context.globalAlpha=1;
       const range=model.ranges?.[metric]||metricRange(model.points,metric);
       for(let index=1;index<projected.length;index+=1){context.strokeStyle=metricColor(metric,model.points[index][metric],range);context.lineWidth=5;context.beginPath();context.moveTo(projected[index-1].x,projected[index-1].y);context.lineTo(projected[index].x,projected[index].y);context.stroke();}
       context.fillStyle='#fff'; context.beginPath(); context.arc(projected[0].x,projected[0].y,5,0,Math.PI*2); context.fill();
+      if(selectedIndex!==null&&projected[selectedIndex]){const selected=projected[selectedIndex];context.strokeStyle='#fff';context.lineWidth=3;context.beginPath();context.arc(selected.x,selected.y,10,0,Math.PI*2);context.stroke();context.fillStyle=metricColor(metric,model.points[selectedIndex][metric],range);context.beginPath();context.arc(selected.x,selected.y,5,0,Math.PI*2);context.fill();context.fillStyle='#fff';context.font='800 11px system-ui';context.fillText(`#${selectedIndex+1}`,selected.x+13,selected.y-9);}
       context.textAlign='left'; context.fillStyle='#e2e8f0'; context.font='700 14px system-ui'; context.fillText(METRICS[metric].label,18,28);
-      context.fillStyle='#94a3b8'; context.font='12px system-ui'; context.fillText('Ziehen: drehen · Mausrad/Pinch: zoomen',18,height-18);
+      context.fillStyle='#94a3b8'; context.font='12px system-ui'; context.fillText('Ziehen: drehen · 2 Finger/⇧: verschieben · Rad/Pinch: zoomen · Tippen: Messpunkt',18,height-18);
     }
 
     function requestRender(){if(animationFrame===null) animationFrame=typeof requestAnimationFrame==='function'?requestAnimationFrame(render):setTimeout(render,0);}
-    function pointerDown(event){pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});drag={x:event.clientX,y:event.clientY};if(pointers.size===2){const [left,right]=[...pointers.values()];pinchDistance=Math.hypot(right.x-left.x,right.y-left.y);}canvas.setPointerCapture?.(event.pointerId);}
-    function pointerMove(event){if(!pointers.has(event.pointerId))return;pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});if(pointers.size>=2){const [left,right]=[...pointers.values()];const distance=Math.hypot(right.x-left.x,right.y-left.y);if(pinchDistance)zoom=clamp(zoom*distance/pinchDistance,.35,4);pinchDistance=distance;requestRender();return;}if(!drag)return;yaw+=(event.clientX-drag.x)*.008;pitch=clamp(pitch+(event.clientY-drag.y)*.008,-1.35,.35);drag={x:event.clientX,y:event.clientY};requestRender();}
-    function pointerUp(event){pointers.delete(event?.pointerId);pinchDistance=null;const remaining=[...pointers.values()][0];drag=remaining?{...remaining}:null;canvas.releasePointerCapture?.(event?.pointerId);}
+    function pointerDown(event){pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});drag={x:event.clientX,y:event.clientY,startX:event.clientX,startY:event.clientY,moved:false,mode:event.shiftKey||event.button===1||event.button===2?'pan':'rotate'};if(pointers.size===2){const [left,right]=[...pointers.values()];gesture={distance:Math.hypot(right.x-left.x,right.y-left.y),midX:(left.x+right.x)/2,midY:(left.y+right.y)/2};}canvas.setPointerCapture?.(event.pointerId);}
+    function pointerMove(event){if(!pointers.has(event.pointerId))return;pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});if(pointers.size>=2){const [left,right]=[...pointers.values()];const distance=Math.hypot(right.x-left.x,right.y-left.y),midX=(left.x+right.x)/2,midY=(left.y+right.y)/2;if(gesture){zoom=clamp(zoom*distance/Math.max(1,gesture.distance),.25,6);panX+=midX-gesture.midX;panY+=midY-gesture.midY;}gesture={distance,midX,midY};if(drag)drag.moved=true;requestRender();return;}if(!drag)return;const dx=event.clientX-drag.x,dy=event.clientY-drag.y;if(Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY)>5)drag.moved=true;if(drag.mode==='pan'){panX+=dx;panY+=dy;}else{yaw+=dx*.008;pitch=clamp(pitch+dy*.008,-1.48,.48);}drag.x=event.clientX;drag.y=event.clientY;requestRender();}
+    function selectAt(clientX,clientY){const rect=canvas.getBoundingClientRect(),picked=nearestProjectedPoint(lastProjected,clientX-rect.left,clientY-rect.top,24);if(!picked)return null;selectedIndex=picked.index;options.onSelect?.(model.points[selectedIndex],selectedIndex);requestRender();return model.points[selectedIndex];}
+    function pointerUp(event){const wasSingle=pointers.size===1,wasClick=wasSingle&&drag&&!drag.moved;if(wasClick)selectAt(event.clientX,event.clientY);pointers.delete(event?.pointerId);gesture=null;const remaining=[...pointers.values()][0];drag=remaining?{x:remaining.x,y:remaining.y,startX:remaining.x,startY:remaining.y,moved:true,mode:'rotate'}:null;canvas.releasePointerCapture?.(event?.pointerId);}
     function wheel(event){event.preventDefault();zoom=clamp(zoom*Math.exp(-event.deltaY*.001),.35,4);requestRender();}
-    canvas.addEventListener('pointerdown',pointerDown);canvas.addEventListener('pointermove',pointerMove);canvas.addEventListener('pointerup',pointerUp);canvas.addEventListener('pointercancel',pointerUp);canvas.addEventListener('wheel',wheel,{passive:false});
+    function contextMenu(event){event.preventDefault();}
+    canvas.addEventListener('pointerdown',pointerDown);canvas.addEventListener('pointermove',pointerMove);canvas.addEventListener('pointerup',pointerUp);canvas.addEventListener('pointercancel',pointerUp);canvas.addEventListener('wheel',wheel,{passive:false});canvas.addEventListener('contextmenu',contextMenu);
     const observer=typeof ResizeObserver!=='undefined'?new ResizeObserver(requestRender):null;observer?.observe(canvas);requestRender();
     return {
       setMetric(next){if(METRICS[next])metric=next;requestRender();return metric;},
       setModel(next){model=next;requestRender();},
-      reset(){yaw=-.65;pitch=-.52;zoom=1;requestRender();},
+      reset(){yaw=-.65;pitch=-.52;zoom=1;panX=0;panY=0;requestRender();},
+      setView(view){if(view==='top'){yaw=0;pitch=-1.48;}else if(view==='front'){yaw=0;pitch=0;}else if(view==='side'){yaw=Math.PI/2;pitch=0;}else{yaw=-.65;pitch=-.52;}panX=0;panY=0;requestRender();return view;},
+      selectPoint(index){const next=clamp(Math.round(Number(index)||0),0,Math.max(0,model.points.length-1));selectedIndex=next;options.onSelect?.(model.points[next],next);requestRender();return model.points[next];},
+      selected(){return selectedIndex===null?null:{index:selectedIndex,point:model.points[selectedIndex]};},
+      viewState(){return{yaw,pitch,zoom,panX,panY};},
       render:requestRender,
       toDataUrl(){render();return canvas.toDataURL('image/png');},
-      destroy(){destroyed=true;observer?.disconnect();canvas.removeEventListener('pointerdown',pointerDown);canvas.removeEventListener('pointermove',pointerMove);canvas.removeEventListener('pointerup',pointerUp);canvas.removeEventListener('pointercancel',pointerUp);canvas.removeEventListener('wheel',wheel);if(animationFrame!==null&&typeof cancelAnimationFrame==='function')cancelAnimationFrame(animationFrame);}
+      destroy(){destroyed=true;observer?.disconnect();canvas.removeEventListener('pointerdown',pointerDown);canvas.removeEventListener('pointermove',pointerMove);canvas.removeEventListener('pointerup',pointerUp);canvas.removeEventListener('pointercancel',pointerUp);canvas.removeEventListener('wheel',wheel);canvas.removeEventListener('contextmenu',contextMenu);if(animationFrame!==null&&typeof cancelAnimationFrame==='function')cancelAnimationFrame(animationFrame);}
     };
   }
 
-  return { METRICS, deriveTrackModel, mergeModels, metricRange, metricColor, thumbnailSvg, thumbnailDataUri, createRenderer };
+  return { METRICS, deriveTrackModel, mergeModels, metricRange, metricColor, thumbnailSvg, thumbnailDataUri, nearestProjectedPoint, createRenderer };
 });

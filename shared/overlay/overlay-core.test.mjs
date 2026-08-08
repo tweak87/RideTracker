@@ -8,7 +8,9 @@ assert.equal(spec.axes.x, 'lateral');
 assert.equal(spec.axes.y, 'longitudinal');
 assert.equal(spec.axes.z, 'vertical');
 assert.deepEqual(spec.layouts.landscape.gDial, [0.417,0.481,0.167,0.296]);
-assert.deepEqual(spec.layouts.portrait.gDial, [0.250,0.255,0.500,0.280]);
+assert.deepEqual(spec.layouts.portrait.gDial, [0.250,0.310,0.500,0.210]);
+assert.deepEqual(spec.layouts.portrait.compass, [0.330,0.170,0.340,0.130]);
+assert.deepEqual(spec.layouts.landscape.compass, [0.410,0.040,0.180,0.180]);
 for (const layout of Object.values(spec.layouts)) for (const rect of Object.values(layout)) {
   assert.equal(rect.length, 4);
   assert.ok(rect.every(Number.isFinite));
@@ -25,4 +27,5 @@ const p = pointerPosition(4, -4, 4, 100, 100, 50); assert.deepEqual(p, {x:150,y:
 assert.ok(smoothValue(0, 10, 80, 80) > 6 && smoothValue(0,10,80,80) < 7);
 const frame = normalizeFrame({lateralG:.8,normalG:2.4,longitudinalG:-.5,speedMS:87/3.6,heartRateBpm:142},18450);
 assert.equal(frame.gForce.vertical,2.4); assert.equal(frame.speed.valueKmh,87); assert.equal(frame.heartRate.bpm,142);
+assert.equal(normalizeFrame({headingDeg:405}).compass.headingDeg,45);
 console.log('Overlay core tests passed');

@@ -58,6 +58,15 @@ test('park, track and ride miniatures lead to an interactive heatmap viewer', as
   await expect(viewer.locator('canvas')).toBeVisible();
   await viewer.locator('[data-metric]').selectOption('totalG');
   await expect(viewer.locator('[data-metric]')).toHaveValue('totalG');
+  await expect(viewer.locator('[data-view]')).toHaveCount(4);
+  await expect(viewer.locator('[data-inspector]')).toContainText('Punkt 1');
+  await page.evaluate(()=>window.RideTrackerCommunityHub.viewer().selectPoint(32));
+  await expect(viewer.locator('[data-inspector]')).toContainText('Punkt 33');
+  await expect(viewer.locator('[data-inspector]')).toContainText('Tempo');
+  const before=await page.evaluate(()=>window.RideTrackerCommunityHub.viewer().viewState());
+  await viewer.locator('[data-view="top"]').click();
+  const after=await page.evaluate(()=>window.RideTrackerCommunityHub.viewer().viewState());
+  expect(after.pitch).not.toBe(before.pitch);
   const painted=await viewer.locator('canvas').evaluate(canvas=>canvas.toDataURL().length);
   expect(painted).toBeGreaterThan(1000);
 });

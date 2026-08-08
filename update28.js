@@ -7,16 +7,17 @@
     ['gDial', 'G-Kraft-Kreis', '+0.8 / +2.4 G'],
     ['gValues', 'G-Achsen', 'LAT +0.8 · VERT +2.4 · LONG −0.5'],
     ['speed', 'Geschwindigkeit', '87 KM/H'],
+    ['compass', 'Kompass', '032° · NO'],
     ['vibration', 'Vibration', '6.8 m/s²'],
     ['dynamics', 'Fahrdynamik', '2.58 G · 4.1 G/s']
   ];
   const BASE = {
     landscape: {
       pulse: {x:.02,y:.62,w:.29,h:.31}, gDial:{x:.42,y:.48,w:.17,h:.30}, gValues:{x:.33,y:.84,w:.34,h:.11},
-      speed:{x:.70,y:.61,w:.28,h:.33}, vibration:{x:.80,y:.06,w:.18,h:.24}, dynamics:{x:.03,y:.06,w:.24,h:.18}
+      speed:{x:.70,y:.61,w:.28,h:.33}, compass:{x:.41,y:.04,w:.18,h:.18}, vibration:{x:.80,y:.06,w:.18,h:.24}, dynamics:{x:.03,y:.06,w:.24,h:.18}
     },
     portrait: {
-      vibration:{x:.04,y:.04,w:.42,h:.15}, dynamics:{x:.54,y:.04,w:.42,h:.15}, gDial:{x:.18,y:.22,w:.64,h:.30},
+      vibration:{x:.04,y:.03,w:.42,h:.13}, dynamics:{x:.54,y:.03,w:.42,h:.13}, compass:{x:.33,y:.17,w:.34,h:.13}, gDial:{x:.18,y:.31,w:.64,h:.21},
       gValues:{x:.07,y:.54,w:.86,h:.10}, pulse:{x:.05,y:.69,w:.43,h:.25}, speed:{x:.52,y:.69,w:.43,h:.25}
     }
   };

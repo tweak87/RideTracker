@@ -30,6 +30,16 @@ function syntheticRide(offset=0,speedOffset=0){
   assert.ok(model.summary.maxSpeedKmh>50);
   assert.equal(Object.keys(model.ranges).length,Object.keys(track3d.METRICS).length);
   assert.ok(model.bounds.maxY-model.bounds.minY>10);
+  assert.equal(model.version,2);
+  assert.equal(model.points[0].distanceM,0);
+  assert.ok(model.points.at(-1).distanceM>400);
+  assert.equal(model.points.at(-1).progress,1);
+}
+
+{
+  const picked=track3d.nearestProjectedPoint([{x:10,y:10},{x:50,y:50}],47,52,10);
+  assert.equal(picked.index,1);
+  assert.equal(track3d.nearestProjectedPoint([{x:10,y:10}],100,100,10),null);
 }
 
 {

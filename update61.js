@@ -2,8 +2,8 @@
   'use strict';
 
   const RELEASE = window.RideTrackerReleaseManifest || {
-    version:'2026.08.08-community-backend-3d.1',
-    baseline:{commit:'3bd0175b93c7babe515f91555352e7711020fa7f',rollbackBranch:'rollback/pre-community-backend-20260808'}
+    version:'2026.08.08-speed-compass-3d.1',
+    baseline:{commit:'9a0d225bd291f1c5c3b65cb4f507f898dcf5a83b',rollbackBranch:'rollback/pre-speed-compass-3d-20260808'}
   };
   const META_KEY = 'rideTracker.savedRides.v2';
   const LOG_KEY = 'rideTracker.supportLog.v1';
@@ -39,10 +39,10 @@
     if(!flags().detailedLogging)return;
     try{writeJson(LOG_KEY,state.logs.slice(-800));}catch(_){}
   }
-  function log(level,source,message,detail=null) {
+  function log(level,source,message,detail=null,forwardToDiagnostics=true) {
     const item={at:new Date().toISOString(),tMs:Math.round(performance.now()),level,source,message:String(message||''),detail:safeValue(detail)};
     state.logs.push(item);if(state.logs.length>800)state.logs.splice(0,state.logs.length-800);persistLogs();
-    try{window.RideTrackerDiagnostics?.log?.(level,source,message,detail);}catch(_){}
+    if(forwardToDiagnostics)try{window.RideTrackerDiagnostics?.log?.(level,source,message,detail);}catch(_){}
     renderSupport();return item;
   }
 
@@ -207,6 +207,8 @@
     const before=performance.now();await new Promise(resolve=>setTimeout(resolve,0));const lag=performance.now()-before;add('Main-Thread',lag>500?'fail':lag>120?'warn':'pass',`${lag.toFixed(1)} ms Timer-Lag`);
     const preflight=await inspectPreflight();add('Aufnahmekette',preflight.blocking.length?'warn':'pass',preflight.blocking.length?`Blockiert: ${preflight.blocking.join(', ')}`:'grundsätzlich startfähig');
     add('Navigation-Audit',window.RideTrackerNavigationRegistry?.audit?.().consistent?'pass':'fail','Community-Navigation');
+    add('Kompass-Widget',window.RideTrackerCompass?'pass':'warn',window.RideTrackerCompass?.snapshot?.().source||'noch ohne Sensordaten');
+    add('3D-Punktinspektor',typeof window.RideTrackerTrack3D?.nearestProjectedPoint==='function'?'pass':'fail','XYZ-Achsen und Punktabfrage');
     log(results.some(x=>x.state==='fail')?'error':'info','self-test','Self-test completed',results);return{checkedAt:new Date().toISOString(),ok:results.every(result=>result.state!=='fail'),results};
   }
   async function supportBundle() {
@@ -247,7 +249,7 @@
 
   function installInstrumentation() {
     try{const saved=readJson(LOG_KEY,[]);if(Array.isArray(saved))state.logs=saved.slice(-800);}catch(_){}
-    window.addEventListener('error',event=>log('error','window',event.message||'Window error',{filename:event.filename,lineno:event.lineno,colno:event.colno}));window.addEventListener('unhandledrejection',event=>log('error','promise',event.reason?.message||String(event.reason||'Unhandled rejection'),event.reason));
+    window.addEventListener('ridetracker:runtime-error',event=>log('error','runtime',event.detail?.message||'Browserfehler',event.detail,false));
     document.addEventListener('click',event=>{const target=event.target.closest?.('button,a,[role=button]');if(!target)return;const started=performance.now(),detail={id:target.id||null,route:target.dataset.communityRoute||target.dataset.registryRoute||null,label:String(target.getAttribute('aria-label')||target.textContent||'').trim().slice(0,80),disabled:Boolean(target.disabled)};setTimeout(()=>{const duration=performance.now()-started;log(duration>800?'warn':'info','action','UI action', {...detail,durationMs:Math.round(duration),resultRoute:document.body.dataset.rtRoute||null});if(duration>1500&&flags().automaticRepair&&!isRecording())window.RideTrackerDiagnostics?.safeBoot?.();},0);},true);
     for(const name of ['ridetracker:recording-started','ridetracker:recording-stopped','ridetracker:ride-saved','ridetracker:ride-validated','ridetracker:recording-gps-error','ridetracker:database-error','ridetracker:navigation-audit'])window.addEventListener(name,event=>log(name.includes('error')?'error':'info','event',name,event.detail));
     try{new PerformanceObserver(list=>{for(const entry of list.getEntries())if(entry.duration>150)log('warn','performance','Long task',{durationMs:Math.round(entry.duration),name:entry.name});}).observe({type:'longtask',buffered:true});}catch(_){}

@@ -183,12 +183,7 @@
   function installDiagnostics() {
     if (window.__rtDiagnostics43) return;
     window.__rtDiagnostics43 = true;
-    window.addEventListener('error', event => {
-      const message = String(event?.message || event?.error?.message || 'Unbekannter Fehler');
-      console.error('[RideTracker runtime]', { message, source: event?.filename, line: event?.lineno, column: event?.colno, error: event?.error });
-    });
-    window.addEventListener('unhandledrejection', event => console.error('[RideTracker promise]', event?.reason));
-    window.addEventListener('ridetracker:database-error', event => console.error('[RideTracker database]', event?.detail));
+    window.addEventListener('ridetracker:database-error', event => window.RideTrackerRuntimeErrors?.report?.({message:event?.detail?.message||'Datenbankfehler',error:event?.detail}));
   }
 
   const install = () => {
