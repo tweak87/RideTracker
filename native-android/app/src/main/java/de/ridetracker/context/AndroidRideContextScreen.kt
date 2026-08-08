@@ -70,7 +70,7 @@ fun AndroidRideContextPanel(
                     Text("Wetter bei Start und Ende")
                     Text("Open-Meteo · optional", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Switch(store.weatherEnabled, store::setWeatherEnabled)
+                Switch(store.weatherEnabled, store::updateWeatherEnabled)
             }
 
             Button(

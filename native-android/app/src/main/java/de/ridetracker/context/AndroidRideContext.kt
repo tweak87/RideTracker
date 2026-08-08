@@ -119,7 +119,7 @@ class AndroidRideContextStore(private val context: Context) {
     var weatherEnabled by mutableStateOf(preferences.getBoolean("weatherEnabled", false)); private set
     var radiusM by mutableStateOf(preferences.getInt("radiusM", 25_000)); private set
 
-    fun setWeatherEnabled(enabled: Boolean) {
+    fun updateWeatherEnabled(enabled: Boolean) {
         weatherEnabled = enabled
         preferences.edit().putBoolean("weatherEnabled", enabled).apply()
     }
