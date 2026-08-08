@@ -78,6 +78,8 @@ requireToken('update64.js', 'BY-(?:SA|NC|ND)', 'Restrictive Commons licenses mus
 requireToken('update64.js', 'RideTrackerRideContext', 'Ride context integration API missing');
 rejectToken('update64.js', 'if(host){renderDraftEnhancement();return host;}', 'Ride context observer must not rerender its own existing draft subtree');
 requireToken('update38.js', 'runtimeErrors.handling', 'Runtime error recursion guard missing');
+requireToken('update38.js', '#rtStandaloneHudEditor.open,#rtDeviceCenter.open', 'Legacy boot recovery must preserve active tools');
+requireToken('update38.js', "!document.body.classList.contains('rt-hud-editor-open')", 'Page restore must preserve an intentional HUD');
 
 const html = source['index.html'];
 const gpsPosition = html.indexOf('shared/ride-engine/gps-speed.js?v=');
