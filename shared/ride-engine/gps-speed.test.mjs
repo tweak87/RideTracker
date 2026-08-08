@@ -119,6 +119,35 @@ for (let index = 0; index < 4; index += 1) {
 const poorAccuracy = poorAccuracyEstimator.snapshot();
 assert.ok(poorAccuracy.smoothedSpeedMS > 8, `sustained movement with a poor iOS fix must not stay at zero: ${poorAccuracy.smoothedSpeedMS}`);
 
+const repeatedTimestampEstimator = gps.createEstimator();
+for (let index = 0; index < 5; index += 1) {
+  repeatedTimestampEstimator.update({
+    latitude: 50 + index * 0.00022,
+    longitude: 8,
+    horizontalAccuracyM: 35,
+    gpsTimestampMs: 1_000,
+    gpsReceivedAtMs: 1_000 + index * 1_000,
+    nativeSpeedMS: 0,
+  });
+}
+const repeatedTimestamp = repeatedTimestampEstimator.snapshot();
+assert.ok(repeatedTimestamp.smoothedSpeedMS > 10, `repeated browser timestamps must fall back to receipt time: ${repeatedTimestamp.smoothedSpeedMS}`);
+assert.ok(repeatedTimestamp.timestampRepairs >= 4, 'timestamp repairs must be exposed for diagnostics');
+
+const shieldedEstimator = gps.createEstimator();
+let shielded;
+for (let index = 0; index < 5; index += 1) {
+  shielded = shieldedEstimator.update({
+    latitude: 50,
+    longitude: 8,
+    horizontalAccuracyM: 97,
+    gpsTimestampMs: 1_000 + index * 1_000,
+    nativeSpeedMS: 0,
+  });
+}
+assert.equal(shielded.speedMS, null, 'an inaccurate fixed position must not be presented as a proven 0 km/h');
+assert.equal(shielded.source, 'position-uncertain');
+
 assert.ok(Math.abs(gps.bearingDegrees({latitude:50,longitude:8},{latitude:50.001,longitude:8})) < 0.1);
 
 const merged = gps.mergeCanonicalGpsIntoSamples([

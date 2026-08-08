@@ -48,6 +48,24 @@
     return relative !== null ? relative * 1000 : null;
   }
 
+  function resolvedTimestampMs(point, previousTimestampMs = null) {
+    const reportedTimestampMs = pointTimestampMs(point);
+    const receivedTimestampMs = numberOrNull(point?.gpsReceivedAtMs ?? point?.receivedAtMs);
+    const previous = numberOrNull(previousTimestampMs);
+    let timestampMs = reportedTimestampMs ?? receivedTimestampMs;
+    let repaired = reportedTimestampMs === null && receivedTimestampMs !== null;
+    let reason = repaired ? 'missing-browser-timestamp' : null;
+
+    if (previous !== null && (timestampMs === null || timestampMs <= previous)) {
+      if (receivedTimestampMs !== null && receivedTimestampMs > previous) {
+        timestampMs = receivedTimestampMs;
+        repaired = true;
+        reason = 'non-monotonic-browser-timestamp';
+      }
+    }
+    return { timestampMs, reportedTimestampMs, receivedTimestampMs, repaired, reason };
+  }
+
   function createEstimator(options = {}) {
     const config = {
       maximumSpeedMS: 100,
@@ -70,6 +88,7 @@
       previous: null, history: [], smoothedSpeedMS: null, lastMovingAtMs: null, points: 0,
       stationaryAnchor: null, stationarySamples: 0, stationaryLocked: false,
       movementEvidence: 0, movementHeadingDeg: null,
+      lastTimestampMs: null, timestampRepairs: 0,
     };
 
     function reset() {
@@ -83,6 +102,8 @@
       state.stationaryLocked = false;
       state.movementEvidence = 0;
       state.movementHeadingDeg = null;
+      state.lastTimestampMs = null;
+      state.timestampRepairs = 0;
     }
 
     function update(point) {
@@ -92,7 +113,9 @@
       let noiseAllowanceM = null;
       let derivedHeadingDeg = null;
       let confidence = 0;
-      const currentTimestampMs = pointTimestampMs(point);
+      const timestamp = resolvedTimestampMs(point, state.lastTimestampMs);
+      const currentTimestampMs = timestamp.timestampMs;
+      if (timestamp.repaired) state.timestampRepairs += 1;
       const geometryCandidates = [];
       let longestCandidate = null;
 
@@ -151,6 +174,10 @@
           || headingDeltaDegrees(state.movementHeadingDeg, derivedHeadingDeg) <= config.stationaryCourseToleranceDeg);
       const recentlyMoving = state.lastMovingAtMs !== null && currentTimestampMs !== null
         && currentTimestampMs - state.lastMovingAtMs <= config.holdMaximumSeconds * 1000;
+      const decisiveGeometry = derivedUseful
+        && derivedSpeedMS >= 8
+        && confidence >= 0.45
+        && anchorDistanceM >= Math.max(35, stationaryRadiusM * 2.5);
 
       if (nativeSaysStationary && insideStationaryCluster && !(recentlyMoving && derivedUseful)) {
         state.stationarySamples += 1;
@@ -159,7 +186,9 @@
         if (state.stationarySamples >= config.stationaryLockPoints) state.stationaryLocked = true;
       } else if (movementSpeedMS >= config.stationaryReleaseSpeedMS) {
         const strongNativeMovement = nativeUseful && nativeSpeedMS >= 2.2;
-        state.movementEvidence += strongNativeMovement ? 1 : (courseConsistent ? 1 : 0.35);
+        state.movementEvidence = decisiveGeometry
+          ? config.stationaryReleasePoints
+          : state.movementEvidence + (strongNativeMovement ? 1 : (courseConsistent ? 1 : 0.35));
         if (derivedHeadingDeg !== null) state.movementHeadingDeg = derivedHeadingDeg;
         if (state.movementEvidence >= config.stationaryReleasePoints) {
           state.stationaryLocked = false;
@@ -202,15 +231,20 @@
       // From a stationary cluster we require multiple directionally consistent fixes (or
       // two strong native-speed fixes) before releasing the zero-speed lock.
       const movementConfirmed = state.movementEvidence >= config.stationaryReleasePoints;
+      const uncertainStationaryFix = !derivedUseful
+        && !nativeUseful
+        && currentAccuracyM > 25;
       const suppressUnconfirmedMovement = state.stationaryLocked
         || (!movementConfirmed && state.stationarySamples > 0 && rawSpeedMS !== null
           && rawSpeedMS >= config.minimumMovingSpeedMS && !nativeUseful
           && (confidence < 0.25 || currentAccuracyM > 5));
       if (state.points > 0 && suppressUnconfirmedMovement) {
-        rawSpeedMS = 0;
-        source = state.stationaryLocked ? 'stationary-lock' : 'stationary-candidate';
+        rawSpeedMS = uncertainStationaryFix ? null : 0;
+        source = uncertainStationaryFix
+          ? 'position-uncertain'
+          : (state.stationaryLocked ? 'stationary-lock' : 'stationary-candidate');
         confidence = Math.max(confidence, insideStationaryCluster ? 0.9 : 0.55);
-        if (state.stationaryLocked) state.smoothedSpeedMS = 0;
+        if (state.stationaryLocked) state.smoothedSpeedMS = uncertainStationaryFix ? null : 0;
       }
 
       if (rawSpeedMS !== null && rawSpeedMS >= config.minimumMovingSpeedMS) state.lastMovingAtMs = currentTimestampMs;
@@ -232,6 +266,7 @@
 
       state.previous = { ...point, gpsTimestampMs: currentTimestampMs ?? Date.now() };
       state.history.push(state.previous);
+      state.lastTimestampMs = currentTimestampMs;
       state.points += 1;
       return {
         speedMS: state.smoothedSpeedMS,
@@ -248,6 +283,10 @@
         stationaryRadiusM,
         anchorDistanceM,
         movementEvidence: state.movementEvidence,
+        timestampMs: currentTimestampMs,
+        timestampRepaired: timestamp.repaired,
+        timestampRepairReason: timestamp.reason,
+        timestampRepairs: state.timestampRepairs,
       };
     }
 
@@ -333,6 +372,7 @@
     numberOrNull,
     distanceMeters,
     bearingDegrees,
+    resolvedTimestampMs,
     createEstimator,
     gpsPointsFromPackage,
     nearestGpsPoint,

@@ -2,7 +2,7 @@
 
 ## Version und Rollback
 
-- Produktversion: `2026.08.08-context-map-weather.1`
+- Produktversion: `2026.08.08-ice-telemetry-fire8.3`
 - Gesicherter Ausgangsstand: `5a4f178947b144694543161e1f8a459ab19a07b5`
 - Remote-Rollback-Branch: `rollback/pre-park-map-weather-20260808`
 - Lokales Tag: `park-map-weather-baseline-20260808`

@@ -58,7 +58,10 @@
   }
 
   function phoneCalibrationReady() {
-    return Boolean(window.RideTrackerCalibrationManager?.current?.()) || /kalibriert/i.test(byId('calState')?.textContent || '');
+    const manager = window.RideTrackerCalibrationManager;
+    const current = Boolean(manager?.current?.());
+    if (current && typeof manager?.activeCompatible === 'function') return manager.activeCompatible();
+    return current || /kalibriert/i.test(byId('calState')?.textContent || '');
   }
 
   function externalImuCalibrationReady(item) {

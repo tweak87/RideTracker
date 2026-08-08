@@ -58,7 +58,8 @@ requireToken('context', 'AndroidPlatformLocationProvider', 'Park and weather con
 requireToken('platformLocation', 'LocationManager.GPS_PROVIDER', 'Platform GPS provider missing');
 requireToken('platformLocation', 'LocationManager.NETWORK_PROVIDER', 'Platform network location fallback missing');
 requireToken('gradle', 'minSdk = 21', 'Fire OS 5 compatibility floor missing');
-requireToken('gradle', 'applicationIdSuffix = ".firetest"', 'Side-by-side Fire test package missing');
+requireToken('gradle', 'applicationIdSuffix = ".fire8v3"', 'Side-by-side Fire OS 8 test package missing');
+requireToken('gradle', 'useLegacyPackaging = true', 'Fire-compatible native library packaging missing');
 requireToken('gradle', '"armeabi-v7a", "arm64-v8a"', 'Fire APK must only package compatible ARM variants');
 rejectToken('gradle', 'play-services-location', 'Fire OS build must not depend on Google Play Services location');
 requireToken('speed', 'stationaryLocked', 'Android stationary GPS lock missing');
@@ -67,7 +68,8 @@ requireToken('viewer', 'detectTapGestures', 'Android 3D point inspector missing'
 requireToken('media', 'thumbnailNode', 'Android ride thumbnails missing');
 requireToken('workflow', 'assembleDebug', 'Android APK build missing');
 requireToken('workflow', 'assembleFireTest', 'Dedicated Fire OS APK build missing');
-requireToken('workflow', 'RideTracker-Fire-2026.08.08.2-fireTest.apk', 'Direct Fire APK artifact missing');
+requireToken('workflow', 'INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.3.apk', 'Direct Fire APK artifact missing');
+requireToken('workflow', 'apksigner', 'Fire APK signature verification missing');
 requireToken('workflow', 'gh release create', 'Direct Android APK release missing');
 
 console.log('Android parity audit passed.');

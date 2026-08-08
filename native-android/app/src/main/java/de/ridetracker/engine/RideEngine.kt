@@ -19,7 +19,10 @@ data class MotionOutput(
     val totalG: Double,
     val positiveGAverage: Double?,
     val airtime: Boolean
-)
+) {
+    val horizontalG: Double get() = hypot(lateralG, longitudinalG)
+    val lateralMS2: Double get() = lateralG * 9.80665
+}
 data class LocationInput(
     val t: Double,
     val latitude: Double,

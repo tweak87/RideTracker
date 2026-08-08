@@ -304,14 +304,17 @@ fun AndroidSensorFaq(modifier: Modifier = Modifier) {
         Text("Wie G-Kräfte, Geschwindigkeit, Richtung und Messqualität berechnet und bewertet werden.")
         FaqCard("Wie werden G-Kräfte berechnet?") {
             Text("Die automatische Kalibrierung bestimmt die Fahrzeugachsen normal (oben/unten), lateral (links/rechts) und longitudinal (vorwärts/rückwärts). Der Beschleunigungsvektor inklusive Erdanziehung wird auf diese Achsen projiziert und durch 9,80665 m/s² geteilt.")
-            Text("Gnormal = a · eoben / 9,80665\nGlateral = a · eseitlich / 9,80665\nGlongitudinal = a · evorne / 9,80665\nGgesamt = √(Gnormal² + Glateral² + Glongitudinal²)", style = MaterialTheme.typography.bodyMedium)
-            Text("Im Stillstand sind ungefähr +1 G auf der Normalachse normal. RideTracker ist eine Freizeitmessung und kein sicherheitsrelevantes Prüfsystem.")
+            Text("Gnormal = a · eoben / 9,80665\nGlateral = a · eseitlich / 9,80665\nGlongitudinal = a · evorne / 9,80665\nGhorizontal = √(Glateral² + Glongitudinal²)\nGgesamt = √(Gnormal² + Glateral² + Glongitudinal²)", style = MaterialTheme.typography.bodyMedium)
+            Text("Im Stillstand sind ungefähr +1 G auf der Normalachse normal. Der horizontale Gesamtwert bleibt aussagekräftig, wenn Quer- und Längskraft durch eine falsche Vorwärtskante vertauscht sind. Kalibriere auf einem geraden, ruhigen Abschnitt mit endgültig befestigtem Gerät; eine Kalibrierung in einer Kurve kann Seitenkraft zu klein erscheinen lassen. RideTracker ist eine Freizeitmessung und kein sicherheitsrelevantes Prüfsystem.")
         }
         FaqCard("Funktionieren G-Kräfte ohne GPS?") {
             Text("Ja. G-Kräfte stammen aus dem Beschleunigungs- und Orientierungssensor. Ohne GPS fehlen jedoch eine belastbare Geschwindigkeit, der geografische Verlauf und das räumliche Streckenmodell. Eine doppelte Integration der Beschleunigung wird nicht als Positionsersatz verwendet, weil kleine Sensorfehler schnell stark anwachsen.")
         }
         FaqCard("Warum zeigt RideTracker im Stillstand nicht jeden GPS-Sprung?") {
             Text("Native GPS-Geschwindigkeit und aus mehreren Positionsfenstern abgeleitete Werte werden plausibilisiert. Ungenaue Fixes, unmögliche Sprünge und einzelne Ausreißer werden verworfen. Nach erkanntem Stillstand wird Bewegung erst durch mehrere konsistente Fixes freigegeben.")
+        }
+        FaqCard("Warum kann im ICE keine Geschwindigkeit verfügbar sein?") {
+            Text("Metallbedampfte Scheiben und der Wagenkasten können Satellitensignale abschirmen. Bleibt die absolute Position dadurch unverändert, lässt sich eine konstante Zuggeschwindigkeit nicht seriös aus dem Beschleunigungssensor ableiten. RideTracker zeigt in diesem Fall einen nicht verfügbaren Wert statt einer erfundenen Geschwindigkeit.")
         }
         FaqCard("Wie funktioniert der Kompass?") {
             Text("Android verwendet den Rotation-Vector-Sensor und zeigt die Richtung relativ zum magnetischen Norden. Stahlkonstruktionen, Lautsprecher oder magnetische Halterungen können den Wert beeinflussen.")

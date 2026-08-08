@@ -10,6 +10,8 @@
     lastFixAt:0,
     lastAccuracy:null,
     lastSource:'–',
+    timestampRepairs:0,
+    timestampRepairReason:null,
     lastError:null,
     persistedRideId:null,
     persistedPoints:0,
@@ -118,6 +120,10 @@
     point.nativeSpeedMS=speed.nativeSpeedMS;
     point.derivedSpeedMS=speed.derivedSpeedMS;
     point.speedConfidence=finite(speed.confidence)?Number(speed.confidence):null;
+    if(finite(speed.timestampMs))point.gpsTimestampMs=Number(speed.timestampMs);
+    point.gpsTimestampRepaired=Boolean(point.gpsTimestampRepaired||speed.timestampRepaired);
+    point.gpsTimestampRepairReason=point.gpsTimestampRepairReason||speed.timestampRepairReason||null;
+    point.gpsTimestampRepairs=Math.max(Number(point.gpsTimestampRepairs||0),Number(speed.timestampRepairs||0));
     if(!finite(point.headingDeg)&&finite(speed.derivedHeadingDeg))point.headingDeg=Number(speed.derivedHeadingDeg);
     point.headingSource=finite(speed.derivedHeadingDeg)&&point.headingDeg===speed.derivedHeadingDeg?'gps-course':(finite(point.headingDeg)?'gps-native':null);
     point.quality=qualityFor(point,speed.source,speed.confidence);
@@ -125,6 +131,8 @@
     state.lastFixAt=performance.now();
     state.lastAccuracy=finite(point.horizontalAccuracyM)?Number(point.horizontalAccuracyM):null;
     state.lastSource=speed.source;
+    state.timestampRepairs=point.gpsTimestampRepairs;
+    state.timestampRepairReason=point.gpsTimestampRepairReason;
     state.lastError=null;
     state.previous={...point};
     updateSpeedDom();
@@ -160,6 +168,8 @@
     state.lastFixAt=0;
     state.lastAccuracy=null;
     state.lastSource='–';
+    state.timestampRepairs=0;
+    state.timestampRepairReason=null;
     state.lastError=null;
     state.persistedRideId=null;
     state.persistedPoints=0;
@@ -280,6 +290,7 @@
     if(state.recording && !state.points)return 'GPS-Fix wird gesucht …';
     if(state.recording && state.points){
       const age=(performance.now()-state.lastFixAt)/1000;
+      if(state.lastSource==='position-uncertain')return 'GPS im Fahrzeug zu ungenau · Tempo nicht bestimmbar';
       return age>5?'GPS-Fix veraltet':'GPS-Fix aktiv';
     }
     if(state.persistedRideId)return state.persistedPoints?`GPS gespeichert · ${state.persistedPoints} Punkte`:'Fahrt gespeichert · keine GPS-Punkte';
@@ -294,6 +305,8 @@
       maxSpeedKmh:state.maxSpeedKmh,
       accuracyM:state.lastAccuracy,
       source:state.lastSource,
+      timestampRepairs:state.timestampRepairs,
+      timestampRepairReason:state.timestampRepairReason,
       ageMs:state.lastFixAt?performance.now()-state.lastFixAt:null,
       error:state.lastError,
       persistedRideId:state.persistedRideId,
@@ -327,7 +340,7 @@
     set('[data-speed]',finite(snap.speedKmh)?`${Number(snap.speedKmh).toFixed(1)} km/h`:'–');
     set('[data-accuracy]',finite(snap.accuracyM)?`±${Math.round(snap.accuracyM)} m`:'–');
     set('[data-points]',String(snap.points||snap.persistedPoints||0));
-    set('[data-source]',snap.source==='native+derived'?'GPS + Strecke':snap.source==='derived'?'aus GPS-Strecke':snap.source==='derived-low-confidence'?'GPS-Schätzung':snap.source==='held'?'letzter GPS-Wert':snap.source==='unavailable'?'noch nicht verfügbar':snap.source==='native'?'GPS direkt':snap.source);
+    set('[data-source]',snap.source==='native+derived'?'GPS + Strecke':snap.source==='derived'?'aus GPS-Strecke':snap.source==='derived-low-confidence'?'GPS-Schätzung':snap.source==='held'?'letzter GPS-Wert':snap.source==='unavailable'?'noch nicht verfügbar':snap.source==='position-uncertain'?'Position unzuverlässig':snap.source==='stationary-lock'||snap.source==='stationary-candidate'?'Stillstand bestätigt':snap.source==='native'?'GPS direkt':snap.source);
   }
 
   window.addEventListener('ridetracker:recording-gps',onGps);

@@ -43,6 +43,13 @@ class CalibrationMathTest {
         assertEquals(1.0, output.totalG, 1e-6)
     }
 
+    @Test
+    fun exposesHorizontalResultantAndLateralMetersPerSecondSquared() {
+        val output = RideEngine().processMotion(MotionInput(0.0, 0.3, 0.4, 1.0))
+        assertEquals(0.5, output.horizontalG, 1e-6)
+        assertEquals(2.941995, output.lateralMS2, 1e-6)
+    }
+
     private fun dot(a: Vector3, b: Vector3) = a.x * b.x + a.y * b.y + a.z * b.z
     private fun length(v: Vector3) = sqrt(dot(v, v))
 }
