@@ -4,7 +4,7 @@ Stand: 2026-08-08
 
 Dieses Dokument ist die verbindliche Übergabe für einen neuen Chat. Vor Änderungen zuerst `main`, die letzten Actions und dieses Dokument lesen. Danach nur auf Basis des tatsächlichen Repository-Stands weiterarbeiten.
 
-Aktuelle Zielversion: `2026.08.08-context-map-weather.1`. Der vorherige Stand ist am Commit `5a4f178947b144694543161e1f8a459ab19a07b5` und Branch `rollback/pre-park-map-weather-20260808` dokumentiert. Neu sind die wählbare Parkkarte, optionale Wetter-/Wind-Snapshots, lizenzierte Thumbnails, der automatische Aufnahme-Dialog, der strengere Stillstandfilter, die Sensor-FAQ und Supabase-Migration 002 mit Datenschutz-Gate, Export und Löschung.
+Aktuelle Zielversion: `2026.08.08-ice-telemetry-fire8.3`. Der vorherige Stand ist am Commit `5a4f178947b144694543161e1f8a459ab19a07b5` und Branch `rollback/pre-park-map-weather-20260808` dokumentiert. Neu sind die wählbare Parkkarte, optionale Wetter-/Wind-Snapshots, lizenzierte Thumbnails, der automatische Aufnahme-Dialog, der strengere Stillstandfilter, die Sensor-FAQ, monotone ICE-GPS-Zeitbasis, Kalibrierungs-Lageprüfung, horizontale G-Kraft-Diagnose, verifizierter Fire-OS-8-Testbuild und Supabase-Migration 002 mit Datenschutz-Gate, Export und Löschung.
 
 ## 1. Produktziel
 

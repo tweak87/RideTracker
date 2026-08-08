@@ -127,6 +127,41 @@ test('poor iOS GPS fixes derive movement instead of forcing zero', async ({page}
   expect(result.snapshot.source).toContain('derived');
 });
 
+test('ICE GPS repairs repeated timestamps and never claims uncertain zero speed', async ({page}) => {
+  const moving=await page.evaluate(()=>{
+    window.dispatchEvent(new CustomEvent('ridetracker:new-ride-session'));
+    const values=[];
+    for(let index=0;index<5;index+=1){
+      const point={timestamp:index,latitude:50+index*.00022,longitude:8,horizontalAccuracyM:35,gpsTimestampMs:1000,gpsReceivedAtMs:1000+index*1000,nativeSpeedMS:0,source:'phone-gps'};
+      window.dispatchEvent(new CustomEvent('ridetracker:recording-gps',{detail:point}));values.push(point);
+    }
+    return{last:values.at(-1),snapshot:window.RideTrackerGpsHealth.snapshot()};
+  });
+  expect(moving.snapshot.speedKmh).toBeGreaterThan(35);
+  expect(moving.last.gpsTimestampRepaired).toBe(true);
+  expect(moving.snapshot.timestampRepairs).toBeGreaterThanOrEqual(4);
+
+  const shielded=await page.evaluate(()=>{
+    window.dispatchEvent(new CustomEvent('ridetracker:new-ride-session'));
+    for(let index=0;index<5;index+=1)window.dispatchEvent(new CustomEvent('ridetracker:recording-gps',{detail:{timestamp:index,latitude:50,longitude:8,horizontalAccuracyM:97,gpsTimestampMs:1000+index*1000,nativeSpeedMS:0,source:'phone-gps'}}));
+    return window.RideTrackerGpsHealth.snapshot();
+  });
+  expect(shielded.speedKmh).toBeNull();
+  expect(shielded.source).toBe('position-uncertain');
+  await expect(page.locator('#rtGpsHealth58')).toContainText('Position unzuverlässig');
+});
+
+test('G-force diagnostics expose lateral force and orientation-independent horizontal resultant', async ({page}) => {
+  const result=await page.evaluate(()=>({
+    metrics:window.RideTrackerGForceQuality.forceMetrics({normal:1,lateral:.3,longitudinal:.4}),
+    diagnostics:Boolean(window.RideTrackerGForceDiagnostics),
+  }));
+  expect(result.diagnostics).toBe(true);
+  expect(result.metrics.horizontalG).toBeCloseTo(.5,6);
+  expect(result.metrics.lateralMS2).toBeCloseTo(2.941995,6);
+  await expect(page.locator('#rtGForceDiagnostics65')).toContainText('Horizontal gesamt');
+});
+
 test('compass is configurable and uses GPS course as fallback', async ({page}) => {
   const compass=await page.evaluate(()=>{
     window.dispatchEvent(new CustomEvent('ridetracker:canonical-gps',{detail:{latitude:50,longitude:8,speedMS:8,headingDeg:72,horizontalAccuracyM:5}}));

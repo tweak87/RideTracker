@@ -187,7 +187,7 @@
     window.RideTrackerCommunityHub={open,render,buildCatalog,decorateLibrary,openViewer,syncAll,backend,viewer:()=>state.renderer};
     window.addEventListener('ridetracker:ride-saved',event=>void autoSyncRide(event.detail?.rideId));window.addEventListener('ridetracker:community-ride-updated',event=>void autoSyncRide(event.detail?.rideId));
     const observer=new MutationObserver(()=>{const admin=document.getElementById('rtAdminCenter61');if(admin&&!admin.hidden)decorateAdmin();});observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden']});
-    log('info','boot','Community backend and 3D module installed',{version:'2026.08.08-context-map-weather.1'});
+    log('info','boot','Community backend and 3D module installed',{version:'2026.08.08-ice-telemetry-fire8.3'});
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 })();

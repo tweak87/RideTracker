@@ -13,7 +13,9 @@ const required = [
   'update62.js',
   'update63.js',
   'update64.js',
+  'update65.js',
   'shared/ride-engine/gps-speed.js',
+  'shared/ride-engine/g-force-quality.js',
   'shared/ride-engine/browser-adapter.js',
   'shared/core/community-model.js',
   'shared/core/community-backend.js',
@@ -34,6 +36,9 @@ const rejectToken = (file, token, message) => {
 };
 
 requireToken('shared/ride-engine/gps-speed.js', 'createEstimator', 'Canonical GPS estimator missing');
+requireToken('shared/ride-engine/gps-speed.js', 'non-monotonic-browser-timestamp', 'GPS timestamp repair missing');
+requireToken('shared/ride-engine/gps-speed.js', 'position-uncertain', 'Uncertain shielded GPS state missing');
+requireToken('shared/ride-engine/g-force-quality.js', 'calibrationCompatibility', 'Calibration orientation validation missing');
 requireToken('shared/ride-engine/gps-speed.js', 'mergeCanonicalGpsIntoSamples', 'Canonical GPS merge missing');
 requireToken('update54.js', 'RideTrackerGpsMath?.mergeCanonicalGpsIntoSamples', 'GPS persistence must use canonical speed');
 requireToken('update58.js', "ridetracker:canonical-gps", 'Filtered GPS event missing');
@@ -44,6 +49,7 @@ rejectToken('update58.js', 'observer.observe(document.body,{childList:true,subtr
 requireToken('shared/ride-engine/browser-adapter.js', 'callback?.(position);', 'Every GPS consumer must receive its callback');
 rejectToken('shared/ride-engine/browser-adapter.js', 'if (result.accepted)', 'Shared engine must not starve a GPS consumer');
 requireToken('index.html', 'if(window.RideTrackerGpsCapture?.start)', 'Recording must prefer the single GPS capture service');
+requireToken('index.html', 'calX=hasLinear?x-lx:x', 'Calibration must separate gravity from vehicle acceleration when available');
 requireToken('index.html', "ridetracker:recording-started", 'Recording-start event missing');
 requireToken('index.html', "ridetracker:recording-stopped", 'Recording-stop event missing');
 
@@ -76,6 +82,8 @@ requireToken('update64.js', 'weatherEnabled:false', 'Weather lookup must default
 requireToken('update64.js', 'allowedCommonsLicense', 'Stock image license filter missing');
 requireToken('update64.js', 'BY-(?:SA|NC|ND)', 'Restrictive Commons licenses must be excluded');
 requireToken('update64.js', 'RideTrackerRideContext', 'Ride context integration API missing');
+requireToken('update65.js', 'RideTrackerGForceDiagnostics', 'G-force diagnostics API missing');
+requireToken('update65.js', 'horizontalG', 'Horizontal force resultant missing');
 rejectToken('update64.js', 'if(host){renderDraftEnhancement();return host;}', 'Ride context observer must not rerender its own existing draft subtree');
 requireToken('update38.js', 'runtimeErrors.handling', 'Runtime error recursion guard missing');
 requireToken('update38.js', '#rtStandaloneHudEditor.open,#rtDeviceCenter.open', 'Legacy boot recovery must preserve active tools');

@@ -4,21 +4,22 @@ Stand: 8. August 2026
 
 ## Welches Paket verwenden?
 
-- `RideTracker-Fire-2026.08.08.2-fireTest.apk` ist der empfohlene Testbuild für Fire OS.
-- Die Paket-ID `de.ridetracker.firetest` unterscheidet sich bewusst von `de.ridetracker`. Dadurch kann die Fire-Version neben einer früheren RideTracker-Testversion installiert werden und umgeht Signaturkonflikte mit älteren Debug-APKs.
+- `INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.3.apk` ist der einzige empfohlene Testbuild für Fire OS 8. Die ähnlich große Datei `RideTracker-Android-…-debug.apk` ist **nicht** für diesen Installationstest gedacht.
+- Im Installationsdialog muss als App-Name **RideTracker FIRE 8 TEST** stehen. Steht dort nur **RideTracker**, wurde die normale APK geöffnet.
+- Die Paket-ID `de.ridetracker.fire8v3` unterscheidet sich bewusst von `de.ridetracker` und der vorherigen Fire-Test-ID. Dadurch kann diese Diagnoseversion neben früheren RideTracker-Paketen installiert werden und umgeht deren Debug-Signaturkonflikte.
 - Der Build unterstützt Android API 21 und neuer, also Fire OS 5 und neuer. Fire OS 4 und ältere Versionen werden von der aktuellen AndroidX-/Compose-Oberfläche nicht unterstützt.
-- Das Fire-Paket enthält nur die auf Fire-Tablets benötigten ARM-Varianten (`armeabi-v7a` und `arm64-v8a`), um Download und Installationsspeicher kleiner zu halten.
+- Das Fire-Paket enthält nur die auf Fire-Tablets benötigten ARM-Varianten (`armeabi-v7a` und `arm64-v8a`). Native Bibliotheken werden im älteren, auf Fire OS robusteren Extraktionsformat verpackt.
 
 ## Installation
 
 1. Unter **Einstellungen → Sicherheit und Datenschutz → Apps unbekannter Herkunft** die verwendete Download-App (Silk oder Dateien) freigeben.
 2. Mindestens 200 MB freien Speicher sicherstellen.
-3. Die Fire-Test-APK vollständig herunterladen und danach aus **Dateien/Downloads** öffnen.
+3. Die Datei `INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.3.apk` vollständig herunterladen und danach aus **Dateien/Downloads** öffnen. Im Installer den Namen **RideTracker FIRE 8 TEST** kontrollieren.
 4. Wird weiterhin nur „App wurde nicht installiert“ angezeigt, Fire-OS-Version, Modell/Generation, freien Speicher und den Namen der heruntergeladenen APK notieren.
 
 Nach erfolgreicher Installation kann unter **Menü → Kompatibilität & Diagnose** ein vollständiger Geräte- und Sensorbericht kopiert und bei einem Fehler weitergegeben werden.
 
-Die normale APK `de.ridetracker` kann beim Aktualisieren einer früheren Debug-Version abgelehnt werden, wenn beide Builds mit unterschiedlichen Debug-Zertifikaten signiert wurden. Vor einer Deinstallation zuerst wichtige Fahrten exportieren. Eine Deinstallation löscht lokale App-Daten.
+Die normale APK `de.ridetracker` kann beim Aktualisieren einer früheren Debug-Version abgelehnt werden, wenn beide Builds mit unterschiedlichen Debug-Zertifikaten signiert wurden. Das ist sehr wahrscheinlich der Grund, wenn der Installationsdialog aus dem Foto nur **RideTracker** anzeigt. Vor einer Deinstallation zuerst wichtige Fahrten exportieren. Eine Deinstallation löscht lokale App-Daten.
 
 ## Fire-OS-Kompatibilität
 

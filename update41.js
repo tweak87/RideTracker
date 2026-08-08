@@ -2,7 +2,7 @@
   'use strict';
 
   const STORAGE_KEY = 'rideTracker.calibration.v1';
-  const state = { restored: false, prompted: false, lastSavedAt: null };
+  const state = { restored: false, prompted: false, lastSavedAt: null, lastValidation: null };
   const byId = id => document.getElementById(id);
 
   function readStored() {
@@ -27,6 +27,23 @@
   function selectedForward() { return byId('forward')?.value || 'top'; }
   function selectedMode() { return byId('calMode')?.value || 'auto'; }
 
+  function validateCalibration(record = readStored()) {
+    const calibration = record?.calibration || currentCalibration();
+    const quality = window.RideTrackerGForceQuality;
+    if (!calibration) return { ready:true, compatible:false, reason:'missing-calibration' };
+    if (!quality?.calibrationCompatibility || typeof S === 'undefined') return { ready:true, compatible:true, reason:'quality-check-unavailable' };
+    const validation = quality.calibrationCompatibility(calibration, Array.isArray(S.raw) ? S.raw : []);
+    state.lastValidation = validation;
+    return validation;
+  }
+
+  function activeCompatible() {
+    if (!currentCalibration()) return false;
+    if (!state.restored) return true;
+    const validation = validateCalibration();
+    return validation.ready && validation.compatible;
+  }
+
   function saveCurrent() {
     const calibration = currentCalibration();
     if (!calibration) return false;
@@ -40,6 +57,7 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
     state.lastSavedAt = record.savedAt;
     state.restored = false;
+    state.lastValidation = null;
     window.dispatchEvent(new CustomEvent('ridetracker:calibration-saved', { detail: record }));
     refreshStatus();
     return true;
@@ -48,6 +66,12 @@
   function applyStored(record = readStored()) {
     if (!record?.calibration) return false;
     if (record.forwardEdge && record.forwardEdge !== selectedForward()) return false;
+    const validation = validateCalibration(record);
+    if (!validation.ready || !validation.compatible) {
+      state.lastValidation = validation;
+      refreshStatus();
+      return false;
+    }
     try {
       if (typeof S === 'undefined') return false;
       S.cal = record.calibration;
@@ -66,11 +90,12 @@
     } catch (_) { return false; }
   }
 
-  function clearCurrentKeepStored() {
+  function clearCurrentKeepStored(preserveValidation = false) {
     try {
       if (typeof S !== 'undefined') S.cal = null;
     } catch (_) {}
     state.restored = false;
+    if (!preserveValidation) state.lastValidation = null;
     const calState = byId('calState');
     if (calState) {
       calState.textContent = 'nicht kalibriert';
@@ -130,12 +155,17 @@
     const text = byId('rtCalibrationPromptText');
     if (text) text.textContent = mismatch
       ? 'Die gespeicherte Kalibrierung gehört zu einer anderen Vorwärtskante. Bitte für die aktuelle Montage neu kalibrieren.'
-      : 'Für diese Geräteposition ist noch keine Kalibrierung vorhanden. Die Kalibrierung dauert nur wenige Sekunden.';
+      : state.lastValidation?.reason === 'orientation-changed'
+        ? `Die Handylage hat sich um ${Math.round(state.lastValidation.angleDeg || 0)}° verändert. Damit Quer- und Längskräfte nicht zu klein erscheinen, ist eine neue Kalibrierung erforderlich.`
+        : state.lastValidation?.reason === 'device-moving'
+          ? 'Die Lageprüfung ist noch nicht stabil. Halte das Telefon kurz ruhig in seiner endgültigen Position und kalibriere neu.'
+          : 'Für diese Geräteposition ist noch keine Kalibrierung vorhanden. Die Kalibrierung dauert nur wenige Sekunden.';
     dialog.hidden = false;
   }
 
   async function ensureForStart() {
-    if (currentCalibration()) return true;
+    if (currentCalibration() && activeCompatible()) return true;
+    if (currentCalibration() && state.restored) clearCurrentKeepStored(true);
     if (applyStored()) return true;
     showCalibrationPrompt();
     return false;
@@ -180,7 +210,9 @@
     const text = info.querySelector('[data-cal-info]');
     const stored = readStored();
     const current = currentCalibration();
-    if (current && state.restored) text.textContent = `Gespeicherte Kalibrierung aktiv${calibrationAgeText() ? ` · ${calibrationAgeText()}` : ''}`;
+    if (state.lastValidation?.reason === 'orientation-changed') text.textContent = `Neu kalibrieren · Handylage ${Math.round(state.lastValidation.angleDeg || 0)}° verändert`;
+    else if (state.lastValidation?.reason === 'device-moving') text.textContent = 'Lageprüfung wartet auf ruhiges Telefon';
+    else if (current && state.restored) text.textContent = `Gespeicherte Kalibrierung geprüft${calibrationAgeText() ? ` · ${calibrationAgeText()}` : ''}`;
     else if (current) text.textContent = 'Aktuelle Kalibrierung aktiv';
     else if (stored && stored.forwardEdge === selectedForward()) text.textContent = `Kalibrierung gespeichert${calibrationAgeText() ? ` · ${calibrationAgeText()}` : ''}`;
     else text.textContent = 'Keine passende Kalibrierung vorhanden';
@@ -192,7 +224,7 @@
   }
 
   function restoreWhenReady() {
-    if (!currentCalibration()) applyStored();
+    if (!currentCalibration() && initialized()) applyStored();
     if (currentCalibration() && initialized() && byId('start')) byId('start').disabled = false;
     refreshStatus();
   }
@@ -200,6 +232,8 @@
   const observer = new MutationObserver(() => {
     maybePersistAfterCalibration();
     restoreWhenReady();
+    setTimeout(restoreWhenReady, 800);
+    setTimeout(restoreWhenReady, 1600);
   });
 
   const install = () => {
@@ -212,6 +246,12 @@
     if (initState) observer.observe(initState, { childList: true, subtree: true, attributes: true });
     byId('forward')?.addEventListener('change', () => { clearCurrentKeepStored(); applyStored(); });
     window.addEventListener('ridetracker:recording-stopped', refreshStatus);
+    setInterval(() => {
+      if (!state.restored || byId('stop')?.disabled === false) return;
+      const validation = validateCalibration();
+      if (validation.ready && validation.reason === 'orientation-changed') clearCurrentKeepStored(true);
+      else refreshStatus();
+    }, 1000);
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true }); else install();
 
@@ -222,6 +262,8 @@
     saveCurrent,
     stored: readStored,
     current: currentCalibration,
+    activeCompatible,
+    validation: () => validateCalibration(),
     refresh: refreshStatus
   };
 })();

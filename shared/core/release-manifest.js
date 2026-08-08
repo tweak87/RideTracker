@@ -2,8 +2,8 @@
   'use strict';
   globalThis.RideTrackerReleaseManifest = Object.freeze({
     product: 'RideTracker',
-    version: '2026.08.08-context-map-weather.1',
-    channel: 'park-map-weather-auto-record',
+    version: '2026.08.08-ice-telemetry-fire8.3',
+    channel: 'ice-gps-gforce-fire8',
     releasedAt: '2026-08-08T12:00:00.000Z',
     baseline: Object.freeze({
       label: 'Stable speed, compass and spatial inspector baseline before ride context and privacy hardening',
@@ -36,7 +36,12 @@
       'versioned-community-privacy-consent',
       'community-data-export-erasure',
       'android-native-feature-parity',
-      'direct-android-test-apk'
+      'direct-android-test-apk',
+      'monotonic-browser-gps-time',
+      'shielded-position-uncertainty',
+      'calibration-orientation-validation',
+      'horizontal-g-force-diagnostics',
+      'verified-fire-os-8-apk'
     ])
   });
 })();

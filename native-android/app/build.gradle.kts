@@ -12,8 +12,8 @@ android {
         applicationId = "de.ridetracker"
         minSdk = 21
         targetSdk = 35
-        versionCode = 202608082
-        versionName = "2026.08.08.2"
+        versionCode = 202608083
+        versionName = "2026.08.08.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["appLabel"] = "RideTracker"
     }
@@ -29,12 +29,18 @@ android {
     buildTypes {
         create("fireTest") {
             initWith(getByName("debug"))
-            applicationIdSuffix = ".firetest"
+            applicationIdSuffix = ".fire8v3"
             versionNameSuffix = "-fire"
             matchingFallbacks += listOf("debug")
-            manifestPlaceholders["appLabel"] = "RideTracker Fire Test"
+            manifestPlaceholders["appLabel"] = "RideTracker FIRE 8 TEST"
             ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
         }
+    }
+
+    packaging {
+        // Fire OS package installers are most reliable when native libraries use the
+        // traditional compressed/extracted layout instead of direct APK mmap loading.
+        jniLibs.useLegacyPackaging = true
     }
 
     kotlinOptions {
