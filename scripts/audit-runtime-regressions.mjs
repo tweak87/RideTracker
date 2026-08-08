@@ -2,12 +2,14 @@ import fs from 'node:fs';
 
 const required = [
   'index.html',
+  'update38.js',
   'update46.js',
   'update54.js',
   'update58.js',
   'update60.js',
   'update61.js',
   'update62.js',
+  'update63.js',
   'shared/ride-engine/gps-speed.js',
   'shared/ride-engine/browser-adapter.js',
   'shared/core/community-model.js',
@@ -51,12 +53,16 @@ requireToken('update61.js', 'RideTrackerSupportCenter', 'Support center API miss
 requireToken('update61.js', 'RideTrackerAdminCenter', 'Local admin center API missing');
 requireToken('shared/core/community-model.js', 'ready-for-backend', 'Community publication state missing');
 requireToken('shared/core/community-model.js', 'publicProjection', 'Privacy-safe community projection missing');
-requireToken('shared/core/release-manifest.js', 'rollback/pre-community-backend-20260808', 'Documented rollback point missing');
+requireToken('shared/core/release-manifest.js', 'rollback/pre-speed-compass-3d-20260808', 'Documented rollback point missing');
 requireToken('update61.js', 'RideTrackerCommunityHub?.open', 'Community navigation must delegate to the full hub');
 requireToken('update62.js', 'RideTrackerCommunityHub', 'Community backend/3D hub missing');
 requireToken('shared/core/community-backend.js', 'SERVICE_ROLE_REJECTED', 'Service-role browser protection missing');
 requireToken('shared/core/community-backend.js', 'RAW_GPS_REJECTED', 'Raw GPS upload protection missing');
 requireToken('shared/visualization/track-3d.js', 'mergeModels', 'Server-compatible multi-ride model merge missing');
+requireToken('shared/visualization/track-3d.js', 'nearestProjectedPoint', '3D point picking missing');
+requireToken('update63.js', 'RideTrackerCompass', 'Compass runtime missing');
+requireToken('update63.js', 'webkitCompassHeading', 'iOS compass support missing');
+requireToken('update38.js', 'runtimeErrors.handling', 'Runtime error recursion guard missing');
 
 const html = source['index.html'];
 const gpsPosition = html.indexOf('shared/ride-engine/gps-speed.js?v=');

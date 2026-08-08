@@ -50,6 +50,15 @@
         "active": { "type": "boolean" },
         "elapsedMs": { "type": "number", "minimum": 0 }
       }
+    },
+    "compass": {
+      "type": "object",
+      "required": ["headingDeg", "source"],
+      "properties": {
+        "headingDeg": { "type": ["number", "null"], "minimum": 0, "exclusiveMaximum": 360 },
+        "accuracyDeg": { "type": ["number", "null"], "minimum": 0 },
+        "source": { "enum": ["device-orientation", "ios-compass", "gps-course", "unavailable"] }
+      }
     }
   },
   "additionalProperties": true

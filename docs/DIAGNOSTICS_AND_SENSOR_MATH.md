@@ -27,6 +27,8 @@ Verwendet für:
 
 GPS ist zu langsam und zu verrauscht, um schnelle G-Kraft-Spitzen direkt zu bestimmen.
 
+Fehlt GPS vollständig, bleiben die G-Kräfte deshalb weiterhin verfügbar. Nicht verfügbar sind dann nur belastbare Geschwindigkeit, globale Position und eine GPS-basierte räumliche Strecke. Eine doppelte Integration der Telefonbeschleunigung wird für die Geschwindigkeit bewusst nicht verwendet, weil kleinste Bias- und Orientierungsfehler innerhalb weniger Sekunden stark anwachsen.
+
 ### Barometer
 
 Wenn verfügbar bevorzugte Quelle für relative Höhenänderungen. GPS-Höhe ist meist deutlich verrauschter.
@@ -95,10 +97,13 @@ Für die erste robuste Version ist ein Complementary-/Quaternion-Filter sinnvoll
 Browser und Betriebssysteme liefern `coords.speed` nicht immer zuverlässig. RideTracker verwendet deshalb:
 
 1. native GPS-Geschwindigkeit, wenn plausibel,
-2. ansonsten Distanz zwischen zwei gültigen Fixes geteilt durch Zeitdifferenz,
-3. Rauschschwelle abhängig von horizontaler Accuracy,
-4. Plausibilitätsgrenze gegen extreme Ausreißer,
-5. zeitliche Glättung.
+2. ansonsten mehrere Zeitfenster aus den letzten zwölf Sekunden statt nur zwei benachbarter Fixes,
+3. den Median der längsten plausiblen Streckenfenster,
+4. eine gedeckelte Rauschschwelle abhängig von horizontaler Accuracy,
+5. Plausibilitätsgrenze gegen extreme Ausreißer,
+6. kurze Haltezeit für einen einzelnen fehlenden Fix und zeitliche Glättung.
+
+Ein nativer Nullwert wird bei sehr ungenauer Position nicht mehr automatisch als Stillstand übernommen. Solange weder native noch geometrisch abgeleitete Geschwindigkeit belastbar ist, zeigt RideTracker `–` statt `0 km/h`.
 
 Die abgeleitete Geschwindigkeit wird wieder als normale Telemetriequelle in den SourceRouter eingespeist.
 
@@ -133,7 +138,7 @@ Diagnose enthält u. a.:
 - aktuelle Route
 - NavigationRegistry-Audit
 - sichtbare/stale Overlays/Scrims
-- Runtimefehler und Promise-Rejections
+- deduplizierte Runtimefehler und Promise-Rejections mit Stack, Datei und Zeile
 - GPS-Health: Punkte, Accuracy, Speed, Source, Persistenzstatus
 - Sensor-Channel-Registry
 - Plugin-Verbindungsereignisse

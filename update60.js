@@ -220,7 +220,8 @@
   function renderBadge() {
     const button=document.getElementById('rtDiagnosticsButton60');
     if(button)button.textContent=`DIAG ${state.logs.filter(x=>x.level==='error').length||''}`.trim();
-    if(!document.getElementById('rtDiagnostics60')?.hidden)renderPanel();
+    const panel=document.getElementById('rtDiagnostics60');
+    if(panel&&!panel.hidden)renderPanel();
   }
 
   function enable() {
@@ -249,10 +250,10 @@
   document.head.appendChild(style);
 
   const originalWarn=console.warn.bind(console), originalError=console.error.bind(console);
-  console.warn=(...args)=>{add('warn','console',String(args[0]??''),args.slice(1));originalWarn(...args);};
-  console.error=(...args)=>{add('error','console',String(args[0]??''),args.slice(1));originalError(...args);};
-  window.addEventListener('error',event=>add('error','window',event.message||'window error',{filename:event.filename,lineno:event.lineno,colno:event.colno,error:event.error}));
-  window.addEventListener('unhandledrejection',event=>add('error','promise',event.reason?.message||String(event.reason||'unhandled rejection'),event.reason));
+  let consoleCaptureDepth=0;
+  console.warn=(...args)=>{if(consoleCaptureDepth===0){consoleCaptureDepth+=1;try{add('warn','console',String(args[0]??''),args.slice(1));}finally{consoleCaptureDepth-=1;}}originalWarn(...args);};
+  console.error=(...args)=>{if(consoleCaptureDepth===0){consoleCaptureDepth+=1;try{add('error','console',String(args[0]??''),args.slice(1));}finally{consoleCaptureDepth-=1;}}originalError(...args);};
+  window.addEventListener('ridetracker:runtime-error',event=>add('error','runtime',event.detail?.message||'Browserfehler',event.detail));
 
   const watchedEvents=['ridetracker:recording-started','ridetracker:recording-stopped','ridetracker:recording-gps-error','ridetracker:ride-saved','ridetracker:ride-validated','ridetracker:navigation-audit','ridetracker:plugin-connection','ridetracker:source-switch'];
   for(const name of watchedEvents)window.addEventListener(name,event=>{if(name==='ridetracker:navigation-audit')state.lastNavigationAudit=safeValue(event.detail);add('info','event',name,event.detail);});

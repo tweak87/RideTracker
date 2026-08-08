@@ -20,6 +20,17 @@ const native = nativeEstimator.update({
 assert.equal(native.source, 'native');
 assert.equal(native.speedMS, 12);
 
+const unavailableEstimator = gps.createEstimator();
+const unavailable = unavailableEstimator.update({
+  latitude: 50,
+  longitude: 8,
+  horizontalAccuracyM: 97,
+  gpsTimestampMs: 1_000,
+  nativeSpeedMS: null,
+});
+assert.equal(unavailable.speedMS, null, 'an unresolved first fix must not be displayed as 0 km/h');
+assert.equal(unavailable.source, 'unavailable');
+
 const derivedEstimator = gps.createEstimator();
 derivedEstimator.update({
   latitude: 50,
@@ -56,7 +67,22 @@ assert.equal(stationary.speedMS, 0, 'GPS jitter inside the accuracy radius must 
 const impossibleEstimator = gps.createEstimator();
 impossibleEstimator.update({ latitude: 50, longitude: 8, horizontalAccuracyM: 3, gpsTimestampMs: 1_000 });
 const impossible = impossibleEstimator.update({ latitude: 51, longitude: 8, horizontalAccuracyM: 3, gpsTimestampMs: 2_000 });
-assert.equal(impossible.speedMS, 0, 'implausible GPS jumps must be rejected');
+assert.equal(impossible.speedMS, null, 'implausible GPS jumps must be rejected without inventing a zero');
+
+const poorAccuracyEstimator = gps.createEstimator();
+for (let index = 0; index < 4; index += 1) {
+  poorAccuracyEstimator.update({
+    latitude: 50 + index * 0.00018,
+    longitude: 8,
+    horizontalAccuracyM: 97,
+    gpsTimestampMs: 1_000 + index * 1_000,
+    nativeSpeedMS: 0,
+  });
+}
+const poorAccuracy = poorAccuracyEstimator.snapshot();
+assert.ok(poorAccuracy.smoothedSpeedMS > 8, `sustained movement with a poor iOS fix must not stay at zero: ${poorAccuracy.smoothedSpeedMS}`);
+
+assert.ok(Math.abs(gps.bearingDegrees({latitude:50,longitude:8},{latitude:50.001,longitude:8})) < 0.1);
 
 const merged = gps.mergeCanonicalGpsIntoSamples([
   { timestamp: 0, speedMS: 0, speedKmh: 0, gpsSource: 'phone-gps' },

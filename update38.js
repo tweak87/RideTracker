@@ -163,20 +163,37 @@
     if (forceHome || (!recording && !activeTool && dashboard && getComputedStyle(dashboard).display === 'none')) goHome();
   }
 
-  function showRuntimeError(message) {
-    console.error('[RideTracker Web]', message);
+  const runtimeErrors = { handling:false, lastKey:'', lastAt:0, count:0, timer:0 };
+  function reportRuntimeError(input) {
+    if (runtimeErrors.handling) return false;
+    const detail = typeof input === 'string' ? {message:input} : (input || {});
+    const message = String(detail.message || detail.error?.message || 'Unbekannter Browserfehler');
+    const key = `${message}|${detail.filename || ''}|${detail.lineno || ''}|${detail.colno || ''}`;
+    const now = performance.now();
+    if (key === runtimeErrors.lastKey && now - runtimeErrors.lastAt < 2500) return false;
+    runtimeErrors.handling = true;
+    runtimeErrors.lastKey = key;
+    runtimeErrors.lastAt = now;
+    runtimeErrors.count += 1;
     let banner = document.getElementById('rtRuntimeErrorBanner');
     if (!banner) {
       banner = document.createElement('div');
       banner.id = 'rtRuntimeErrorBanner';
-      banner.style.cssText = 'position:fixed;left:10px;right:10px;bottom:10px;z-index:3000000;padding:10px 12px;border:1px solid #ff6680;border-radius:12px;background:#2a0b13;color:#fff;font:12px/1.4 system-ui;max-height:35vh;overflow:auto';
+      banner.style.cssText = 'position:fixed;left:10px;right:10px;bottom:calc(82px + env(safe-area-inset-bottom));z-index:3000000;padding:10px 12px;border:1px solid #ff6680;border-radius:12px;background:#2a0b13eF;color:#fff;font:12px/1.4 system-ui;max-height:24vh;overflow:auto;pointer-events:none';
       document.body.appendChild(banner);
     }
-    banner.textContent = `Web-Fehler erkannt: ${message}`;
+    banner.hidden = false;
+    banner.textContent = `Web-Fehler erkannt und protokolliert: ${message}`;
+    clearTimeout(runtimeErrors.timer);
+    runtimeErrors.timer = setTimeout(() => { banner.hidden = true; }, 10000);
+    try { window.dispatchEvent(new CustomEvent('ridetracker:runtime-error',{detail:{message,name:detail.name||detail.error?.name||null,stack:detail.stack||detail.error?.stack||null,filename:detail.filename||null,lineno:detail.lineno||null,colno:detail.colno||null,count:runtimeErrors.count}})); } catch (_) {}
+    runtimeErrors.handling = false;
+    return true;
   }
 
-  window.addEventListener('error', event => { const message = event?.error?.message || event?.message; if (message) showRuntimeError(message); });
-  window.addEventListener('unhandledrejection', event => { const reason = event?.reason; showRuntimeError(reason?.message || String(reason || 'Unbekannter Promise-Fehler')); });
+  window.addEventListener('error', event => reportRuntimeError({message:event?.error?.message||event?.message,error:event?.error,filename:event?.filename,lineno:event?.lineno,colno:event?.colno}));
+  window.addEventListener('unhandledrejection', event => { const reason=event?.reason;reportRuntimeError({message:reason?.message||String(reason||'Unbekannter Promise-Fehler'),error:reason}); });
+  window.RideTrackerRuntimeErrors={report:reportRuntimeError,snapshot:()=>({count:runtimeErrors.count,lastKey:runtimeErrors.lastKey,lastAt:runtimeErrors.lastAt})};
 
   const boot = () => {
     ensureVisibleShell();

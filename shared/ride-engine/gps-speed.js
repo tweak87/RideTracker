@@ -18,6 +18,24 @@
     return 2 * radius * Math.asin(Math.sqrt(q));
   }
 
+  function bearingDegrees(a, b) {
+    if (![a?.latitude, a?.longitude, b?.latitude, b?.longitude].every(finite)) return null;
+    const latitudeA = radians(a.latitude);
+    const latitudeB = radians(b.latitude);
+    const deltaLongitude = radians(Number(b.longitude) - Number(a.longitude));
+    const y = Math.sin(deltaLongitude) * Math.cos(latitudeB);
+    const x = Math.cos(latitudeA) * Math.sin(latitudeB)
+      - Math.sin(latitudeA) * Math.cos(latitudeB) * Math.cos(deltaLongitude);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  }
+
+  function median(values) {
+    const sorted = values.filter(Number.isFinite).sort((left, right) => left - right);
+    if (!sorted.length) return null;
+    const middle = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+
   function pointTimestampMs(point) {
     const absolute = numberOrNull(point?.gpsTimestampMs ?? point?.timestampMs);
     if (absolute !== null) return absolute;
@@ -31,15 +49,20 @@
       minimumMovingSpeedMS: 0.45,
       minimumDeltaSeconds: 0.35,
       maximumDeltaSeconds: 15,
+      historyWindowSeconds: 12,
+      geometryMinimumDeltaSeconds: 0.8,
+      holdMaximumSeconds: 3.2,
       riseAlpha: 0.58,
       fallAlpha: 0.36,
       ...options,
     };
-    const state = { previous: null, smoothedSpeedMS: 0, points: 0 };
+    const state = { previous: null, history: [], smoothedSpeedMS: null, lastMovingAtMs: null, points: 0 };
 
     function reset() {
       state.previous = null;
-      state.smoothedSpeedMS = 0;
+      state.history = [];
+      state.smoothedSpeedMS = null;
+      state.lastMovingAtMs = null;
       state.points = 0;
     }
 
@@ -48,22 +71,48 @@
       let derivedSpeedMS = null;
       let segmentDistanceM = null;
       let noiseAllowanceM = null;
+      let derivedHeadingDeg = null;
+      let confidence = 0;
       const currentTimestampMs = pointTimestampMs(point);
+      const geometryCandidates = [];
+      let longestCandidate = null;
 
-      if (state.previous && currentTimestampMs !== null) {
-        const previousTimestampMs = pointTimestampMs(state.previous);
-        const deltaSeconds = previousTimestampMs === null ? 0 : (currentTimestampMs - previousTimestampMs) / 1000;
-        if (deltaSeconds >= config.minimumDeltaSeconds && deltaSeconds <= config.maximumDeltaSeconds) {
-          segmentDistanceM = distanceMeters(state.previous, point);
-          const previousAccuracy = Math.max(0, numberOrNull(state.previous.horizontalAccuracyM) ?? 25);
-          const currentAccuracy = Math.max(0, numberOrNull(point?.horizontalAccuracyM) ?? 25);
-          noiseAllowanceM = clamp(Math.hypot(previousAccuracy, currentAccuracy) * 0.35, 2.5, 25);
-          if (segmentDistanceM <= noiseAllowanceM) {
-            derivedSpeedMS = 0;
-          } else {
-            const candidate = (segmentDistanceM - noiseAllowanceM) / deltaSeconds;
-            if (candidate >= 0 && candidate <= config.maximumSpeedMS) derivedSpeedMS = candidate;
-          }
+      if (currentTimestampMs !== null) {
+        state.history = state.history.filter((previous) => {
+          const previousTimestampMs = pointTimestampMs(previous);
+          return previousTimestampMs !== null
+            && currentTimestampMs - previousTimestampMs <= config.historyWindowSeconds * 1000;
+        });
+        const currentAccuracy = Math.max(0, numberOrNull(point?.horizontalAccuracyM) ?? 25);
+        for (const previous of state.history) {
+          const previousTimestampMs = pointTimestampMs(previous);
+          const deltaSeconds = previousTimestampMs === null ? 0 : (currentTimestampMs - previousTimestampMs) / 1000;
+          if (deltaSeconds < config.geometryMinimumDeltaSeconds || deltaSeconds > config.maximumDeltaSeconds) continue;
+          const distanceM = distanceMeters(previous, point);
+          const previousAccuracy = Math.max(0, numberOrNull(previous.horizontalAccuracyM) ?? 25);
+          const combinedAccuracyM = Math.hypot(previousAccuracy, currentAccuracy);
+          // Accuracy values around 100 m are common during the first iOS fixes. Capping the
+          // deduction prevents a real ride from being erased completely while still removing
+          // the usual stationary jitter from good fixes.
+          const allowanceM = clamp(combinedAccuracyM * 0.10, 1.5, 14);
+          const candidateMS = Math.max(0, distanceM - allowanceM) / deltaSeconds;
+          if (candidateMS > config.maximumSpeedMS) continue;
+          const candidateConfidence = clamp(distanceM / Math.max(6, combinedAccuracyM * 1.2), 0, 1)
+            * clamp(deltaSeconds / 4, 0.25, 1);
+          geometryCandidates.push({ speedMS:candidateMS, distanceM, allowanceM, deltaSeconds, confidence:candidateConfidence, previous });
+          if (!longestCandidate || deltaSeconds > longestCandidate.deltaSeconds) longestCandidate = geometryCandidates.at(-1);
+        }
+        // Longer baselines are much less sensitive to a single inaccurate fix. Use the
+        // median of the four longest windows so a jump cannot dominate the result.
+        const stableCandidates = [...geometryCandidates]
+          .sort((left, right) => right.deltaSeconds - left.deltaSeconds)
+          .slice(0, 4);
+        derivedSpeedMS = median(stableCandidates.map((candidate) => candidate.speedMS));
+        confidence = median(stableCandidates.map((candidate) => candidate.confidence)) ?? 0;
+        if (longestCandidate) {
+          segmentDistanceM = longestCandidate.distanceM;
+          noiseAllowanceM = longestCandidate.allowanceM;
+          derivedHeadingDeg = bearingDegrees(longestCandidate.previous, point);
         }
       }
 
@@ -71,8 +120,8 @@
         && nativeSpeedMS >= config.minimumMovingSpeedMS
         && nativeSpeedMS <= config.maximumSpeedMS;
       const derivedUseful = derivedSpeedMS !== null && derivedSpeedMS >= config.minimumMovingSpeedMS;
-      let rawSpeedMS = 0;
-      let source = 'stationary';
+      let rawSpeedMS = null;
+      let source = 'unavailable';
 
       if (nativeUseful) {
         if (derivedUseful && Math.abs(nativeSpeedMS - derivedSpeedMS) <= Math.max(4, nativeSpeedMS * 0.5)) {
@@ -84,8 +133,9 @@
         }
       } else if (derivedUseful) {
         rawSpeedMS = derivedSpeedMS;
-        source = 'derived';
-      } else if (nativeSpeedMS !== null && nativeSpeedMS >= 0 && nativeSpeedMS < config.minimumMovingSpeedMS) {
+        source = confidence < 0.25 ? 'derived-low-confidence' : 'derived';
+      } else if (nativeSpeedMS !== null && nativeSpeedMS >= 0 && nativeSpeedMS < config.minimumMovingSpeedMS
+        && (numberOrNull(point?.horizontalAccuracyM) ?? 100) <= 25) {
         rawSpeedMS = 0;
         source = 'native';
       } else if (derivedSpeedMS !== null) {
@@ -93,21 +143,35 @@
         source = 'derived';
       }
 
-      const alpha = rawSpeedMS > state.smoothedSpeedMS ? config.riseAlpha : config.fallAlpha;
-      state.smoothedSpeedMS = state.points === 0
-        ? rawSpeedMS
-        : state.smoothedSpeedMS + (rawSpeedMS - state.smoothedSpeedMS) * alpha;
-      if (state.smoothedSpeedMS < 0.3) state.smoothedSpeedMS = 0;
+      if (rawSpeedMS !== null && rawSpeedMS >= config.minimumMovingSpeedMS) state.lastMovingAtMs = currentTimestampMs;
+      const secondsSinceMoving = state.lastMovingAtMs === null || currentTimestampMs === null
+        ? Infinity : (currentTimestampMs - state.lastMovingAtMs) / 1000;
+      if (rawSpeedMS === null && state.smoothedSpeedMS !== null && secondsSinceMoving <= config.holdMaximumSeconds) {
+        rawSpeedMS = state.smoothedSpeedMS;
+        source = 'held';
+        confidence *= 0.7;
+      }
+      if (rawSpeedMS !== null) {
+        const previousSmoothed = state.smoothedSpeedMS;
+        const alpha = previousSmoothed === null || rawSpeedMS > previousSmoothed ? config.riseAlpha : config.fallAlpha;
+        state.smoothedSpeedMS = previousSmoothed === null
+          ? rawSpeedMS
+          : previousSmoothed + (rawSpeedMS - previousSmoothed) * alpha;
+        if (state.smoothedSpeedMS < 0.3) state.smoothedSpeedMS = 0;
+      }
 
       state.previous = { ...point, gpsTimestampMs: currentTimestampMs ?? Date.now() };
+      state.history.push(state.previous);
       state.points += 1;
       return {
         speedMS: state.smoothedSpeedMS,
-        speedKmh: state.smoothedSpeedMS * 3.6,
+        speedKmh: state.smoothedSpeedMS === null ? null : state.smoothedSpeedMS * 3.6,
         rawSpeedMS,
         source,
+        confidence,
         nativeSpeedMS,
         derivedSpeedMS,
+        derivedHeadingDeg,
         segmentDistanceM,
         noiseAllowanceM,
       };
@@ -194,6 +258,7 @@
     finite,
     numberOrNull,
     distanceMeters,
+    bearingDegrees,
     createEstimator,
     gpsPointsFromPackage,
     nearestGpsPoint,

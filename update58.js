@@ -4,7 +4,7 @@
   const state = {
     recording:false,
     previous:null,
-    smoothedSpeedMS:0,
+    smoothedSpeedMS:null,
     maxSpeedKmh:0,
     points:0,
     lastFixAt:0,
@@ -36,10 +36,11 @@
     return Boolean(stop && stop.disabled===false);
   }
 
-  function qualityFor(point,source){
+  function qualityFor(point,source,estimatorConfidence=null){
     const accuracy=finite(point.horizontalAccuracyM)?Number(point.horizontalAccuracyM):100;
     let quality=clamp(1-accuracy/120,0.15,1);
-    if(source==='derived')quality*=0.92;
+    if(source.startsWith('derived'))quality*=0.92;
+    if(finite(estimatorConfidence))quality*=clamp(Number(estimatorConfidence),0.15,1);
     return quality;
   }
 
@@ -84,7 +85,14 @@
   }
 
   function updateSpeedDom(){
-    if(!state.recording || !finite(state.smoothedSpeedMS))return;
+    if(!state.recording)return;
+    if(!finite(state.smoothedSpeedMS)){
+      const speed=document.getElementById('speed');
+      if(speed)speed.innerHTML='– <span class="unit">km/h</span>';
+      const legacyHud=document.getElementById('hudSpeed');
+      if(legacyHud)legacyHud.textContent='–';
+      return;
+    }
     const kmh=state.smoothedSpeedMS*3.6;
     state.maxSpeedKmh=Math.max(state.maxSpeedKmh,kmh);
     const speed=document.getElementById('speed');
@@ -109,7 +117,10 @@
     point.speedSource=speed.source;
     point.nativeSpeedMS=speed.nativeSpeedMS;
     point.derivedSpeedMS=speed.derivedSpeedMS;
-    point.quality=qualityFor(point,speed.source);
+    point.speedConfidence=finite(speed.confidence)?Number(speed.confidence):null;
+    if(!finite(point.headingDeg)&&finite(speed.derivedHeadingDeg))point.headingDeg=Number(speed.derivedHeadingDeg);
+    point.headingSource=finite(speed.derivedHeadingDeg)&&point.headingDeg===speed.derivedHeadingDeg?'gps-course':(finite(point.headingDeg)?'gps-native':null);
+    point.quality=qualityFor(point,speed.source,speed.confidence);
     state.points+=1;
     state.lastFixAt=performance.now();
     state.lastAccuracy=finite(point.horizontalAccuracyM)?Number(point.horizontalAccuracyM):null;
@@ -118,7 +129,8 @@
     state.previous={...point};
     updateSpeedDom();
     window.dispatchEvent(new CustomEvent('ridetracker:internal-telemetry',{detail:{
-      speedKmh:speed.speedKmh,
+      ...(finite(speed.speedKmh)?{speedKmh:Number(speed.speedKmh)}:{}),
+      ...(finite(point.headingDeg)?{headingDeg:Number(point.headingDeg)}:{}),
       latitude:Number(point.latitude),
       longitude:Number(point.longitude),
       altitude:finite(point.altitude)?Number(point.altitude):null,
@@ -142,7 +154,7 @@
   function resetSession(){
     estimator?.reset?.();
     state.previous=null;
-    state.smoothedSpeedMS=0;
+    state.smoothedSpeedMS=null;
     state.maxSpeedKmh=0;
     state.points=0;
     state.lastFixAt=0;
@@ -162,7 +174,7 @@
     if(next){
       estimator?.reset?.();
       state.previous=null;
-      state.smoothedSpeedMS=0;
+      state.smoothedSpeedMS=null;
       state.maxSpeedKmh=0;
       state.points=0;
       state.lastFixAt=0;
@@ -278,7 +290,7 @@
     return {
       recording:state.recording,
       points:state.points,
-      speedKmh:state.smoothedSpeedMS*3.6,
+      speedKmh:finite(state.smoothedSpeedMS)?state.smoothedSpeedMS*3.6:null,
       maxSpeedKmh:state.maxSpeedKmh,
       accuracyM:state.lastAccuracy,
       source:state.lastSource,
@@ -312,10 +324,10 @@
     const snap=snapshot();
     const set=(selector,value)=>{const node=panel.querySelector(selector);if(node&&node.textContent!==value)node.textContent=value;};
     set('[data-status]',statusText());
-    set('[data-speed]',`${Number(snap.speedKmh||0).toFixed(1)} km/h`);
+    set('[data-speed]',finite(snap.speedKmh)?`${Number(snap.speedKmh).toFixed(1)} km/h`:'–');
     set('[data-accuracy]',finite(snap.accuracyM)?`±${Math.round(snap.accuracyM)} m`:'–');
     set('[data-points]',String(snap.points||snap.persistedPoints||0));
-    set('[data-source]',snap.source==='native+derived'?'GPS + Strecke':snap.source==='derived'?'aus GPS-Strecke':snap.source==='native'?'GPS direkt':snap.source);
+    set('[data-source]',snap.source==='native+derived'?'GPS + Strecke':snap.source==='derived'?'aus GPS-Strecke':snap.source==='derived-low-confidence'?'GPS-Schätzung':snap.source==='held'?'letzter GPS-Wert':snap.source==='unavailable'?'noch nicht verfügbar':snap.source==='native'?'GPS direkt':snap.source);
   }
 
   window.addEventListener('ridetracker:recording-gps',onGps);
