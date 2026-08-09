@@ -3,6 +3,7 @@ package de.ridetracker.community
 import de.ridetracker.session.RideSessionSample
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RideInsightsTest {
@@ -45,5 +46,25 @@ class RideInsightsTest {
         assertNull(normalizedDifference(10.0, null))
         assertNull(normalizedDifference(10.0, 0.0))
         assertEquals(0.25, normalizedDifference(100.0, 80.0) ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun `gps displacement supplies speed when vendor native speed stays zero`() {
+        fun gps(t: Double, latitude: Double) = RideSessionSample(
+            timestamp = t,
+            normalG = 1.0,
+            lateralG = 0.0,
+            longitudinalG = 0.0,
+            totalG = 1.0,
+            relativeAltitudeM = null,
+            speedMS = 0.0,
+            latitude = latitude,
+            longitude = 8.0,
+            horizontalAccuracyM = 3.0,
+            phase = "ride",
+            qualityScore = 90,
+        )
+        val metrics = calculateRideMetrics(listOf(gps(0.0, 50.0), gps(2.0, 50.00020)))
+        assertTrue(metrics.maxSpeedKmh > 20.0)
     }
 }

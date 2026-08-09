@@ -47,30 +47,30 @@ jobs:
       - name: Prepare installable APK
         run: |
           mkdir -p dist
-          cp native-android/app/build/outputs/apk/debug/app-debug.apk dist/RideTracker-Android-2026.08.09.3-debug.apk
-          cp native-android/app/build/outputs/apk/deviceTest/app-deviceTest.apk dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.3.apk
-          cp native-android/app/build/outputs/apk/fireTest/app-fireTest.apk dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.3.apk
-          test -s dist/RideTracker-Android-2026.08.09.3-debug.apk
-          test -s dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.3.apk
-          test -s dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.3.apk
+          cp native-android/app/build/outputs/apk/debug/app-debug.apk dist/RideTracker-Android-2026.08.09.4-debug.apk
+          cp native-android/app/build/outputs/apk/deviceTest/app-deviceTest.apk dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.4.apk
+          cp native-android/app/build/outputs/apk/fireTest/app-fireTest.apk dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.4.apk
+          test -s dist/RideTracker-Android-2026.08.09.4-debug.apk
+          test -s dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.4.apk
+          test -s dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.4.apk
 
       - name: Verify APK package, SDK, signature and archive
         run: |
           BUILD_TOOLS_DIR="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
-          DEVICE_APK="dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.3.apk"
-          FIRE_APK="dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.3.apk"
+          DEVICE_APK="dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.4.apk"
+          FIRE_APK="dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.4.apk"
           "$BUILD_TOOLS_DIR/apksigner" verify --verbose --print-certs "$DEVICE_APK" | tee dist/device-apk-signature.txt
           "$BUILD_TOOLS_DIR/aapt" dump badging "$DEVICE_APK" | tee dist/device-apk-badging.txt
           unzip -t "$DEVICE_APK" | tee dist/device-apk-archive-test.txt
           "$BUILD_TOOLS_DIR/apksigner" verify --verbose --print-certs "$FIRE_APK" | tee dist/fire-apk-signature.txt
           "$BUILD_TOOLS_DIR/aapt" dump badging "$FIRE_APK" | tee dist/fire-apk-badging.txt
           unzip -t "$FIRE_APK" | tee dist/fire-apk-archive-test.txt
-          grep -q "package: name='de.ridetracker.devicev7'" dist/device-apk-badging.txt
-          grep -q "application-label:'RideTracker DEVICE v7'" dist/device-apk-badging.txt
+          grep -q "package: name='de.ridetracker.devicev8'" dist/device-apk-badging.txt
+          grep -q "application-label:'RideTracker DEVICE v8'" dist/device-apk-badging.txt
           grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" dist/device-apk-signature.txt
-          grep -q "package: name='de.ridetracker.fire8v7'" dist/fire-apk-badging.txt
+          grep -q "package: name='de.ridetracker.fire8v8'" dist/fire-apk-badging.txt
           grep -q "sdkVersion:'21'" dist/fire-apk-badging.txt
-          grep -q "application-label:'RideTracker FIRE 8 v7'" dist/fire-apk-badging.txt
+          grep -q "application-label:'RideTracker FIRE 8 v8'" dist/fire-apk-badging.txt
           grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" dist/fire-apk-signature.txt
 
       - name: Upload debug APK
@@ -78,9 +78,9 @@ jobs:
         with:
           name: RideTracker-Android-debug
           path: |
-            dist/RideTracker-Android-2026.08.09.3-debug.apk
-            dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.3.apk
-            dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.3.apk
+            dist/RideTracker-Android-2026.08.09.4-debug.apk
+            dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.4.apk
+            dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.4.apk
             dist/device-apk-signature.txt
             dist/device-apk-badging.txt
             dist/device-apk-archive-test.txt
@@ -94,15 +94,15 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
-          APK_TAG: android-v2026.08.09.3
-          STANDARD_APK: dist/RideTracker-Android-2026.08.09.3-debug.apk
-          DEVICE_APK: dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.3.apk
-          FIRE_APK: dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.3.apk
+          APK_TAG: android-v2026.08.09.4
+          STANDARD_APK: dist/RideTracker-Android-2026.08.09.4-debug.apk
+          DEVICE_APK: dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.4.apk
+          FIRE_APK: dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.4.apk
         run: |
           if gh release view "$APK_TAG" >/dev/null 2>&1; then
             gh release upload "$APK_TAG" "$STANDARD_APK" "$DEVICE_APK" "$FIRE_APK" --clobber
           else
-            gh release create "$APK_TAG" "$STANDARD_APK" "$DEVICE_APK" "$FIRE_APK" --target "$GITHUB_SHA" --prerelease --title "RideTracker Android 2026.08.09.3 (Community Ride Stories)" --notes "Für Huawei/Android INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.3.apk und für Fire OS ausschließlich INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.3.apk verwenden. Die neuen v7-Paket-IDs vermeiden Signaturkonflikte mit früheren Testbuilds. Neu sind der moderne Ride-Draft mit Video-HUD-Vorschau, Offline-Parkkatalog mit Länder- und Attraktionsauswahl, Standortvorschläge, persönliche und offizielle Vergleichswerte, Community-fähige Ride Stories und der lokale Ride Feed. Dies sind Debug-Testbuilds; Installation aus unbekannten Quellen muss für Dateien/Silk bewusst erlaubt werden."
+            gh release create "$APK_TAG" "$STANDARD_APK" "$DEVICE_APK" "$FIRE_APK" --target "$GITHUB_SHA" --prerelease --title "RideTracker Android 2026.08.09.4 (GNSS & 3D Track)" --notes "Für Huawei/Android INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.4.apk und für Fire OS ausschließlich INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.4.apk verwenden. Die neuen v8-Paket-IDs vermeiden Signaturkonflikte mit früheren Testbuilds. Neu sind eine korrigierte Geh- und GPS-Ersatzgeschwindigkeit, GNSS-Qualität mit Genauigkeit und Satelliten, ein gemeinsames Live-/Editor-HUD, verbesserte Scroll- und Tastaturbedienung, alphabetische Park-/Attraktionswahl, Fahrt-Vollständigkeit und ein geglättetes 3D-Achterbahnmodell mit Boden, Schienen und Stützen. Dies sind Debug-Testbuilds; Installation aus unbekannten Quellen muss für Dateien/Silk bewusst erlaubt werden."
           fi
 
       - name: Upload test and lint reports

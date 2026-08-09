@@ -23,4 +23,25 @@ class GpsSpeedEstimatorTest {
         assertTrue((launch.speedMS ?: 0.0) > 3.0)
         assertEquals(false, launch.stationaryLocked)
     }
+
+    @Test fun walkingAwayFromAStationaryClusterProducesDistanceAndSpeed() {
+        val estimator = GpsSpeedEstimator()
+        repeat(4) { index -> estimator.update(GpsObservation(1_000L + index * 1_000L, 50.0, 8.0, 4.0, 0.0)) }
+
+        val walking = (1..5).map { step ->
+            estimator.update(
+                GpsObservation(
+                    timestampMs = 4_000L + step * 1_000L,
+                    latitude = 50.0 + step * 0.000012,
+                    longitude = 8.0,
+                    accuracyM = 4.0,
+                    nativeSpeedMS = null,
+                ),
+            )
+        }
+
+        assertTrue(walking.drop(1).any { !it.suppressPosition })
+        assertTrue((walking.last().speedKmh ?: 0.0) > 2.0)
+        assertEquals(false, walking.last().stationaryLocked)
+    }
 }

@@ -12,8 +12,8 @@ android {
         applicationId = "de.ridetracker"
         minSdk = 21
         targetSdk = 35
-        versionCode = 202608093
-        versionName = "2026.08.09.3"
+        versionCode = 202608094
+        versionName = "2026.08.09.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["appLabel"] = "RideTracker"
     }
@@ -29,18 +29,18 @@ android {
     buildTypes {
         create("fireTest") {
             initWith(getByName("debug"))
-            applicationIdSuffix = ".fire8v7"
+            applicationIdSuffix = ".fire8v8"
             versionNameSuffix = "-fire"
             matchingFallbacks += listOf("debug")
-            manifestPlaceholders["appLabel"] = "RideTracker FIRE 8 v7"
+            manifestPlaceholders["appLabel"] = "RideTracker FIRE 8 v8"
             ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
         }
         create("deviceTest") {
             initWith(getByName("debug"))
-            applicationIdSuffix = ".devicev7"
+            applicationIdSuffix = ".devicev8"
             versionNameSuffix = "-device"
             matchingFallbacks += listOf("debug")
-            manifestPlaceholders["appLabel"] = "RideTracker DEVICE v7"
+            manifestPlaceholders["appLabel"] = "RideTracker DEVICE v8"
         }
     }
 

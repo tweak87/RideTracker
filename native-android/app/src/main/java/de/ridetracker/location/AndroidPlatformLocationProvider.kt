@@ -5,6 +5,8 @@ import android.content.Context
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.location.GnssStatus
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -23,12 +25,22 @@ import kotlin.coroutines.resumeWithException
 class AndroidPlatformLocationProvider(context: Context) {
     private val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
     private var continuousListener: LocationListener? = null
+    private var gnssCallback: Any? = null
+
+    data class GnssQuality(
+        val satellitesVisible: Int = 0,
+        val satellitesUsedInFix: Int = 0,
+        val averageCn0DbHz: Double? = null,
+    )
 
     val availableProviders: List<String>
         get() = preferredProviders().filter(::providerEnabled)
 
     @SuppressLint("MissingPermission")
-    fun startUpdates(onLocation: (Location) -> Unit): List<String> {
+    fun startUpdates(
+        onLocation: (Location) -> Unit,
+        onGnssQuality: (GnssQuality) -> Unit = {},
+    ): List<String> {
         stopUpdates()
         val listener = listener(onLocation)
         val registered = mutableListOf<String>()
@@ -39,12 +51,34 @@ class AndroidPlatformLocationProvider(context: Context) {
             }
         }
         if (registered.isNotEmpty()) continuousListener = listener
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && registered.contains(LocationManager.GPS_PROVIDER)) {
+            val callback = object : GnssStatus.Callback() {
+                override fun onSatelliteStatusChanged(status: GnssStatus) {
+                    var used = 0
+                    var cn0Sum = 0.0
+                    var cn0Count = 0
+                    for (index in 0 until status.satelliteCount) {
+                        if (status.usedInFix(index)) used += 1
+                        val cn0 = status.getCn0DbHz(index).toDouble()
+                        if (cn0.isFinite() && cn0 > 0.0) { cn0Sum += cn0; cn0Count += 1 }
+                    }
+                    onGnssQuality(GnssQuality(status.satelliteCount, used, if (cn0Count > 0) cn0Sum / cn0Count else null))
+                }
+            }
+            if (runCatching { manager.registerGnssStatusCallback(callback, Handler(Looper.getMainLooper())) }.getOrDefault(false)) {
+                gnssCallback = callback
+            }
+        }
         return registered
     }
 
     fun stopUpdates() {
         continuousListener?.let { runCatching { manager.removeUpdates(it) } }
         continuousListener = null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            (gnssCallback as? GnssStatus.Callback)?.let { callback -> runCatching { manager.unregisterGnssStatusCallback(callback) } }
+        }
+        gnssCallback = null
     }
 
     @SuppressLint("MissingPermission")

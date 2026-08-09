@@ -13,7 +13,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -26,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -299,7 +297,6 @@ fun FunctionalRideTrackerApp(activity: Activity) {
         } else completeNavigation(target)
     }
 
-    val primarySections = remember { listOf(FunctionalSection.COMMUNITY, FunctionalSection.HOME, FunctionalSection.RECORD, FunctionalSection.RIDES, FunctionalSection.PROFILE) }
     val fullscreenRecording = recordVideo && (starting || recorder.isRecording) && !recordingMinimized
     BackHandler(enabled = fullscreenRecording || menuOpen || section != FunctionalSection.HOME) {
         when {
@@ -340,27 +337,7 @@ fun FunctionalRideTrackerApp(activity: Activity) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(RideMidnight)
-            .pointerInput(section, recorder.isRecording, starting) {
-                if (!recorder.isRecording && !starting && section in primarySections) {
-                    var horizontalDrag = 0f
-                    detectHorizontalDragGestures(
-                        onHorizontalDrag = { change, amount -> change.consume(); horizontalDrag += amount },
-                        onDragCancel = { horizontalDrag = 0f },
-                        onDragEnd = {
-                            val current = primarySections.indexOf(section)
-                            val threshold = 96.dp.toPx()
-                            val next = when {
-                                horizontalDrag < -threshold -> (current + 1).coerceAtMost(primarySections.lastIndex)
-                                horizontalDrag > threshold -> (current - 1).coerceAtLeast(0)
-                                else -> current
-                            }
-                            if (next != current) navigate(primarySections[next])
-                            horizontalDrag = 0f
-                        },
-                    )
-                }
-            },
+            .background(RideMidnight),
     ) {
         Scaffold(
             containerColor = RideMidnight,
@@ -430,20 +407,22 @@ fun FunctionalRideTrackerApp(activity: Activity) {
                 }
             },
         ) { padding ->
-            when (section) {
-                FunctionalSection.HOME -> AndroidDashboard(Modifier.padding(padding), profiles.activeProfile.name, navigate)
-                FunctionalSection.RECORD -> AndroidRecording(Modifier.padding(padding), recorder, videoRecorder, rideContext, stopping, sessionUsesVideo, ::requestParkSearch, ::saveRide) { recordingMinimized = false }
-                FunctionalSection.RIDES -> RideMediaScreen(Modifier.padding(padding), profiles)
-                FunctionalSection.COMMUNITY -> AndroidCommunityOverview(Modifier.padding(padding), profiles.activeProfile.name)
-                FunctionalSection.PROFILE -> AndroidProfileScreen(Modifier.padding(padding), profiles)
-                FunctionalSection.MAP -> AndroidRideMapList(Modifier.padding(padding), context)
-                FunctionalSection.DEVICES -> AndroidDeviceCenter(Modifier.padding(padding), devices, heartRate, recorder)
-                FunctionalSection.SETTINGS -> AndroidSettings(Modifier.padding(padding), recorder, heartRate, { navigate(FunctionalSection.HUD) }, { navigate(FunctionalSection.DEVICES) }, { navigate(FunctionalSection.COMPATIBILITY) })
-                FunctionalSection.HUD -> AndroidHudFullscreenEditor(Modifier.padding(padding))
-                FunctionalSection.STATISTICS -> StatisticsScreen(Modifier.padding(padding))
-                FunctionalSection.ACHIEVEMENTS -> AchievementsScreen(Modifier.padding(padding))
-                FunctionalSection.FAQ -> AndroidSensorFaq(Modifier.padding(padding))
-                FunctionalSection.COMPATIBILITY -> AndroidCompatibilityScreen(Modifier.padding(padding))
+            key(section) {
+                when (section) {
+                    FunctionalSection.HOME -> AndroidDashboard(Modifier.padding(padding), profiles.activeProfile.name, navigate)
+                    FunctionalSection.RECORD -> AndroidRecording(Modifier.padding(padding), recorder, videoRecorder, rideContext, stopping, sessionUsesVideo, ::requestParkSearch, ::saveRide) { recordingMinimized = false }
+                    FunctionalSection.RIDES -> RideMediaScreen(Modifier.padding(padding), profiles)
+                    FunctionalSection.COMMUNITY -> AndroidCommunityOverview(Modifier.padding(padding), profiles.activeProfile.name)
+                    FunctionalSection.PROFILE -> AndroidProfileScreen(Modifier.padding(padding), profiles)
+                    FunctionalSection.MAP -> AndroidRideMapList(Modifier.padding(padding), context)
+                    FunctionalSection.DEVICES -> AndroidDeviceCenter(Modifier.padding(padding), devices, heartRate, recorder)
+                    FunctionalSection.SETTINGS -> AndroidSettings(Modifier.padding(padding), recorder, heartRate, { navigate(FunctionalSection.HUD) }, { navigate(FunctionalSection.DEVICES) }, { navigate(FunctionalSection.COMPATIBILITY) })
+                    FunctionalSection.HUD -> AndroidHudFullscreenEditor(Modifier.padding(padding))
+                    FunctionalSection.STATISTICS -> StatisticsScreen(Modifier.padding(padding))
+                    FunctionalSection.ACHIEVEMENTS -> AchievementsScreen(Modifier.padding(padding))
+                    FunctionalSection.FAQ -> AndroidSensorFaq(Modifier.padding(padding))
+                    FunctionalSection.COMPATIBILITY -> AndroidCompatibilityScreen(Modifier.padding(padding))
+                }
             }
         }
 
@@ -458,7 +437,7 @@ fun FunctionalRideTrackerApp(activity: Activity) {
     }
 
     if (menuOpen) ModalBottomSheet(onDismissRequest = { menuOpen = false }) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Hauptmenü", style = MaterialTheme.typography.headlineSmall)
             Text("Hauptbereiche", style = MaterialTheme.typography.titleMedium)
             listOf(FunctionalSection.COMMUNITY, FunctionalSection.HOME, FunctionalSection.RECORD, FunctionalSection.RIDES, FunctionalSection.PROFILE).forEach { target ->
@@ -576,7 +555,7 @@ private fun AndroidDashboard(modifier: Modifier, profile: String, select: (Funct
                 Text("Bereit für die nächste Fahrt?", style = MaterialTheme.typography.headlineMedium)
                 Text("Hallo $profile · Aufnahme, Kalibrierung und Kamera starten mit einem Tipp automatisch.", color = RideMuted)
                 Button({ select(FunctionalSection.RECORD) }, Modifier.fillMaxWidth()) { Icon(Icons.Filled.FiberManualRecord, null); Spacer(Modifier.width(8.dp)); Text("Neue Fahrt aufnehmen") }
-                Text("Zwischen Hauptseiten kannst du auch nach links oder rechts wischen.", style = MaterialTheme.typography.labelSmall, color = RideMuted)
+                Text("Die Hauptnavigation bleibt während des Scrollens jederzeit am unteren Rand erreichbar.", style = MaterialTheme.typography.labelSmall, color = RideMuted)
             }
         }
         Text("Deine Bereiche", style = MaterialTheme.typography.titleLarge)
@@ -717,7 +696,12 @@ private fun AndroidRecording(
                 Text("Live-Telemetrie", style = MaterialTheme.typography.titleMedium)
                 Text("Status: ${recorder.status}")
                 Text("Tempo: ${"%.1f".format(recorder.speedKmh)} km/h · ${recorder.speedSource}${if (recorder.stationaryLocked) " · Stillstand gesperrt" else ""}")
-                Text("Höhe: ${"%.1f".format(recorder.relativeAltitudeM)} m · Qualität ${recorder.qualityScore} %")
+                Text("Strecke: ${"%.1f".format(recorder.distanceMeters)} m · ${recorder.acceptedLocations} GPS-Punkte akzeptiert")
+                Text(
+                    "GNSS: ${recorder.satellitesUsedInFix}/${recorder.satellitesVisible} Satelliten verwendet/sichtbar · Genauigkeit ${recorder.horizontalAccuracyM?.let { "±%.1f m".format(it) } ?: "–"}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text("Höhe: ${"%.1f".format(recorder.relativeAltitudeM)} m · ${recorder.altitudeSource} · Qualität ${recorder.qualityScore} %")
                 Text("Kompass: ${recorder.headingDegrees?.let { "${"%.0f".format(it)}° ${compassDirection(it)}" } ?: "noch ohne Richtung"}")
             }
         }

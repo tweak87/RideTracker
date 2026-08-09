@@ -73,9 +73,14 @@ class GpsSpeedEstimator {
             movementEvidence = 0.0
             movementHeading = null
             if (stationarySamples >= 3) stationaryLocked = true
-        } else if (movementSpeed >= 1.4) {
+        } else if (movementSpeed >= 0.65 && !insideCluster) {
             val strongNative = nativeUseful && native!! >= 2.2
-            movementEvidence += if (strongNative) 1.0 else if (courseConsistent) 1.0 else 0.35
+            movementEvidence += when {
+                strongNative -> 1.0
+                courseConsistent && point.accuracyM <= 20.0 -> 1.0
+                courseConsistent -> 0.7
+                else -> 0.35
+            }
             if (heading != null) movementHeading = heading
             if (movementEvidence >= 2.0) {
                 stationaryLocked = false
@@ -108,7 +113,13 @@ class GpsSpeedEstimator {
         }
 
         val movementConfirmed = movementEvidence >= 2.0
-        val suppress = points > 0 && (stationaryLocked || (!movementConfirmed && stationarySamples > 0 && rawSpeed != null && rawSpeed >= 0.45 && !nativeUseful && (confidence < 0.25 || point.accuracyM > 5.0)))
+        // A stationary lock releases after two consistent fixes outside the accuracy
+        // cluster. The lower movement threshold includes walking, while the evidence
+        // counter still rejects one isolated GPS jump.
+        val suppress = points > 0 && (
+            (stationaryLocked && (!movementConfirmed || insideCluster)) ||
+                (!movementConfirmed && insideCluster && stationarySamples > 0 && rawSpeed != null && rawSpeed >= 0.45 && !nativeUseful && (confidence < 0.25 || point.accuracyM > 5.0))
+            )
         if (suppress) {
             rawSpeed = 0.0
             source = if (stationaryLocked) "stationary-lock" else "stationary-candidate"

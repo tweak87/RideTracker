@@ -4,6 +4,7 @@ import android.content.Context
 import de.ridetracker.session.LocalProfileStore
 import de.ridetracker.session.RideSessionSample
 import de.ridetracker.session.rideSessionSamplesFromJson
+import de.ridetracker.session.deriveGpsMotion
 import org.json.JSONObject
 import kotlin.math.abs
 
@@ -33,8 +34,9 @@ data class MetricComparison(
 
 fun calculateRideMetrics(samples: List<RideSessionSample>): RideMetrics {
     if (samples.isEmpty()) return RideMetrics()
+    val gpsFallback = deriveGpsMotion(samples)
     return RideMetrics(
-        maxSpeedKmh = samples.maxOf { it.speedMS * 3.6 },
+        maxSpeedKmh = maxOf(samples.maxOf { it.speedMS * 3.6 }, gpsFallback.maxSpeedMS * 3.6),
         maxNormalG = samples.maxOf { it.normalG },
         minNormalG = samples.minOf { it.normalG },
         maxLateralG = samples.maxOf { abs(it.lateralG) },

@@ -143,6 +143,15 @@ private fun HudStage(
     persist: () -> Unit,
     modifier: Modifier,
 ) {
+    val previewTelemetry = remember {
+        AndroidHudTelemetry(
+            g = de.ridetracker.sensors.AndroidLiveGForceSample(normalG = 2.4, lateralG = .8, longitudinalG = -.35),
+            speedKmh = 87.0,
+            heartRateBpm = 142,
+            vibrationMS2 = 6.8,
+            phase = "ride",
+        )
+    }
     Box(modifier.aspectRatio(if (mode == HudMode.Portrait) 9f / 16f else 16f / 9f).onSizeChanged(setSize).background(Color(0xFF102331), RoundedCornerShape(16.dp))) {
         items.forEach { (key, item) -> if (item.visible) {
             Box(
@@ -169,7 +178,7 @@ private fun HudStage(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(labels.first { it.first == key }.second.uppercase(), style = MaterialTheme.typography.labelSmall); Text(samples[key] ?: "–", color = Color.Cyan, style = MaterialTheme.typography.titleMedium) }
+                AndroidHudElement(key, previewTelemetry, Modifier.fillMaxSize())
                 Text("✥", modifier = Modifier.align(Alignment.TopEnd).background(Color.Cyan, RoundedCornerShape(50)).padding(5.dp), color = Color.Black)
             }
         } }
@@ -177,4 +186,3 @@ private fun HudStage(
 }
 
 private val labels = listOf("pulse" to "Puls", "gDial" to "G-Kraft-Kreis", "gValues" to "G-Achsen", "speed" to "Geschwindigkeit", "vibration" to "Vibration", "dynamics" to "Fahrdynamik")
-private val samples = mapOf("pulse" to "142 BPM", "gDial" to "+0.8 / +2.4 G", "gValues" to "LAT +0.8 · VERT +2.4", "speed" to "87 KM/H", "vibration" to "6.8 m/s²", "dynamics" to "2.58 G · 4.1 G/s")

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -31,6 +32,7 @@ import de.ridetracker.sensors.AndroidSensorRecorder
 import de.ridetracker.session.RideSessionSample
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.max
@@ -62,12 +64,24 @@ internal fun RideStoryDraftScreen(
     val metrics = remember(samples) { calculateRideMetrics(samples) }
     val title = rideContext.selectedAttraction?.name ?: "Neue Ride Story"
     val park = rideContext.selectedPark?.name ?: "Park noch auswählen"
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val completeness = buildRideCompleteness(
+        samples = samples,
+        recordedDistanceMeters = recorder.distanceMeters,
+        calibrated = recorder.isCalibrated,
+        rideContext = rideContext.snapshot(),
+        hasVideo = videoFile?.exists() == true,
+        videoHudEmbedded = videoHudEmbedded,
+    )
 
-    LazyColumn(
-        modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 210.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    Box(modifier.fillMaxSize().imePadding()) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            state = listState,
+            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 210.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
         item {
             RideDraftHero(title, park, metrics, recorder.publicationStatus)
         }
@@ -83,6 +97,7 @@ internal fun RideStoryDraftScreen(
                 }
             }
         }
+        item { RideCompletenessCard(completeness, Modifier.fillMaxWidth()) }
         when (tab) {
             RideDraftTab.STORY -> {
                 item {
@@ -120,6 +135,7 @@ internal fun RideStoryDraftScreen(
                                 { recorder.communityComment = it },
                                 label = { Text("Kommentar für den Beitrag") },
                                 placeholder = { Text("Wie war die Fahrt, welcher Sitz, welche Besonderheiten?") },
+                                trailingIcon = { KeyboardDismissButton() },
                                 minLines = 3,
                                 modifier = Modifier.fillMaxWidth(),
                             )
@@ -165,6 +181,14 @@ internal fun RideStoryDraftScreen(
                 }
                 item { AndroidTrack3DViewer(trackPoints, Modifier.fillMaxWidth()) }
             }
+        }
+        }
+        if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 500) {
+            SmallFloatingActionButton(
+                onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 190.dp),
+                containerColor = RideSurfaceHigh,
+            ) { Icon(Icons.Filled.VerticalAlignTop, "Ganz nach oben") }
         }
     }
 }

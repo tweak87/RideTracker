@@ -43,7 +43,13 @@ enum class AndroidHeatMetric(val title: String) { SPEED("Geschwindigkeit"), TOTA
 fun deriveAndroidTrackPoints(root: JSONObject): List<AndroidTrackPoint> = deriveAndroidTrackPoints(rideSessionSamplesFromJson(root))
 
 fun deriveAndroidTrackPoints(samples: List<RideSessionSample>): List<AndroidTrackPoint> {
-    val raw = samples.filter { it.latitude?.isFinite() == true && it.longitude?.isFinite() == true }
+    val raw = samples
+        .filter { it.latitude?.isFinite() == true && it.longitude?.isFinite() == true && (it.horizontalAccuracyM ?: 1000.0) <= 80.0 }
+        .fold(mutableListOf<RideSessionSample>()) { output, sample ->
+            val previous = output.lastOrNull()
+            if (previous == null || previous.latitude != sample.latitude || previous.longitude != sample.longitude) output += sample
+            output
+        }
     if (raw.size < 2) return emptyList()
     val step = max(1, ceil(raw.size / 400.0).toInt())
     val selected = raw.filterIndexed { index, _ -> index % step == 0 }.toMutableList().apply { if (last() !== raw.last()) add(raw.last()) }
@@ -59,13 +65,22 @@ fun deriveAndroidTrackPoints(samples: List<RideSessionSample>): List<AndroidTrac
         val x = (requireNotNull(sample.longitude) - originLongitude) * longitudeScale
         val z = (requireNotNull(sample.latitude) - originLatitude) * latitudeScale
         val y = sample.relativeAltitudeM?.takeIf { it.isFinite() } ?: 0.0
-        if (index > 0) distance += sqrt((x - previousX).pow(2) + (y - previousY).pow(2) + (z - previousZ).pow(2))
+        val segmentDistance = if (index > 0) sqrt((x - previousX).pow(2) + (y - previousY).pow(2) + (z - previousZ).pow(2)) else 0.0
+        if (index > 0) distance += segmentDistance
+        val previousSample = selected.getOrNull(index - 1)
+        val derivedSegmentSpeedKmh = previousSample?.let { previous ->
+            val seconds = sample.timestamp - previous.timestamp
+            if (seconds in 0.25..30.0) (segmentDistance / seconds * 3.6).coerceAtMost(360.0) else 0.0
+        } ?: 0.0
         previousX = x; previousY = y; previousZ = z
+        val nativeSpeedKmh = sample.speedMS * 3.6
         AndroidTrackPoint(
             index = index,
             timestamp = sample.timestamp,
             x = x, y = y, z = z, distanceM = distance,
-            speedKmh = sample.speedMS * 3.6,
+            // Keep a trustworthy native fix unchanged. The displacement-derived value is
+            // deliberately a fallback for devices/vendors that report a permanent zero.
+            speedKmh = if (nativeSpeedKmh > 0.5) nativeSpeedKmh else derivedSegmentSpeedKmh,
             normalG = sample.normalG,
             lateralG = sample.lateralG,
             longitudinalG = sample.longitudinalG,
@@ -128,11 +143,52 @@ fun AndroidTrack3DViewer(points: List<AndroidTrackPoint>, modifier: Modifier = M
             drawRect(Color(0xFF07111F))
             val currentSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
             val screen = projectTrack(modelPoints, currentSize, yaw, pitch, zoom)
-            val groundLevel = modelPoints.minOf { it.y }
+            val minimumX = modelPoints.minOf { it.x }
+            val maximumX = modelPoints.maxOf { it.x }
+            val minimumZ = modelPoints.minOf { it.z }
+            val maximumZ = modelPoints.maxOf { it.z }
+            val xMargin = max(6.0, (maximumX - minimumX) * .12)
+            val zMargin = max(6.0, (maximumZ - minimumZ) * .12)
+            val heightRange = modelPoints.maxOf { it.y } - modelPoints.minOf { it.y }
+            val groundLevel = modelPoints.minOf { it.y } - max(1.5, heightRange * .08)
+            fun groundPoint(x: Double, z: Double) = modelPoints.first().copy(x = x, y = groundLevel, z = z)
+            val groundCorners = listOf(
+                groundPoint(minimumX - xMargin, minimumZ - zMargin),
+                groundPoint(maximumX + xMargin, minimumZ - zMargin),
+                groundPoint(maximumX + xMargin, maximumZ + zMargin),
+                groundPoint(minimumX - xMargin, maximumZ + zMargin),
+            )
+            val projectedGroundCorners = projectTrack(groundCorners, currentSize, yaw, pitch, zoom, modelPoints)
+            if (projectedGroundCorners.size == 4) {
+                val groundPath = Path().apply {
+                    moveTo(projectedGroundCorners[0].x, projectedGroundCorners[0].y)
+                    projectedGroundCorners.drop(1).forEach { lineTo(it.x, it.y) }
+                    close()
+                }
+                drawPath(groundPath, Color(0xFF17362D).copy(alpha = .86f))
+                drawPath(groundPath, Color(0xFF65F0B7).copy(alpha = .22f), style = Stroke(1.5f))
+                for (gridIndex in 0..10) {
+                    val ratio = gridIndex / 10.0
+                    val x = minimumX - xMargin + (maximumX - minimumX + xMargin * 2) * ratio
+                    val z = minimumZ - zMargin + (maximumZ - minimumZ + zMargin * 2) * ratio
+                    val xLine = projectTrack(listOf(groundPoint(x, minimumZ - zMargin), groundPoint(x, maximumZ + zMargin)), currentSize, yaw, pitch, zoom, modelPoints)
+                    val zLine = projectTrack(listOf(groundPoint(minimumX - xMargin, z), groundPoint(maximumX + xMargin, z)), currentSize, yaw, pitch, zoom, modelPoints)
+                    if (xLine.size == 2) drawLine(Color.White.copy(alpha = .075f), xLine[0], xLine[1], 1f)
+                    if (zLine.size == 2) drawLine(Color.White.copy(alpha = .075f), zLine[0], zLine[1], 1f)
+                }
+            }
             val ground = projectTrack(modelPoints.map { it.copy(y = groundLevel) }, currentSize, yaw, pitch, zoom, modelPoints)
             val supportStep = max(12, modelPoints.size / 34)
             for (index in modelPoints.indices step supportStep) {
-                drawLine(Color(0xFF365268).copy(alpha = .58f), ground[index], screen[index], strokeWidth = 2.2f, cap = StrokeCap.Round)
+                val direction = when {
+                    index < screen.lastIndex -> screen[index + 1] - screen[index]
+                    index > 0 -> screen[index] - screen[index - 1]
+                    else -> Offset(1f, 0f)
+                }
+                val directionLength = direction.getDistance().coerceAtLeast(.001f)
+                val normal = Offset(-direction.y / directionLength, direction.x / directionLength) * 5.5f
+                drawLine(Color(0xFF6E8798).copy(alpha = .7f), ground[index], screen[index] - normal, strokeWidth = 2.2f, cap = StrokeCap.Round)
+                drawLine(Color(0xFF6E8798).copy(alpha = .7f), ground[index], screen[index] + normal, strokeWidth = 2.2f, cap = StrokeCap.Round)
                 drawCircle(Color(0xFF4D718B).copy(alpha = .55f), 3.2f, ground[index])
             }
             if (screen.size >= 2) {
@@ -143,7 +199,13 @@ fun AndroidTrack3DViewer(points: List<AndroidTrackPoint>, modifier: Modifier = M
                 drawPath(railBed, Color(0xFF01060C).copy(alpha = .92f), style = Stroke(width = 13f, cap = StrokeCap.Round))
                 drawPath(railBed, Color(0xFFB8D0DF).copy(alpha = .28f), style = Stroke(width = 8f, cap = StrokeCap.Round))
                 for (index in 1 until screen.size) {
-                    drawLine(metricColor(modelPoints[index], metric, metricRange), screen[index - 1], screen[index], strokeWidth = if (index == selectedIndex) 7.5f else 5.2f, cap = StrokeCap.Round)
+                    val direction = screen[index] - screen[index - 1]
+                    val length = direction.getDistance().coerceAtLeast(.001f)
+                    val railOffset = Offset(-direction.y / length, direction.x / length) * 4.3f
+                    val railColor = Color(0xFFD9E6EE).copy(alpha = .92f)
+                    drawLine(railColor, screen[index - 1] - railOffset, screen[index] - railOffset, strokeWidth = 3.2f, cap = StrokeCap.Round)
+                    drawLine(railColor, screen[index - 1] + railOffset, screen[index] + railOffset, strokeWidth = 3.2f, cap = StrokeCap.Round)
+                    drawLine(metricColor(modelPoints[index], metric, metricRange), screen[index - 1], screen[index], strokeWidth = if (index == selectedIndex) 5.5f else 3.4f, cap = StrokeCap.Round)
                 }
                 val sleeperStep = max(9, modelPoints.size / 90)
                 for (index in sleeperStep until screen.lastIndex step sleeperStep) {

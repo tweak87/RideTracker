@@ -56,7 +56,7 @@ requireToken('app', 'Icons.Filled.Groups', 'Primary Android navigation needs rec
 requireToken('communityProfile', 'Lokaler, datenschutzorientierter Modus', 'Truthful local community status missing');
 requireToken('communityProfile', 'Profil anlegen und auswählen', 'Android profile management missing');
 requireToken('compatibility', 'Amazon Fire OS erkannt', 'Fire OS diagnostics missing');
-requireToken('compatibility', '.fire8v7', 'Fire OS diagnostics must recognize the current test package');
+requireToken('compatibility', '.fire8v8', 'Fire OS diagnostics must recognize the current test package');
 requireToken('compatibility', 'Standort ohne Google-Dienste', 'Google-independent location diagnostics missing');
 requireToken('compatibility', 'Diagnosebericht kopieren', 'Shareable Fire diagnostics missing');
 requireToken('heartRate', 'requiredPermissions()', 'BLE permission compatibility guard missing');
@@ -80,8 +80,8 @@ requireToken('context', 'OVERPASS_ENDPOINTS', 'Park search needs resilient provi
 requireToken('platformLocation', 'LocationManager.GPS_PROVIDER', 'Platform GPS provider missing');
 requireToken('platformLocation', 'LocationManager.NETWORK_PROVIDER', 'Platform network location fallback missing');
 requireToken('gradle', 'minSdk = 21', 'Fire OS 5 compatibility floor missing');
-requireToken('gradle', 'applicationIdSuffix = ".fire8v7"', 'Side-by-side Fire OS 8 test package missing');
-requireToken('gradle', 'applicationIdSuffix = ".devicev7"', 'Side-by-side Huawei/Android test package missing');
+requireToken('gradle', 'applicationIdSuffix = ".fire8v8"', 'Side-by-side Fire OS 8 test package missing');
+requireToken('gradle', 'applicationIdSuffix = ".devicev8"', 'Side-by-side Huawei/Android test package missing');
 requireToken('gradle', 'useLegacyPackaging = true', 'Fire-compatible native library packaging missing');
 requireToken('gradle', '"armeabi-v7a", "arm64-v8a"', 'Fire APK must only package compatible ARM variants');
 rejectToken('gradle', 'play-services-location', 'Fire OS build must not depend on Google Play Services location');
@@ -94,8 +94,8 @@ requireToken('media', 'Video in Dateien speichern', 'Finalized ride video export
 requireToken('media', 'thumbnailNode', 'Android ride thumbnails missing');
 requireToken('workflow', 'assembleDebug', 'Android APK build missing');
 requireToken('workflow', 'assembleFireTest', 'Dedicated Fire OS APK build missing');
-requireToken('workflow', 'INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.3.apk', 'Direct Huawei/Android APK artifact missing');
-requireToken('workflow', 'INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.3.apk', 'Direct Fire APK artifact missing');
+requireToken('workflow', 'INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.4.apk', 'Direct Huawei/Android APK artifact missing');
+requireToken('workflow', 'INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.4.apk', 'Direct Fire APK artifact missing');
 requireToken('workflow', 'apksigner', 'Fire APK signature verification missing');
 requireToken('workflow', 'gh release create', 'Direct Android APK release missing');
 

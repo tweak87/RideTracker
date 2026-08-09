@@ -41,6 +41,19 @@ class Track3DViewerTest {
         assertTrue(points.last().distanceM > 20.0)
     }
 
+    @Test
+    fun `spatial model derives walking speed when vendor speed remains zero`() {
+        val samples = listOf(
+            sessionSample(0.0, 52.00000, 8.00000, 0.0),
+            sessionSample(8.0, 52.00018, 8.00000, 0.0),
+        )
+
+        val points = deriveAndroidTrackPoints(samples)
+
+        assertTrue(points.last().distanceM > 15.0)
+        assertTrue(points.last().speedKmh > 5.0)
+    }
+
     private fun point(index: Int, x: Double, y: Double, z: Double, speed: Double) = AndroidTrackPoint(
         index = index,
         timestamp = index.toDouble(),
