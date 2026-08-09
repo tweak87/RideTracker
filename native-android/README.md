@@ -2,7 +2,7 @@
 
 Native RideTracker-App mit Jetpack Compose und einer Kotlin-Portierung der Ride Engine.
 
-Die Version `2026.08.09.3` führt nach jeder Aufzeichnung in einen modernen Ride-Draft: Video samt Sensor-HUD, Park- und Attraktionsauswahl, persönliche und offizielle Vergleichswerte sowie die räumliche 3D-Strecke stehen vor dem Speichern bereit. Ein Offline-Katalog bietet Parks nach Land und priorisiert nahe Parks anhand des Standorts; OpenStreetMap ergänzt fehlende Orte. Aus gespeicherten Fahrten entstehen lokale, datenschutzorientierte Ride Stories im neuen Feed. Die bisherigen Wetter-, Bild-, Geräte-, Berechtigungs-, GPS-, Kompass- und Sensorfunktionen bleiben erhalten.
+Die Version `2026.08.09.4` ergänzt eine korrigierte Geh- und GPS-Ersatzgeschwindigkeit, GNSS-Qualität mit Genauigkeit und Satelliten, ein gemeinsames Live-/Editor-HUD, verbesserte Scroll- und Tastaturbedienung, alphabetische Park-/Attraktionswahl, eine Vollständigkeitsanzeige je Fahrt und ein geglättetes 3D-Achterbahnmodell mit künstlichem Boden, Schienen, Schwellen und Stützen. Der moderne Ride-Draft mit Video-Vorschau, Vergleichen und lokaler Community-Story bleibt vollständig erhalten. Ohne Barometer nutzt das Höhenmodell eine ausdrücklich gekennzeichnete GPS-Höhenannäherung.
 
 ## Vorgesehene Sensoren
 
@@ -15,7 +15,7 @@ Die Version `2026.08.09.3` führt nach jeder Aufzeichnung in einen modernen Ride
 
 ## Build ohne Android Studio
 
-Der GitHub-Workflow `Build Android` kann über die GitHub-App oder Safari gestartet werden. Er testet Kotlin-Logik, Android-Lint, Paket-IDs, SDK, APK-v2-Signaturen und ZIP-Strukturen. Builds von `main` erscheinen als Vorab-Release `android-v2026.08.09.3`. Für Huawei/Android `INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.3.apk`, für Fire OS 8 `INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.3.apk` verwenden. Die App-Namen **RideTracker DEVICE v7** beziehungsweise **RideTracker FIRE 8 v7** bestätigen den richtigen Build. Auf dem Testgerät muss die Installation aus dieser Browser-/Dateiquelle bewusst erlaubt werden. Hinweise für Amazon-Tablets stehen in [`../docs/ANDROID_FIRE_INSTALL.md`](../docs/ANDROID_FIRE_INSTALL.md).
+Der GitHub-Workflow `Build Android` kann über die GitHub-App oder Safari gestartet werden. Er testet Kotlin-Logik, Android-Lint, Paket-IDs, SDK, APK-v2-Signaturen und ZIP-Strukturen. Builds von `main` erscheinen als Vorab-Release `android-v2026.08.09.4`. Für Huawei/Android `INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.4.apk`, für Fire OS 8 `INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.4.apk` verwenden. Die App-Namen **RideTracker DEVICE v8** beziehungsweise **RideTracker FIRE 8 v8** bestätigen den richtigen Build. Die v8-Pakete werden parallel zu älteren Testversionen installiert, damit wechselnde Debug-Zertifikate keine Aktualisierung blockieren. Auf dem Testgerät muss die Installation aus dieser Browser-/Dateiquelle bewusst erlaubt werden. Hinweise für Amazon-Tablets stehen in [`../docs/ANDROID_FIRE_INSTALL.md`](../docs/ANDROID_FIRE_INSTALL.md).
 
 ## Architektur
 

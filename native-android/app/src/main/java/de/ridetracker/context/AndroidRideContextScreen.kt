@@ -23,6 +23,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import de.ridetracker.KeyboardDismissButton
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.PI
@@ -216,6 +217,8 @@ private fun CatalogSelection(store: AndroidRideContextStore) {
     var countryExpanded by remember { mutableStateOf(false) }
     var parkExpanded by remember { mutableStateOf(false) }
     var attractionExpanded by remember { mutableStateOf(false) }
+    var manualParkExpanded by remember { mutableStateOf(false) }
+    var manualParkName by remember { mutableStateOf("") }
     val selectedCountry = store.catalogCountries.firstOrNull { it.code == store.selectedCountryCode }
     val selectedCatalogPark = store.catalogParks.firstOrNull { it.id == store.selectedPark?.id }
 
@@ -230,6 +233,13 @@ private fun CatalogSelection(store: AndroidRideContextStore) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (store.currentLocation != null) {
+                Text(
+                    "Das Land wurde aus der GPS-Position vorausgewählt. Parks und Attraktionen sind alphabetisch sortiert und jederzeit manuell änderbar.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
             ExposedDropdownMenuBox(expanded = countryExpanded, onExpandedChange = { countryExpanded = it }) {
                 OutlinedTextField(
                     value = selectedCountry?.name.orEmpty(),
@@ -266,6 +276,24 @@ private fun CatalogSelection(store: AndroidRideContextStore) {
                         )
                     }
                 }
+            }
+            TextButton(onClick = { manualParkExpanded = !manualParkExpanded }) {
+                Text(if (manualParkExpanded) "Manuelle Parkeingabe schließen" else "Park nicht gelistet?")
+            }
+            if (manualParkExpanded) {
+                OutlinedTextField(
+                    value = manualParkName,
+                    onValueChange = { manualParkName = it },
+                    label = { Text("Freizeitpark manuell eingeben") },
+                    trailingIcon = { KeyboardDismissButton() },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedButton(
+                    onClick = { store.selectManualPark(manualParkName); manualParkExpanded = false },
+                    enabled = manualParkName.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Diesen Park übernehmen") }
             }
             if (selectedCatalogPark != null) {
                 ExposedDropdownMenuBox(expanded = attractionExpanded, onExpandedChange = { attractionExpanded = it }) {
@@ -338,6 +366,7 @@ private fun AttractionPickerDialog(
                     value = search,
                     onValueChange = { search = it },
                     label = { Text("Gefundene Attraktionen filtern") },
+                    trailingIcon = { KeyboardDismissButton() },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -366,6 +395,7 @@ private fun AttractionPickerDialog(
                     value = manualName,
                     onValueChange = { manualName = it },
                     label = { Text("Nicht gelistet: Name manuell") },
+                    trailingIcon = { KeyboardDismissButton() },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -538,7 +568,10 @@ fun AndroidSensorFaq(modifier: Modifier = Modifier) {
             Text("Ja. G-Kräfte stammen aus dem Beschleunigungs- und Orientierungssensor. Ohne GPS fehlen jedoch eine belastbare Geschwindigkeit, der geografische Verlauf und das räumliche Streckenmodell. Eine doppelte Integration der Beschleunigung wird nicht als Positionsersatz verwendet, weil kleine Sensorfehler schnell stark anwachsen.")
         }
         FaqCard("Warum zeigt RideTracker im Stillstand nicht jeden GPS-Sprung?") {
-            Text("Native GPS-Geschwindigkeit und aus mehreren Positionsfenstern abgeleitete Werte werden plausibilisiert. Ungenaue Fixes, unmögliche Sprünge und einzelne Ausreißer werden verworfen. Nach erkanntem Stillstand wird Bewegung erst durch mehrere konsistente Fixes freigegeben.")
+            Text("Native GPS-Geschwindigkeit und aus mehreren Positionsfenstern abgeleitete Werte werden plausibilisiert. Ungenaue Fixes, unmögliche Sprünge und einzelne Ausreißer werden verworfen. Nach erkanntem Stillstand wird Bewegung durch konsistente Fixes außerhalb des Genauigkeitsclusters wieder freigegeben – ausdrücklich auch beim Gehen.")
+        }
+        FaqCard("Was fehlt ohne Barometer?") {
+            Text("Geschwindigkeit, GPS-Strecke sowie Längs-, Seiten- und Vertikalkräfte funktionieren weiterhin. Für die Höhe verwendet RideTracker ersatzweise die relative GPS-Höhe und kennzeichnet die Quelle. Diese reagiert langsamer, kann um mehrere Meter schwanken und bildet kurze Kuppen, Abfahrten und Airtime deutlich ungenauer ab. Effizient testbar bleiben daher GPS-Distanz, Tempo, G-Kräfte, Video/HUD, Parkwahl und die horizontale 3D-Strecke; eingeschränkt testbar sind präzise Höhenprofile, Steigrate und Lift-/Drop-Erkennung.")
         }
         FaqCard("Warum kann im ICE keine Geschwindigkeit verfügbar sein?") {
             Text("Metallbedampfte Scheiben und der Wagenkasten können Satellitensignale abschirmen. Bleibt die absolute Position dadurch unverändert, lässt sich eine konstante Zuggeschwindigkeit nicht seriös aus dem Beschleunigungssensor ableiten. RideTracker zeigt in diesem Fall einen nicht verfügbaren Wert statt einer erfundenen Geschwindigkeit.")

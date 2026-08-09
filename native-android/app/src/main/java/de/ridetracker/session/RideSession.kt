@@ -15,6 +15,11 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 data class RideSessionEvent(val timestamp: Double, val type: String)
 
@@ -33,6 +38,12 @@ data class RideSessionSample(
     val qualityScore: Int,
     val source: String = "android_phone",
     val heartRateBpm: Int? = null,
+    val verticalAccuracyM: Double? = null,
+    val speedAccuracyMS: Double? = null,
+    val locationProvider: String? = null,
+    val satellitesVisible: Int? = null,
+    val satellitesUsedInFix: Int? = null,
+    val averageCn0DbHz: Double? = null,
 )
 
 fun rideSessionSamplesFromJson(root: JSONObject): List<RideSessionSample> {
@@ -59,6 +70,12 @@ fun rideSessionSamplesFromJson(root: JSONObject): List<RideSessionSample> {
                     qualityScore = sample.optInt("qualityScore", 0),
                     source = sample.optString("source", "android_phone"),
                     heartRateBpm = sample.optNullableInt("heartRateBpm"),
+                    verticalAccuracyM = sample.optNullableDouble("verticalAccuracyM"),
+                    speedAccuracyMS = sample.optNullableDouble("speedAccuracyMS"),
+                    locationProvider = sample.optString("locationProvider").takeIf { it.isNotBlank() },
+                    satellitesVisible = sample.optNullableInt("satellitesVisible"),
+                    satellitesUsedInFix = sample.optNullableInt("satellitesUsedInFix"),
+                    averageCn0DbHz = sample.optNullableDouble("averageCn0DbHz"),
                 ),
             )
         }
@@ -73,6 +90,12 @@ data class RideSessionSummary(
     val rejectedLocations: Int,
     val qualityScore: Int,
     val finalPhase: String,
+    val maxSpeedKmh: Double = 0.0,
+    val bestHorizontalAccuracyM: Double? = null,
+    val averageHorizontalAccuracyM: Double? = null,
+    val maxSatellitesVisible: Int? = null,
+    val maxSatellitesUsedInFix: Int? = null,
+    val altitudeSource: String = "none",
 )
 
 data class RideSessionDocument(
@@ -135,11 +158,15 @@ data class RideSessionDocument(
             samples.forEach { sample -> put(JSONObject().apply {
                 put("timestamp", sample.timestamp); put("normalG", sample.normalG); put("lateralG", sample.lateralG); put("longitudinalG", sample.longitudinalG); put("totalG", sample.totalG)
                 putNullable("relativeAltitudeM", sample.relativeAltitudeM); put("speedMS", sample.speedMS); putNullable("latitude", sample.latitude); putNullable("longitude", sample.longitude); putNullable("horizontalAccuracyM", sample.horizontalAccuracyM)
+                putNullable("verticalAccuracyM", sample.verticalAccuracyM); putNullable("speedAccuracyMS", sample.speedAccuracyMS); putNullable("locationProvider", sample.locationProvider)
+                putNullable("satellitesVisible", sample.satellitesVisible); putNullable("satellitesUsedInFix", sample.satellitesUsedInFix); putNullable("averageCn0DbHz", sample.averageCn0DbHz)
                 put("phase", sample.phase); put("qualityScore", sample.qualityScore); put("source", sample.source); putNullable("heartRateBpm", sample.heartRateBpm)
             }) }
         })
         put("summary", JSONObject().apply {
             put("durationSeconds", summary.durationSeconds); put("sampleCount", summary.sampleCount); put("distanceMeters", summary.distanceMeters); put("acceptedLocations", summary.acceptedLocations); put("rejectedLocations", summary.rejectedLocations); put("qualityScore", summary.qualityScore); put("finalPhase", summary.finalPhase)
+            put("maxSpeedKmh", summary.maxSpeedKmh); putNullable("bestHorizontalAccuracyM", summary.bestHorizontalAccuracyM); putNullable("averageHorizontalAccuracyM", summary.averageHorizontalAccuracyM)
+            putNullable("maxSatellitesVisible", summary.maxSatellitesVisible); putNullable("maxSatellitesUsedInFix", summary.maxSatellitesUsedInFix); put("altitudeSource", summary.altitudeSource)
         })
     }
 
@@ -148,6 +175,48 @@ data class RideSessionDocument(
         val file = File(context.filesDir, "RideTracker-$stamp-${id.take(8)}.ride.json")
         file.writeText(toJson(LocalProfileStore.current(context)).toString(2)); RidePackageStore.save(context, this, file); return file
     }
+}
+
+data class DerivedGpsMotion(
+    val distanceMeters: Double = 0.0,
+    val maxSpeedMS: Double = 0.0,
+    val usablePointCount: Int = 0,
+)
+
+/** Independent fallback for summaries when a vendor reports no native Location.speed. */
+fun deriveGpsMotion(samples: List<RideSessionSample>): DerivedGpsMotion {
+    val fixes = samples
+        .filter { it.latitude?.isFinite() == true && it.longitude?.isFinite() == true && (it.horizontalAccuracyM ?: 1000.0) <= 80.0 }
+        .distinctBy { Triple(it.timestamp, it.latitude, it.longitude) }
+        .fold(mutableListOf<RideSessionSample>()) { output, sample ->
+            val last = output.lastOrNull()
+            if (last == null || last.latitude != sample.latitude || last.longitude != sample.longitude) output += sample
+            output
+        }
+    if (fixes.size < 2) return DerivedGpsMotion(usablePointCount = fixes.size)
+    var distance = 0.0
+    var maxSpeed = 0.0
+    fixes.zipWithNext().forEach { (first, second) ->
+        val segment = haversineMeters(requireNotNull(first.latitude), requireNotNull(first.longitude), requireNotNull(second.latitude), requireNotNull(second.longitude))
+        val seconds = second.timestamp - first.timestamp
+        val uncertainty = maxOf(first.horizontalAccuracyM ?: 0.0, second.horizontalAccuracyM ?: 0.0) * 0.25
+        val corrected = (segment - uncertainty.coerceIn(0.0, 5.0)).coerceAtLeast(0.0)
+        if (seconds in 0.25..30.0 && corrected / seconds <= 100.0) {
+            distance += corrected
+            maxSpeed = maxOf(maxSpeed, corrected / seconds)
+        }
+    }
+    return DerivedGpsMotion(distance, maxSpeed, fixes.size)
+}
+
+private fun haversineMeters(latA: Double, lonA: Double, latB: Double, lonB: Double): Double {
+    val radius = 6_371_000.0
+    val latitudeA = Math.toRadians(latA)
+    val latitudeB = Math.toRadians(latB)
+    val latitudeDelta = Math.toRadians(latB - latA)
+    val longitudeDelta = Math.toRadians(lonB - lonA)
+    val value = sin(latitudeDelta / 2).pow(2) + cos(latitudeA) * cos(latitudeB) * sin(longitudeDelta / 2).pow(2)
+    return 2 * radius * asin(sqrt(value.coerceIn(0.0, 1.0)))
 }
 
 private fun JSONObject.putNullable(key: String, value: Any?) { if (value == null) put(key, JSONObject.NULL) else put(key, value) }

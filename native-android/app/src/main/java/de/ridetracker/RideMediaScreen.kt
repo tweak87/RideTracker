@@ -10,6 +10,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -46,6 +47,7 @@ data class AndroidRideMediaItem(
     val videoStartOffsetSeconds: Double,
     val videoHudEmbedded: Boolean,
     val publicationStatus: String,
+    val completeness: RideCompletenessReport,
 )
 
 private fun loadRideMedia(context: Context, profileId: String): List<AndroidRideMediaItem> {
@@ -89,6 +91,7 @@ private fun loadRideMedia(context: Context, profileId: String): List<AndroidRide
                 videoStartOffsetSeconds = videoNode?.optDouble("startOffsetSeconds", 0.0) ?: 0.0,
                 videoHudEmbedded = videoNode?.optBoolean("hudEmbedded", false) == true,
                 publicationStatus = root.optJSONObject("community")?.optString("publicationStatus", "private") ?: "private",
+                completeness = rideCompletenessFromJson(root),
             )
         }.getOrNull()
     }?.sortedByDescending { it.id } ?: emptyList()
@@ -113,6 +116,7 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
     var videoToExport by remember { mutableStateOf<File?>(null) }
     var exportStatus by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
     val videoExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("video/mp4")) { destination ->
         val source = videoToExport
         if (destination != null && source != null) scope.launch {
@@ -137,7 +141,8 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
         targetRide = null
     }
 
-    LazyColumn(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Box(modifier.fillMaxSize().imePadding()) {
+        LazyColumn(Modifier.fillMaxSize().padding(16.dp), state = listState, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Text("Gespeicherte Fahrten", style = MaterialTheme.typography.headlineMedium)
             Text("Videos ansehen und Titel, Park, Notizen, Kommentare, Bild und Bewertung bearbeiten.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -181,7 +186,18 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
                         SavedRideValue("SEITLICH", "%.1f G".format(metrics.maxLateralG), RideAmber)
                         SavedRideValue("QUALITÄT", "${metrics.qualityScore}%", RideRose)
                     }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        LinearProgressIndicator(
+                            progress = { ride.completeness.percent / 100f },
+                            modifier = Modifier.weight(1f).height(7.dp),
+                            color = if (ride.completeness.percent >= 75) RideGreen else RideAmber,
+                            trackColor = RideSurfaceHigh,
+                        )
+                        Spacer(Modifier.width(9.dp))
+                        Text("Vollständigkeit ${ride.completeness.percent}%", style = MaterialTheme.typography.labelMedium)
+                    }
                     if (expanded) {
+                        RideCompletenessCard(ride.completeness, Modifier.fillMaxWidth())
                         ride.imageCredit?.let { credit ->
                             Text(credit, style = MaterialTheme.typography.labelSmall)
                             ride.imageSourceUrl?.let { source -> TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(source))) }) { Text("Bildquelle öffnen") } }
@@ -200,10 +216,10 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
                             }, modifier = Modifier.fillMaxWidth()) { Text("Video in Dateien speichern") }
                         } ?: Text("Für diese Fahrt ist keine Videodatei verfügbar.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         AndroidTrack3DViewer(ride.trackPoints, Modifier.fillMaxWidth())
-                        OutlinedTextField(title, { title = it }, label = { Text("Bahn / Titel") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(park, { park = it }, label = { Text("Freizeitpark") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(notes, { notes = it }, label = { Text("Private Notiz") }, minLines = 3, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(comment, { comment = it }, label = { Text("Kommentar") }, minLines = 3, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(title, { title = it }, label = { Text("Bahn / Titel") }, trailingIcon = { KeyboardDismissButton() }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(park, { park = it }, label = { Text("Freizeitpark") }, trailingIcon = { KeyboardDismissButton() }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(notes, { notes = it }, label = { Text("Private Notiz") }, trailingIcon = { KeyboardDismissButton() }, minLines = 3, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(comment, { comment = it }, label = { Text("Kommentar") }, trailingIcon = { KeyboardDismissButton() }, minLines = 3, modifier = Modifier.fillMaxWidth())
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { runCatching { saveRideEdits(ride, title, park, notes, comment) }; rides = loadRideMedia(context, profiles.activeProfileId) }) { Text("Änderungen speichern") }
                             OutlinedButton(onClick = { targetRide = ride; picker.launch("image/*") }) { Text("Bild auswählen") }
@@ -216,6 +232,14 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
                     }
                 }
             }
+        }
+        }
+        if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 500) {
+            SmallFloatingActionButton(
+                onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                modifier = Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(18.dp),
+                containerColor = RideSurfaceHigh,
+            ) { Text("↑", style = MaterialTheme.typography.titleLarge) }
         }
     }
 }

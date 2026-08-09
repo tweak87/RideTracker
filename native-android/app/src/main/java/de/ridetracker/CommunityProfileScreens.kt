@@ -150,7 +150,7 @@ private fun CommunityStatusCard(title: String, text: String) {
 @Composable
 internal fun AndroidProfileScreen(modifier: Modifier, profiles: LocalProfileStore) {
     var newName by remember { mutableStateOf("") }
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Profile", style = MaterialTheme.typography.headlineMedium)
         Text("Fahrten, Statistiken und Bewertungen bleiben nach lokalem Profil getrennt.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         profiles.profiles.forEach { profile ->
@@ -166,7 +166,7 @@ internal fun AndroidProfileScreen(modifier: Modifier, profiles: LocalProfileStor
         }
         HorizontalDivider()
         Text("Neues lokales Profil", style = MaterialTheme.typography.titleMedium)
-        OutlinedTextField(newName, { newName = it }, label = { Text("Anzeigename") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(newName, { newName = it }, label = { Text("Anzeigename") }, trailingIcon = { KeyboardDismissButton() }, singleLine = true, modifier = Modifier.fillMaxWidth())
         Button(
             enabled = newName.trim().length >= 2,
             onClick = { profiles.create(newName); newName = "" },

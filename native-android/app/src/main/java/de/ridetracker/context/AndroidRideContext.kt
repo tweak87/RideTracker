@@ -163,6 +163,7 @@ class AndroidRideContextStore(private val context: Context) {
     fun selectAttraction(attraction: NearbyAttraction?) {
         selectedAttraction = attraction
         officialFacts = RideCatalog.findAttraction(attraction?.id)?.second?.facts
+            ?: RideCatalog.findAttractionByName(attraction?.name, selectedPark?.id)?.second?.facts
         status = attraction?.let { "Ausgewählt: ${it.name} · ${selectedPark?.name ?: "Park"}" }
             ?: "Bitte die passende Attraktion auswählen."
     }
@@ -185,8 +186,35 @@ class AndroidRideContextStore(private val context: Context) {
         )
     }
 
+    fun selectManualPark(name: String) {
+        val normalized = name.trim()
+        if (normalized.isBlank()) {
+            status = "Bitte einen Namen für den Freizeitpark eingeben."
+            return
+        }
+        val location = currentLocation
+        selectedPark = NearbyPark(
+            id = "manual/${selectedCountryCode.lowercase()}/${normalized.lowercase().replace(Regex("[^a-z0-9äöüß]+"), "-").trim('-')}",
+            name = normalized,
+            latitude = location?.latitude ?: 0.0,
+            longitude = location?.longitude ?: 0.0,
+            distanceM = 0.0,
+            provider = "Manuelle Auswahl",
+        )
+        selectedAttraction = null
+        officialFacts = null
+        attractions = emptyList()
+        status = "$normalized wurde manuell ausgewählt. Attraktion kann anschließend gesucht oder eingetragen werden."
+    }
+
     fun selectCountry(code: String) {
         if (RideCatalog.countries.none { it.code == code }) return
+        if (selectedCountryCode != code) {
+            selectedPark = null
+            selectedAttraction = null
+            officialFacts = null
+            attractions = emptyList()
+        }
         selectedCountryCode = code
         preferences.edit().putString("catalogCountry", code).apply()
         status = "${RideCatalog.countries.first { it.code == code }.name}: ${catalogParks.size} Parks im Offline-Katalog."
@@ -228,8 +256,7 @@ class AndroidRideContextStore(private val context: Context) {
         attractions = emptyList()
         status = "Attraktionen in ${park.name} werden geladen …"
         val catalogPark = RideCatalog.findPark(park.id)
-        if (catalogPark != null) {
-            attractions = catalogPark.attractions.map { attraction ->
+        val catalogAttractions = catalogPark?.attractions.orEmpty().map { attraction ->
                 NearbyAttraction(
                     id = attraction.id,
                     name = attraction.name,
@@ -239,22 +266,33 @@ class AndroidRideContextStore(private val context: Context) {
                     provider = "RideTracker-Katalog${attraction.manufacturer?.let { " · $it" }.orEmpty()}",
                 )
             }
-            status = "${attractions.size} Attraktionen aus dem Offline-Katalog. Bitte die gefahrene Attraktion auswählen."
-            return
+        if (catalogAttractions.isNotEmpty()) {
+            attractions = catalogAttractions.sortedBy { it.name }
+            status = "${attractions.size} Attraktionen aus dem Offline-Katalog · weitere offene Standortdaten werden ergänzt …"
         }
         runCatching { loadAttractions(park) }
             .onSuccess { values ->
-                attractions = values
-                val closest = values.filter { it.distanceM != null }.minByOrNull { it.distanceM ?: Double.MAX_VALUE }
+                attractions = (catalogAttractions + values)
+                    .distinctBy { it.name.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "") }
+                    .sortedBy { it.name }
+                val closest = attractions.filter { it.distanceM != null }.minByOrNull { it.distanceM ?: Double.MAX_VALUE }
                 selectedAttraction = closest?.takeIf { (it.distanceM ?: Double.MAX_VALUE) <= 600.0 }
-                status = "${values.size} Attraktionen gefunden. Bitte die richtige Bahn auswählen."
+                status = "${attractions.size} Attraktionen in ${park.name} verfügbar. Bitte die richtige Bahn auswählen."
             }
-            .onFailure { error -> status = "Attraktionen konnten nicht geladen werden: ${error.message}" }
+            .onFailure { error ->
+                status = if (catalogAttractions.isNotEmpty()) {
+                    "${catalogAttractions.size} alphabetisch sortierte Katalog-Attraktionen verfügbar; offene Standortdaten sind gerade nicht erreichbar."
+                } else "Attraktionen konnten nicht geladen werden: ${error.message}"
+            }
     }
 
     @SuppressLint("MissingPermission")
     suspend fun requestCurrentLocation(): GeoPoint = locationProvider.currentLocation().let { location ->
-        GeoPoint(location.latitude, location.longitude, location.accuracy.toDouble())
+        GeoPoint(location.latitude, location.longitude, location.accuracy.toDouble()).also { point ->
+            RideCatalog.countryCodeForLocation(point.latitude, point.longitude)?.let { countryCode ->
+                if (selectedPark == null && selectedCountryCode != countryCode) selectCountry(countryCode)
+            }
+        }
     }
 
     suspend fun loadNearbyParks() {

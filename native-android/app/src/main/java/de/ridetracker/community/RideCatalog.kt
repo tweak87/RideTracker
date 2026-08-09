@@ -184,10 +184,32 @@ object RideCatalog {
     fun parksForCountry(countryCode: String): List<CatalogPark> =
         parks.filter { it.countryCode == countryCode.uppercase() }.sortedBy { it.name }
 
+    /** Offline fallback for automatic country preselection when reverse geocoding is unavailable. */
+    fun countryCodeForLocation(latitude: Double, longitude: Double): String? {
+        val boxes = listOf(
+            CountryBox("GB", 49.8, 60.9, -8.8, 2.1),
+            CountryBox("AE", 22.5, 26.3, 51.4, 56.6),
+            CountryBox("JP", 24.0, 46.0, 122.0, 146.0),
+            CountryBox("US", 24.0, 50.0, -125.0, -66.0),
+        )
+        return boxes.firstOrNull { latitude in it.minLatitude..it.maxLatitude && longitude in it.minLongitude..it.maxLongitude }?.code
+            ?: parks.minByOrNull { distanceMeters(latitude, longitude, it.latitude, it.longitude) }
+                ?.takeIf { distanceMeters(latitude, longitude, it) <= 450_000.0 }
+                ?.countryCode
+    }
+
     fun findPark(id: String?): CatalogPark? = parks.firstOrNull { it.id == id }
 
     fun findAttraction(id: String?): Pair<CatalogPark, CatalogAttraction>? = parks.firstNotNullOfOrNull { park ->
         park.attractions.firstOrNull { it.id == id }?.let { park to it }
+    }
+
+    fun findAttractionByName(name: String?, parkId: String? = null): Pair<CatalogPark, CatalogAttraction>? {
+        val normalized = name?.let(::normalizeName)?.takeIf { it.isNotBlank() } ?: return null
+        return parks.asSequence()
+            .filter { parkId == null || it.id == parkId }
+            .mapNotNull { park -> park.attractions.firstOrNull { normalizeName(it.name) == normalized }?.let { park to it } }
+            .firstOrNull()
     }
 
     fun nearestPark(latitude: Double, longitude: Double, maximumDistanceM: Double = 75_000.0): CatalogPark? =
@@ -210,8 +232,18 @@ object RideCatalog {
         return earthRadiusM * 2 * atan2(sqrt(a), sqrt(1 - a))
     }
 
+    private fun normalizeName(value: String) = value.lowercase().replace(Regex("[^a-z0-9äöüß]+"), "")
+
     private fun park(id: String, name: String, country: String, lat: Double, lon: Double, vararg rides: CatalogAttraction) =
-        CatalogPark(id, name, country, lat, lon, rides.toList())
+        CatalogPark(id, name, country, lat, lon, rides.sortedBy { it.name })
+
+    private data class CountryBox(
+        val code: String,
+        val minLatitude: Double,
+        val maxLatitude: Double,
+        val minLongitude: Double,
+        val maxLongitude: Double,
+    )
 
     private fun ride(
         id: String,

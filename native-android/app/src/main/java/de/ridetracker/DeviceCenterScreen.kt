@@ -245,6 +245,7 @@ private fun RoutingEditor(registry: AndroidDeviceRegistry) {
                         registry.saveBindings()
                     },
                     label = { Text("Ersatzquellen") },
+                    trailingIcon = { KeyboardDismissButton() },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text("Mindestqualität: ${"%.2f".format(binding.minimumQuality)}")
@@ -262,6 +263,7 @@ private fun RoutingEditor(registry: AndroidDeviceRegistry) {
                         registry.saveBindings()
                     },
                     label = { Text("Maximales Alter ms") },
+                    trailingIcon = { KeyboardDismissButton() },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -304,14 +306,14 @@ private fun DeviceList(registry: AndroidDeviceRegistry, heartRate: AndroidHeartR
                 Text(device.name, style = MaterialTheme.typography.titleMedium)
                 Text("${device.transport} · ${device.channels.size} Kanäle")
                 if (expanded) {
-                    OutlinedTextField(device.name, { device.name = it; registry.save() }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(device.name, { device.name = it; registry.save() }, label = { Text("Name") }, trailingIcon = { KeyboardDismissButton() }, modifier = Modifier.fillMaxWidth())
                     Row { Text("Aktiv", Modifier.weight(1f)); Switch(device.enabled, { device.enabled = it; registry.save() }) }
                     Row { Text("Automatisch verbinden", Modifier.weight(1f)); Switch(device.autoReconnect, { device.autoReconnect = it; registry.save() }) }
                     device.channels.forEach { channel ->
                         HorizontalDivider()
                         Text(channel.metric, style = MaterialTheme.typography.titleSmall)
                         Row { Text("Kanal aktiv", Modifier.weight(1f)); Switch(channel.enabled, { channel.enabled = it; registry.save() }) }
-                        OutlinedTextField(channel.sampleRateHz.toString(), { channel.sampleRateHz = it.toDoubleOrNull() ?: channel.sampleRateHz; registry.save() }, label = { Text("Messrate Hz") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(channel.sampleRateHz.toString(), { channel.sampleRateHz = it.toDoubleOrNull() ?: channel.sampleRateHz; registry.save() }, label = { Text("Messrate Hz") }, trailingIcon = { KeyboardDismissButton() }, modifier = Modifier.fillMaxWidth())
                         Button(onClick = { channel.calibratedAt = java.time.Instant.now().toString(); registry.save() }) {
                             Text(if (channel.calibratedAt == null) "Separat kalibrieren" else "Neu kalibrieren")
                         }

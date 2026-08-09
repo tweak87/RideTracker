@@ -75,6 +75,8 @@ object QualityScore {
         gaps: Int,
         calibrated: Boolean,
         hasBarometer: Boolean,
+        horizontalAccuracyM: Double? = null,
+        satellitesUsedInFix: Int? = null,
     ): Int {
         val totalGps = gpsAccepted + gpsRejected
         val gpsRatio = if (totalGps > 0) gpsAccepted.toDouble() / totalGps else 0.0
@@ -82,12 +84,18 @@ object QualityScore {
         val penalty = min(0.3, gaps * 0.02)
         val calibrationScore = if (calibrated) 1.0 else 0.0
         val barometerScore = if (hasBarometer) 1.0 else 0.0
+        val accuracyScore = horizontalAccuracyM?.takeIf { it.isFinite() }
+            ?.let { ((50.0 - it.coerceIn(3.0, 50.0)) / 47.0).coerceIn(0.0, 1.0) }
+            ?: 0.0
+        val satelliteScore = satellitesUsedInFix?.let { (it / 10.0).coerceIn(0.0, 1.0) } ?: 0.0
+        val gnssSignalScore = accuracyScore * 0.72 + satelliteScore * 0.28
         val raw = 100.0 * (
-            0.30 * motion +
-                0.30 * gpsRatio +
+            0.25 * motion +
+                0.20 * gpsRatio +
+                0.15 * gnssSignalScore +
                 0.20 * calibrationScore +
-                0.10 * barometerScore +
-                0.10
+                0.05 * barometerScore +
+                0.15
             ) - 100.0 * penalty
         return max(0, min(100, raw.roundToInt()))
     }

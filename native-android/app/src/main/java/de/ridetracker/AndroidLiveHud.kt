@@ -1,6 +1,7 @@
 package de.ridetracker
 
 import android.app.Activity
+import android.content.res.Configuration
 import android.os.SystemClock
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
@@ -22,6 +23,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
@@ -29,6 +31,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import de.ridetracker.sensors.AndroidLiveGForceSample
 import de.ridetracker.sensors.AndroidSensorRecorder
+import de.ridetracker.hud.AndroidHudConfigurationStore
 import de.ridetracker.video.AndroidVideoRecorder
 import kotlinx.coroutines.delay
 import kotlin.math.hypot
@@ -151,6 +154,15 @@ fun AndroidLiveRecordingFullscreen(
         }
     }
     val elapsed = "%02d:%02d".format(elapsedMs / 60_000, (elapsedMs / 1_000) % 60)
+    val orientation = LocalConfiguration.current.orientation
+    val hudConfiguration = remember { AndroidHudConfigurationStore.load(activity.applicationContext) }
+    val hudProfile = if (orientation == Configuration.ORIENTATION_LANDSCAPE) hudConfiguration.landscape else hudConfiguration.portrait
+    val acceleration = recorder.liveSensorSample
+    val vibrationMS2 = kotlin.math.abs(
+        kotlin.math.sqrt(
+            acceleration.accelerationXG.pow(2) + acceleration.accelerationYG.pow(2) + acceleration.accelerationZG.pow(2),
+        ) - 1.0,
+    ) * 9.80665
 
     Surface(
         Modifier
@@ -176,6 +188,17 @@ fun AndroidLiveRecordingFullscreen(
                 modifier = Modifier.fillMaxSize(),
             )
             Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black.copy(alpha=.54f),Color.Transparent,Color.Black.copy(alpha=.78f)))))
+            AndroidConfiguredHudLayer(
+                profile = hudProfile,
+                telemetry = AndroidHudTelemetry(
+                    g = recorder.liveGForceSample,
+                    speedKmh = recorder.speedKmh,
+                    heartRateBpm = recorder.latestHeartRateBpm,
+                    vibrationMS2 = vibrationMS2,
+                    phase = recorder.ridePhase,
+                ),
+                modifier = Modifier.fillMaxSize(),
+            )
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 RideTrackerLogo()
                 Spacer(Modifier.width(10.dp))
@@ -183,6 +206,10 @@ fun AndroidLiveRecordingFullscreen(
                     Text(if (recorder.isRecording) "● REC $elapsed" else "KAMERA STARTET", Modifier.padding(horizontal=12.dp,vertical=8.dp), color=Color.White, style=MaterialTheme.typography.labelLarge)
                 }
                 Spacer(Modifier.weight(1f))
+                if (recorder.isRecording) {
+                    FilledTonalIconButton(onClick = stop) { Icon(Icons.Filled.Stop, "Aufnahme stoppen", tint = RideRose) }
+                    Spacer(Modifier.width(8.dp))
+                }
                 FilledTonalIconButton(onClick = minimize) { Icon(Icons.Filled.CloseFullscreen, "Vollbild verlassen") }
             }
 
@@ -194,17 +221,12 @@ fun AndroidLiveRecordingFullscreen(
                 }
             }
 
-            Column(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(12.dp), verticalArrangement=Arrangement.spacedBy(10.dp)) {
-                AndroidGForceTrail(recorder.liveGForceSample, Modifier.fillMaxWidth(), compact=true)
-                Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
-                    Surface(color=Color(0xCC071522),shape=MaterialTheme.shapes.medium) {
-                        Column(Modifier.padding(horizontal=14.dp,vertical=8.dp)) { Text("GESCHWINDIGKEIT",style=MaterialTheme.typography.labelSmall,color=RideMuted);Text("${"%.0f".format(recorder.speedKmh)} km/h",style=MaterialTheme.typography.titleLarge) }
-                    }
-                    Spacer(Modifier.weight(1f))
-                    if(recorder.isRecording) Button(onClick=stop,colors=ButtonDefaults.buttonColors(containerColor=RideRose),contentPadding=PaddingValues(horizontal=18.dp,vertical=12.dp)) { Icon(Icons.Filled.Stop,null);Spacer(Modifier.width(7.dp));Text("Stoppen") }
-                    else Text("Nach unten wischen: verkleinern",style=MaterialTheme.typography.labelSmall,color=RideMuted)
-                }
-            }
+            Text(
+                "Nach unten wischen: Vollbild verlassen",
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(12.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = RideMuted,
+            )
         }
     }
 }
