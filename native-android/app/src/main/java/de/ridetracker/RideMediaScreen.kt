@@ -22,6 +22,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import de.ridetracker.session.LocalProfileStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 
@@ -98,6 +101,22 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
     val context = LocalContext.current
     var rides by remember(profiles.activeProfileId) { mutableStateOf(loadRideMedia(context, profiles.activeProfileId)) }
     var targetRide by remember { mutableStateOf<AndroidRideMediaItem?>(null) }
+    var videoToExport by remember { mutableStateOf<File?>(null) }
+    var exportStatus by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val videoExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("video/mp4")) { destination ->
+        val source = videoToExport
+        if (destination != null && source != null) scope.launch {
+            exportStatus = runCatching {
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(destination, "w")?.use { output -> source.inputStream().use { it.copyTo(output) } }
+                        ?: error("Zieldatei konnte nicht geöffnet werden")
+                }
+                "Video erfolgreich in Dateien gespeichert."
+            }.getOrElse { "Videoexport fehlgeschlagen: ${it.message}" }
+            videoToExport = null
+        }
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         val ride = targetRide ?: return@rememberLauncherForActivityResult
         if (uri != null) runCatching {
@@ -113,6 +132,7 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
         item {
             Text("Gespeicherte Fahrten", style = MaterialTheme.typography.headlineMedium)
             Text("Videos ansehen und Titel, Park, Notizen, Kommentare, Bild und Bewertung bearbeiten.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
         }
         if (rides.isEmpty()) item { Text("Noch keine bewusst gespeicherte Fahrt vorhanden.") }
         items(rides, key = { it.id }) { ride ->
@@ -149,10 +169,14 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
                         }
                         ride.videoFile?.let { file ->
                             AndroidView(
-                                factory = { ctx -> VideoView(ctx).apply { setMediaController(MediaController(ctx).also { it.setAnchorView(this) }); setVideoURI(Uri.fromFile(file)) } },
-                                update = { it.setVideoURI(Uri.fromFile(file)) },
+                                factory = { ctx -> VideoView(ctx).apply { setMediaController(MediaController(ctx).also { it.setAnchorView(this) }); tag = file.absolutePath; setVideoURI(Uri.fromFile(file)) } },
+                                update = { view -> if (view.tag != file.absolutePath) { view.tag = file.absolutePath; view.setVideoURI(Uri.fromFile(file)) } },
                                 modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
                             )
+                            OutlinedButton(onClick = {
+                                videoToExport = file
+                                videoExporter.launch("RideTracker-${ride.id.take(8)}.mp4")
+                            }, modifier = Modifier.fillMaxWidth()) { Text("Video in Dateien speichern") }
                         } ?: Text("Für diese Fahrt ist keine Videodatei verfügbar.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         AndroidTrack3DViewer(ride.trackPoints, Modifier.fillMaxWidth())
                         OutlinedTextField(title, { title = it }, label = { Text("Bahn / Titel") }, modifier = Modifier.fillMaxWidth())

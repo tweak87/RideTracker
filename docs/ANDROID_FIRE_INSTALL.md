@@ -2,13 +2,13 @@
 
 Stand: 8. August 2026
 
-Für ein normales Android-Gerät wie das Huawei P20 Pro wird `INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.08.4.apk` verwendet. Der sichtbare App-Name **RideTracker DEVICE v4** und die neue Paket-ID `de.ridetracker.devicev4` vermeiden Konflikte mit älteren Debug-Signaturen.
+Für ein normales Android-Gerät wie das Huawei P20 Pro wird `INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.1.apk` verwendet. Der sichtbare App-Name **RideTracker DEVICE v5** und die neue Paket-ID `de.ridetracker.devicev5` vermeiden Konflikte mit älteren Debug-Signaturen.
 
 ## Welches Paket verwenden?
 
-- `INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.4.apk` ist der einzige empfohlene Testbuild für Fire OS 8. Die ähnlich große Datei `RideTracker-Android-…-debug.apk` ist **nicht** für diesen Installationstest gedacht.
-- Im Installationsdialog muss als App-Name **RideTracker FIRE 8 v4** stehen. Steht dort nur **RideTracker**, wurde die normale APK geöffnet.
-- Die Paket-ID `de.ridetracker.fire8v4` unterscheidet sich bewusst von `de.ridetracker` und vorherigen Fire-Test-IDs. Dadurch kann diese Diagnoseversion neben früheren RideTracker-Paketen installiert werden und umgeht deren Debug-Signaturkonflikte.
+- `INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.1.apk` ist der einzige empfohlene Testbuild für Fire OS 8. Die ähnlich große Datei `RideTracker-Android-…-debug.apk` ist **nicht** für diesen Installationstest gedacht.
+- Im Installationsdialog muss als App-Name **RideTracker FIRE 8 v5** stehen. Steht dort nur **RideTracker**, wurde die normale APK geöffnet.
+- Die Paket-ID `de.ridetracker.fire8v5` unterscheidet sich bewusst von `de.ridetracker` und vorherigen Fire-Test-IDs. Dadurch kann diese Diagnoseversion neben früheren RideTracker-Paketen installiert werden und umgeht deren Debug-Signaturkonflikte.
 - Der Build unterstützt Android API 21 und neuer, also Fire OS 5 und neuer. Fire OS 4 und ältere Versionen werden von der aktuellen AndroidX-/Compose-Oberfläche nicht unterstützt.
 - Das Fire-Paket enthält nur die auf Fire-Tablets benötigten ARM-Varianten (`armeabi-v7a` und `arm64-v8a`). Native Bibliotheken werden im älteren, auf Fire OS robusteren Extraktionsformat verpackt.
 
@@ -16,7 +16,7 @@ Für ein normales Android-Gerät wie das Huawei P20 Pro wird `INSTALL-RideTracke
 
 1. Unter **Einstellungen → Sicherheit und Datenschutz → Apps unbekannter Herkunft** die verwendete Download-App (Silk oder Dateien) freigeben.
 2. Mindestens 200 MB freien Speicher sicherstellen.
-3. Die Datei `INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.4.apk` vollständig herunterladen und danach aus **Dateien/Downloads** öffnen. Im Installer den Namen **RideTracker FIRE 8 v4** kontrollieren.
+3. Die Datei `INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.1.apk` vollständig herunterladen und danach aus **Dateien/Downloads** öffnen. Im Installer den Namen **RideTracker FIRE 8 v5** kontrollieren.
 4. Wird weiterhin nur „App wurde nicht installiert“ angezeigt, Fire-OS-Version, Modell/Generation, freien Speicher und den Namen der heruntergeladenen APK notieren.
 
 Nach erfolgreicher Installation kann unter **Menü → Kompatibilität & Diagnose** ein vollständiger Geräte- und Sensorbericht kopiert und bei einem Fehler weitergegeben werden.

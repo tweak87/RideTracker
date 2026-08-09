@@ -112,11 +112,17 @@ class AndroidRideContextStore(private val context: Context) {
     var busy by mutableStateOf(false); private set
     var status by mutableStateOf("Noch keine externen Standortdaten geladen."); private set
     var weatherEnabled by mutableStateOf(preferences.getBoolean("weatherEnabled", false)); private set
+    var autoParkLookupEnabled by mutableStateOf(preferences.getBoolean("autoParkLookupEnabled", true)); private set
     var radiusM by mutableStateOf(preferences.getInt("radiusM", 25_000)); private set
 
     fun updateWeatherEnabled(enabled: Boolean) {
         weatherEnabled = enabled
         preferences.edit().putBoolean("weatherEnabled", enabled).apply()
+    }
+
+    fun updateAutoParkLookupEnabled(enabled: Boolean) {
+        autoParkLookupEnabled = enabled
+        preferences.edit().putBoolean("autoParkLookupEnabled", enabled).apply()
     }
 
     fun setRadius(radius: Int) {
@@ -125,6 +131,11 @@ class AndroidRideContextStore(private val context: Context) {
     }
 
     fun resetRideMedia() {
+        currentLocation = null
+        parks = emptyList()
+        attractions = emptyList()
+        selectedPark = null
+        selectedAttraction = null
         weatherStart = null
         weatherEnd = null
         thumbnail = null
@@ -194,9 +205,17 @@ class AndroidRideContextStore(private val context: Context) {
     suspend fun prepareForRecording() {
         runCatching {
             if (currentLocation == null) currentLocation = requestCurrentLocation()
-            if (preferences.getBoolean("externalLookupConsent", false) && parks.isEmpty()) loadNearbyParks()
             if (weatherEnabled) captureWeather("start")
         }.onFailure { status = "Fahrt startet lokal; Kontextabruf fehlgeschlagen: ${it.message}" }
+    }
+
+    suspend fun completeAfterRecording() {
+        val failures = mutableListOf<String>()
+        if (weatherEnabled) runCatching { captureWeather("end") }
+            .onFailure { failures += "Wetter: ${it.message}" }
+        if (autoParkLookupEnabled) runCatching { loadNearbyParks() }
+            .onFailure { failures += "Parks: ${it.message}" }
+        if (failures.isNotEmpty()) status = "Fahrt ist lokal vollständig; Kontext teilweise nicht verfügbar · ${failures.joinToString(" · ")}"
     }
 
     fun markExternalLookupConsent() {
@@ -322,18 +341,26 @@ class AndroidRideContextStore(private val context: Context) {
     }
 
     private suspend fun postOverpass(query: String): JSONObject = withContext(Dispatchers.IO) {
-        val connection = URL("https://overpass-api.de/api/interpreter").openConnection() as HttpURLConnection
-        try {
-            connection.requestMethod = "POST"
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 20_000
-            connection.doOutput = true
-            connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-            connection.setRequestProperty("User-Agent", USER_AGENT)
-            val body = "data=" + URLEncoder.encode(query, StandardCharsets.UTF_8.toString())
-            connection.outputStream.use { it.write(body.toByteArray(StandardCharsets.UTF_8)) }
-            readJsonResponse(connection)
-        } finally { connection.disconnect() }
+        val failures = mutableListOf<String>()
+        for (endpoint in OVERPASS_ENDPOINTS) {
+            val result = runCatching {
+                val connection = URL(endpoint).openConnection() as HttpURLConnection
+                try {
+                    connection.requestMethod = "POST"
+                    connection.connectTimeout = 12_000
+                    connection.readTimeout = 22_000
+                    connection.doOutput = true
+                    connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                    connection.setRequestProperty("User-Agent", USER_AGENT)
+                    val body = "data=" + URLEncoder.encode(query, StandardCharsets.UTF_8.toString())
+                    connection.outputStream.use { it.write(body.toByteArray(StandardCharsets.UTF_8)) }
+                    readJsonResponse(connection)
+                } finally { connection.disconnect() }
+            }
+            result.getOrNull()?.let { return@withContext it }
+            failures += "${URL(endpoint).host}: ${result.exceptionOrNull()?.message ?: "unbekannter Fehler"}"
+        }
+        throw IllegalStateException("Kartendienste nicht erreichbar (${failures.joinToString("; ")})")
     }
 
     private suspend fun fetchJson(url: String): JSONObject = withContext(Dispatchers.IO) {
@@ -403,6 +430,11 @@ class AndroidRideContextStore(private val context: Context) {
         const val OSM_ATTRIBUTION = "Kartendaten © OpenStreetMap-Mitwirkende"
         const val WEATHER_ATTRIBUTION = "Wetterdaten: Open-Meteo.com · CC BY 4.0"
         private const val USER_AGENT = "RideTracker-Android/2026.08.08 (https://github.com/tweak87/RideTracker)"
+        private val OVERPASS_ENDPOINTS = listOf(
+            "https://overpass.kumi.systems/api/interpreter",
+            "https://overpass-api.de/api/interpreter",
+            "https://overpass.private.coffee/api/interpreter",
+        )
 
         fun distanceMeters(latA: Double, lonA: Double, latB: Double, lonB: Double): Double {
             val result = FloatArray(1)

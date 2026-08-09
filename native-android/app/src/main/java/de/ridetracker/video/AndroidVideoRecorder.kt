@@ -3,6 +3,7 @@ package de.ridetracker.video
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.MediaMetadataRetriever
 import android.os.SystemClock
 import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
@@ -22,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import kotlinx.coroutines.delay
 import java.io.File
 
 @androidx.annotation.OptIn(markerClass = [ExperimentalCamera2Interop::class])
@@ -37,9 +39,15 @@ class AndroidVideoRecorder(
         private set
     var isConfiguring by mutableStateOf(false)
         private set
+    var isFinalizing by mutableStateOf(false)
+        private set
     var status by mutableStateOf("Video bereit zur Initialisierung")
         private set
     var lastVideoFile by mutableStateOf<File?>(null)
+        private set
+    var playableVideoFile by mutableStateOf<File?>(null)
+        private set
+    var videoDurationMs by mutableStateOf(0L)
         private set
     var startOffsetSeconds by mutableStateOf(0.0)
         private set
@@ -142,6 +150,9 @@ class AndroidVideoRecorder(
         val cameraStartNs = SystemClock.elapsedRealtimeNanos()
         startOffsetSeconds = (cameraStartNs - sensorStartNs) / 1_000_000_000.0
         lastVideoFile = file
+        playableVideoFile = null
+        videoDurationMs = 0L
+        isFinalizing = false
 
         var pending = capture.output.prepareRecording(context, output)
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
@@ -158,14 +169,61 @@ class AndroidVideoRecorder(
                 is VideoRecordEvent.Finalize -> {
                     isStarting = false
                     isRecording = false
+                    isFinalizing = false
                     activeRecording = null
-                    status = if (event.hasError()) "Videofehler: ${event.error}" else "Video gespeichert: ${file.name}"
+                    if (event.hasError()) {
+                        playableVideoFile = null
+                        status = "Videofehler beim Abschließen: ${event.error}"
+                    } else {
+                        val duration = validateVideo(file)
+                        if (duration != null) {
+                            videoDurationMs = duration
+                            playableVideoFile = file
+                            status = "Video sicher gespeichert: ${file.name}"
+                        } else {
+                            playableVideoFile = null
+                            status = "Video wurde geschrieben, ist aber nicht abspielbar"
+                        }
+                    }
                 }
             }
         }
     }
 
     fun stop() {
-        activeRecording?.stop()
+        val recording = activeRecording
+        if (recording == null) {
+            isStarting = false
+            isRecording = false
+            return
+        }
+        isFinalizing = true
+        status = "Video wird abgeschlossen und geprüft …"
+        recording.stop()
+    }
+
+    suspend fun awaitFinalized(timeoutMs: Long = 15_000L): File? {
+        var waited = 0L
+        while ((isRecording || isStarting || isFinalizing || activeRecording != null) && waited < timeoutMs) {
+            delay(100L)
+            waited += 100L
+        }
+        if (playableVideoFile == null && waited >= timeoutMs) status = "Videoabschluss dauert zu lange; Fahrtdaten bleiben erhalten"
+        return playableVideoFile
+    }
+
+    private fun validateVideo(file: File): Long? {
+        if (!file.exists() || file.length() < 4_096L) return null
+        return runCatching {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(file.absolutePath)
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+                    ?.takeIf { it > 0L }
+                    ?: 1L
+            } finally {
+                retriever.release()
+            }
+        }.getOrNull()
     }
 }

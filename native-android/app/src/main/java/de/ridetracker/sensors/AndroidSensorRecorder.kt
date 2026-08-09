@@ -30,6 +30,17 @@ data class AndroidLiveGForceSample(
     val longitudinalG: Double = 0.0,
 )
 
+data class AndroidLiveSensorSample(
+    val timestampMs: Long = 0L,
+    val accelerationXG: Double = 0.0,
+    val accelerationYG: Double = 0.0,
+    val accelerationZG: Double = 0.0,
+    val gyroscopeX: Double = 0.0,
+    val gyroscopeY: Double = 0.0,
+    val gyroscopeZ: Double = 0.0,
+    val pressureHpa: Double? = null,
+)
+
 class AndroidSensorRecorder(private val context: Context) : SensorEventListener {
     var isRecording by mutableStateOf(false); private set
     var status by mutableStateOf("Bereit"); private set
@@ -56,6 +67,7 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     var heartRateSource by mutableStateOf<String?>(null); private set
     var locationProviderStatus by mutableStateOf("Android-Systemstandort bereit"); private set
     var liveGForceSample by mutableStateOf(AndroidLiveGForceSample()); private set
+    var liveSensorSample by mutableStateOf(AndroidLiveSensorSample()); private set
 
     val coreAdapter = RideTrackerCoreAdapter()
 
@@ -88,10 +100,30 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     private var videoFilename: String? = null
     private var videoStartOffsetSeconds = 0.0
     private var rideContextSnapshot: AndroidRideContextSnapshot? = null
+    private var diagnosticsActive = false
+    private var lastLiveSensorPublishMs = 0L
+    private var rawAcceleration = Vector3(0.0, 0.0, 0.0)
+    private var rawGyroscope = Vector3(0.0, 0.0, 0.0)
+    private var rawPressureHpa: Double? = null
 
     init {
+        hasBarometer = pressure != null
         accelerometer?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
         rotationVector?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
+    }
+
+    fun startDiagnostics() {
+        diagnosticsActive = true
+        gyroscope?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
+        pressure?.also { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
+    }
+
+    fun stopDiagnostics() {
+        diagnosticsActive = false
+        if (!isRecording) {
+            gyroscope?.let { sensorManager.unregisterListener(this, it) }
+            pressure?.let { sensorManager.unregisterListener(this, it) }
+        }
     }
 
     fun calibrateNow(): Boolean {
@@ -127,7 +159,10 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     fun stop() {
         if (!isRecording) return
         isRecording = false; locationProvider.stopUpdates()
-        gyroscope?.let { sensorManager.unregisterListener(this, it) }; pressure?.let { sensorManager.unregisterListener(this, it) }
+        if (!diagnosticsActive) {
+            gyroscope?.let { sensorManager.unregisterListener(this, it) }
+            pressure?.let { sensorManager.unregisterListener(this, it) }
+        }
         coreAdapter.recordingStopped()
         updateQuality(); status = "Beendet: $sampleCount Samples"
     }
@@ -186,6 +221,8 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
         }
         if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
             val vector = Vector3(event.values[0].toDouble() / SensorManager.GRAVITY_EARTH, event.values[1].toDouble() / SensorManager.GRAVITY_EARTH, event.values[2].toDouble() / SensorManager.GRAVITY_EARTH)
+            rawAcceleration = vector
+            publishLiveSensors(event.timestamp)
             calibrationBuffer.addLast(vector); while (calibrationBuffer.size > 250) calibrationBuffer.removeFirst(); calibrationSampleCount = calibrationBuffer.size
             if (!isRecording) return
             val t = (event.timestamp - recordingStartNs) / 1_000_000_000.0
@@ -208,6 +245,15 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
             sessionSamples += RideSessionSample(t, processed.normalG, processed.lateralG, processed.longitudinalG, processed.totalG, if (hasBarometer) relativeAltitudeM else null, latestSpeedMs, loc?.latitude, loc?.longitude, loc?.accuracy?.toDouble(), ridePhase, qualityScore, heartRateBpm = routedHeartRate?.value)
             if (sampleCount % 50 == 0) updateQuality(); return
         }
+        if (event.sensor.type == Sensor.TYPE_GYROSCOPE) {
+            rawGyroscope = Vector3(event.values[0].toDouble(), event.values[1].toDouble(), event.values[2].toDouble())
+            publishLiveSensors(event.timestamp)
+            return
+        }
+        if (event.sensor.type == Sensor.TYPE_PRESSURE) {
+            rawPressureHpa = event.values[0].toDouble()
+            publishLiveSensors(event.timestamp)
+        }
         if (!isRecording) return
         val t = (event.timestamp - recordingStartNs) / 1_000_000_000.0
         if (event.sensor.type == Sensor.TYPE_PRESSURE) {
@@ -219,6 +265,22 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+
+    private fun publishLiveSensors(timestampNs: Long) {
+        val timestampMs = timestampNs / 1_000_000L
+        if (timestampMs - lastLiveSensorPublishMs < 50L) return
+        lastLiveSensorPublishMs = timestampMs
+        liveSensorSample = AndroidLiveSensorSample(
+            timestampMs = timestampMs,
+            accelerationXG = rawAcceleration.x,
+            accelerationYG = rawAcceleration.y,
+            accelerationZG = rawAcceleration.z,
+            gyroscopeX = rawGyroscope.x,
+            gyroscopeY = rawGyroscope.y,
+            gyroscopeZ = rawGyroscope.z,
+            pressureHpa = rawPressureHpa,
+        )
+    }
 
     private fun handleLocation(location: Location) {
         if (!isRecording) return

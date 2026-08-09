@@ -3,8 +3,10 @@ package de.ridetracker
 import android.Manifest
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.Settings
 import android.widget.MediaController
 import android.widget.VideoView
 import androidx.activity.ComponentActivity
@@ -27,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.camera.view.PreviewView
@@ -39,8 +42,10 @@ import de.ridetracker.sensors.AndroidSensorRecorder
 import de.ridetracker.session.LocalProfileStore
 import de.ridetracker.video.AndroidVideoRecorder
 import kotlinx.coroutines.async
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 
@@ -101,9 +106,11 @@ fun FunctionalRideTrackerApp(activity: Activity) {
     var starting by remember { mutableStateOf(false) }
     var stopping by remember { mutableStateOf(false) }
     var permissionMessage by remember { mutableStateOf("") }
+    var permissionSettingsMessage by remember { mutableStateOf<String?>(null) }
     var pendingTarget by remember { mutableStateOf<FunctionalSection?>(null) }
     var showUnsavedDialog by remember { mutableStateOf(false) }
     var recordingMinimized by remember { mutableStateOf(false) }
+    var sessionUsesVideo by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) videoRecorder.configure()
@@ -114,6 +121,7 @@ fun FunctionalRideTrackerApp(activity: Activity) {
         if (recorder.isRecording || starting) return
         recordingMinimized = !withVideo
         starting = true
+        sessionUsesVideo = withVideo
         permissionMessage = "Sensoren, GPS und Kalibrierung werden automatisch vorbereitet …"
         scope.launch {
             if (withVideo) {
@@ -192,10 +200,17 @@ fun FunctionalRideTrackerApp(activity: Activity) {
                 val cameraGranted = !pendingVideo || ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
                 if (cameraGranted) {
                     permissionMessage = if (locationGranted) "Berechtigungen erteilt." else "GPS nicht freigegeben · Kamera und Kraftsensoren starten trotzdem."
+                    if (!locationGranted) permissionSettingsMessage = "Der Standortzugriff ist in den App-Einstellungen deaktiviert. Ohne ihn werden Park, Strecke und GPS-Geschwindigkeit nicht gespeichert."
                     beginAutomaticRecording(pendingVideo)
-                } else permissionMessage = "Die Kamera muss für eine Videoaufnahme freigegeben werden."
+                } else {
+                    permissionMessage = "Die Kamera muss für eine Videoaufnahme freigegeben werden."
+                    permissionSettingsMessage = "Die Kamerafreigabe fehlt. Öffne die App-Einstellungen und erlaube Kamera; für Ton zusätzlich Mikrofon."
+                }
             }
-            PendingPermissionAction.PARK_SEARCH -> if (locationGranted) loadNearbyParks() else permissionMessage = "Für die Parkkarte wird die Standortfreigabe benötigt."
+            PendingPermissionAction.PARK_SEARCH -> if (locationGranted) loadNearbyParks() else {
+                permissionMessage = "Für die Parkkarte wird die Standortfreigabe benötigt."
+                permissionSettingsMessage = "Standort ist deaktiviert. Aktiviere unter App-Einstellungen → Berechtigungen den Standortzugriff."
+            }
             PendingPermissionAction.NONE -> Unit
         }
         pendingPermissionAction = PendingPermissionAction.NONE
@@ -228,9 +243,14 @@ fun FunctionalRideTrackerApp(activity: Activity) {
         videoRecorder.stop()
         recorder.stop()
         scope.launch {
-            runCatching { if (rideContext.weatherEnabled) rideContext.captureWeather("end") }
+            val finalizedVideo = if (sessionUsesVideo) videoRecorder.awaitFinalized() else null
+            rideContext.completeAfterRecording()
             recorder.attachRideContext(rideContext.snapshot())
-            permissionMessage = "Aufnahme beendet. Fahrt kann jetzt bewusst gespeichert werden."
+            permissionMessage = when {
+                sessionUsesVideo && finalizedVideo == null -> "Fahrtdaten beendet; das Video konnte nicht finalisiert werden. ${videoRecorder.status}"
+                rideContext.autoParkLookupEnabled -> "Aufnahme beendet. Parkauswahl und Karte sind jetzt bereit; die Fahrt kann gespeichert werden."
+                else -> "Aufnahme beendet. Fahrt kann jetzt bewusst gespeichert werden."
+            }
             stopping = false
             recordingMinimized = false
         }
@@ -238,12 +258,14 @@ fun FunctionalRideTrackerApp(activity: Activity) {
 
     fun saveRide(): Boolean {
         return runCatching {
-            recorder.attachVideo(videoRecorder.lastVideoFile?.takeIf(File::exists)?.name, videoRecorder.startOffsetSeconds)
+            if (sessionUsesVideo && videoRecorder.isFinalizing) error("Das Video wird noch abgeschlossen. Bitte einen Moment warten.")
+            recorder.attachVideo(if (sessionUsesVideo) videoRecorder.playableVideoFile?.takeIf(File::exists)?.name else null, videoRecorder.startOffsetSeconds)
             recorder.attachRideContext(rideContext.snapshot())
             recorder.saveSession().also { require(it.exists() && it.length() > 0L) { "Die Fahrtdaten wurden nicht geschrieben." } }
         }.onSuccess { file ->
             permissionMessage = "Fahrt erfolgreich gespeichert: ${file.name}"
             rideContext.resetRideMedia()
+            sessionUsesVideo = false
         }.onFailure { error ->
             permissionMessage = "Speichern fehlgeschlagen: ${error.message ?: "unbekannter Fehler"}"
         }.isSuccess
@@ -278,6 +300,21 @@ fun FunctionalRideTrackerApp(activity: Activity) {
             }
         },
     )
+
+    permissionSettingsMessage?.let { guidance ->
+        AlertDialog(
+            onDismissRequest = { permissionSettingsMessage = null },
+            title = { Text("Berechtigung in App-Einstellungen") },
+            text = { Text(guidance) },
+            confirmButton = {
+                Button(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    permissionSettingsMessage = null
+                }) { Text("App-Einstellungen öffnen") }
+            },
+            dismissButton = { TextButton(onClick = { permissionSettingsMessage = null }) { Text("Später") } },
+        )
+    }
 
     Box(
         Modifier
@@ -367,12 +404,12 @@ fun FunctionalRideTrackerApp(activity: Activity) {
         ) { padding ->
             when (section) {
                 FunctionalSection.HOME -> AndroidDashboard(Modifier.padding(padding), profiles.activeProfile.name, navigate)
-                FunctionalSection.RECORD -> AndroidRecording(Modifier.padding(padding), recorder, videoRecorder, rideContext, stopping, ::requestParkSearch, ::saveRide) { recordingMinimized = false }
+                FunctionalSection.RECORD -> AndroidRecording(Modifier.padding(padding), recorder, videoRecorder, rideContext, stopping, sessionUsesVideo, ::requestParkSearch, ::saveRide) { recordingMinimized = false }
                 FunctionalSection.RIDES -> RideMediaScreen(Modifier.padding(padding), profiles)
                 FunctionalSection.COMMUNITY -> AndroidCommunityOverview(Modifier.padding(padding), profiles.activeProfile.name)
                 FunctionalSection.PROFILE -> AndroidProfileScreen(Modifier.padding(padding), profiles)
                 FunctionalSection.MAP -> AndroidRideMapList(Modifier.padding(padding), context)
-                FunctionalSection.DEVICES -> AndroidDeviceCenter(Modifier.padding(padding), devices, heartRate)
+                FunctionalSection.DEVICES -> AndroidDeviceCenter(Modifier.padding(padding), devices, heartRate, recorder)
                 FunctionalSection.SETTINGS -> AndroidSettings(Modifier.padding(padding), recorder, heartRate, { navigate(FunctionalSection.HUD) }, { navigate(FunctionalSection.DEVICES) }, { navigate(FunctionalSection.COMPATIBILITY) })
                 FunctionalSection.HUD -> AndroidHudFullscreenEditor(Modifier.padding(padding))
                 FunctionalSection.STATISTICS -> StatisticsScreen(Modifier.padding(padding))
@@ -521,20 +558,46 @@ private fun AndroidRecording(
     video: AndroidVideoRecorder,
     rideContext: AndroidRideContextStore,
     stopping: Boolean,
+    sessionUsesVideo: Boolean,
     requestParkSearch: () -> Unit,
     saveRide: () -> Boolean,
     openFullscreen: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var exportStatus by remember { mutableStateOf("") }
+    val exportVideo = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("video/mp4")) { destination ->
+        val source = video.playableVideoFile
+        if (destination != null && source != null) scope.launch {
+            exportStatus = runCatching {
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(destination, "w")?.use { output -> source.inputStream().use { it.copyTo(output) } }
+                        ?: error("Zieldatei konnte nicht geöffnet werden")
+                }
+                "Video wurde am ausgewählten Ort gespeichert."
+            }.getOrElse { "Videoexport fehlgeschlagen: ${it.message}" }
+        }
+    }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Neue Fahrt", style = MaterialTheme.typography.headlineMedium)
-        val videoFile = video.lastVideoFile
-        if (!recorder.isRecording && videoFile != null && videoFile.exists()) {
+        val videoFile = video.playableVideoFile
+        if (!recorder.isRecording && sessionUsesVideo && videoFile != null && videoFile.exists()) {
             Text("Videovorschau", style = MaterialTheme.typography.titleMedium)
             AndroidView(
-                factory = { context -> VideoView(context).apply { setMediaController(MediaController(context).also { it.setAnchorView(this) }); setVideoURI(Uri.fromFile(videoFile)) } },
-                update = { it.setVideoURI(Uri.fromFile(videoFile)) },
+                factory = { context -> VideoView(context).apply { setMediaController(MediaController(context).also { it.setAnchorView(this) }); tag = videoFile.absolutePath; setVideoURI(Uri.fromFile(videoFile)) } },
+                update = { view -> if (view.tag != videoFile.absolutePath) { view.tag = videoFile.absolutePath; view.setVideoURI(Uri.fromFile(videoFile)) } },
                 modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
             )
+            OutlinedButton(onClick = { exportVideo.launch("RideTracker-${recorder.sessionId.take(8)}.mp4") }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.Download, null); Spacer(Modifier.width(7.dp)); Text("Video in Dateien speichern")
+            }
+            if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
+        } else if (video.isFinalizing) {
+            Card(Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(24.dp)); Spacer(Modifier.width(10.dp)); Text("Video wird abgeschlossen und auf Abspielbarkeit geprüft …")
+                }
+            }
         } else Surface(color = Color.Black, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
             Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f), contentAlignment = Alignment.Center) {
                 AndroidView(
@@ -566,8 +629,8 @@ private fun AndroidRecording(
             }
         }
         AndroidGForceTrail(recorder.liveGForceSample, Modifier.fillMaxWidth())
-        AndroidRideContextPanel(rideContext, requestParkSearch)
-        Button(enabled = !recorder.isRecording && !stopping && recorder.sampleCount > 0 && recorder.lastSavedPath == null, onClick = { saveRide() }, modifier = Modifier.fillMaxWidth()) { Text("Fahrt bewusst speichern") }
+        AndroidRideContextPanel(rideContext, requestParkSearch, parkLookupAllowed = !recorder.isRecording && recorder.sampleCount > 0)
+        Button(enabled = !recorder.isRecording && !stopping && !video.isFinalizing && recorder.sampleCount > 0 && recorder.lastSavedPath == null, onClick = { saveRide() }, modifier = Modifier.fillMaxWidth()) { Text("Fahrt bewusst speichern") }
         Spacer(Modifier.height(190.dp))
     }
 }

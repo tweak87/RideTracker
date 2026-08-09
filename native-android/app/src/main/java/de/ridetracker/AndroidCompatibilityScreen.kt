@@ -45,7 +45,7 @@ internal fun AndroidCompatibilityScreen(modifier: Modifier) {
         DiagnosticCard("Installation", listOf(
             "Mindestversion" to (snapshot.api >= 21),
             "Freier Speicher (${snapshot.freeStorageMb} MB)" to (snapshot.freeStorageMb >= 200),
-            "Fire-Testpaket" to snapshot.packageId.endsWith(".fire8v4"),
+            "Fire-Testpaket" to snapshot.packageId.endsWith(".fire8v5"),
         ))
         DiagnosticCard("Standort ohne Google-Dienste", listOf(
             "GPS-Anbieter" to snapshot.providers.contains(LocationManager.GPS_PROVIDER),
