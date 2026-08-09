@@ -31,6 +31,7 @@ import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.sin
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AndroidRideContextPanel(
     store: AndroidRideContextStore,
@@ -52,6 +53,8 @@ fun AndroidRideContextPanel(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            CatalogSelection(store)
 
             Text("Umkreis", style = MaterialTheme.typography.labelMedium)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -142,6 +145,10 @@ fun AndroidRideContextPanel(
                 }
             }
 
+            store.officialFacts?.let { facts ->
+                OfficialFactsCard(facts)
+            }
+
             weatherSummary(store.weatherStart)?.let {
                 HorizontalDivider()
                 Text("Wetter gespeichert", style = MaterialTheme.typography.titleMedium)
@@ -200,6 +207,113 @@ fun AndroidRideContextPanel(
         onManual = { store.selectManualAttraction(it); showAttractionPicker = false },
         onDismiss = { showAttractionPicker = false },
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CatalogSelection(store: AndroidRideContextStore) {
+    val scope = rememberCoroutineScope()
+    var countryExpanded by remember { mutableStateOf(false) }
+    var parkExpanded by remember { mutableStateOf(false) }
+    var attractionExpanded by remember { mutableStateOf(false) }
+    val selectedCountry = store.catalogCountries.firstOrNull { it.code == store.selectedCountryCode }
+    val selectedCatalogPark = store.catalogParks.firstOrNull { it.id == store.selectedPark?.id }
+
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .32f),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Text("Parkkatalog", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Standortvorschläge und eine manuelle Auswahl nach Land funktionieren unabhängig voneinander.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ExposedDropdownMenuBox(expanded = countryExpanded, onExpandedChange = { countryExpanded = it }) {
+                OutlinedTextField(
+                    value = selectedCountry?.name.orEmpty(),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Land") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(countryExpanded) },
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                )
+                ExposedDropdownMenu(expanded = countryExpanded, onDismissRequest = { countryExpanded = false }) {
+                    store.catalogCountries.forEach { country ->
+                        DropdownMenuItem(
+                            text = { Text(country.name) },
+                            onClick = { store.selectCountry(country.code); countryExpanded = false },
+                        )
+                    }
+                }
+            }
+            ExposedDropdownMenuBox(expanded = parkExpanded, onExpandedChange = { parkExpanded = it }) {
+                OutlinedTextField(
+                    value = selectedCatalogPark?.name ?: store.selectedPark?.name.orEmpty(),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Park auswählen · ${store.catalogParks.size} verfügbar") },
+                    placeholder = { Text("Park antippen") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(parkExpanded) },
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                )
+                ExposedDropdownMenu(expanded = parkExpanded, onDismissRequest = { parkExpanded = false }) {
+                    store.catalogParks.forEach { park ->
+                        DropdownMenuItem(
+                            text = { Text(park.name) },
+                            onClick = { scope.launch { store.selectCatalogPark(park) }; parkExpanded = false },
+                        )
+                    }
+                }
+            }
+            if (selectedCatalogPark != null) {
+                ExposedDropdownMenuBox(expanded = attractionExpanded, onExpandedChange = { attractionExpanded = it }) {
+                    OutlinedTextField(
+                        value = store.selectedAttraction?.name.orEmpty(),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Attraktion · ${selectedCatalogPark.attractions.size} verfügbar") },
+                        placeholder = { Text("Gefahrene Attraktion wählen") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(attractionExpanded) },
+                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                    )
+                    ExposedDropdownMenu(expanded = attractionExpanded, onDismissRequest = { attractionExpanded = false }) {
+                        selectedCatalogPark.attractions.forEach { attraction ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(attraction.name)
+                                        attraction.manufacturer?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+                                    }
+                                },
+                                onClick = { store.selectCatalogAttraction(attraction); attractionExpanded = false },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OfficialFactsCard(facts: de.ridetracker.community.OfficialRideFacts) {
+    val context = LocalContext.current
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = .42f))) {
+        Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Offizielle Referenz", style = MaterialTheme.typography.titleMedium)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                facts.maxSpeedKmh?.let { AssistChip(onClick = {}, label = { Text("${it.toInt()} km/h") }) }
+                facts.heightM?.let { AssistChip(onClick = {}, label = { Text("${"%.1f".format(it)} m") }) }
+                facts.inversions?.let { AssistChip(onClick = {}, label = { Text("$it Inversionen") }) }
+            }
+            Text("Quelle: ${facts.sourceTitle} · geprüft ${facts.verifiedAt}", style = MaterialTheme.typography.labelSmall)
+            TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(facts.sourceUrl))) }) {
+                Text("Offizielle Quelle öffnen")
+            }
+        }
+    }
 }
 
 @Composable

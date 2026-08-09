@@ -90,6 +90,8 @@ data class RideSessionDocument(
     val videoHudEmbedded: Boolean = false,
     val privateNote: String = "",
     val communityComment: String = "",
+    val publicationStatus: String = "private",
+    val shareExactLocation: Boolean = false,
     val heartRateSource: String? = null,
     val configurationSnapshot: CoreNativeConfigurationSnapshot? = null,
     val rideContext: AndroidRideContextSnapshot? = null,
@@ -117,6 +119,11 @@ data class RideSessionDocument(
             put("hudTrailSeconds", 3)
         })
         put("notes", JSONObject().apply { put("private", privateNote); put("privateNote", privateNote); put("comment", communityComment); put("communityComment", communityComment) })
+        put("community", JSONObject().apply {
+            put("publicationStatus", publicationStatus)
+            put("shareExactLocation", shareExactLocation)
+            put("uploadState", "local_only")
+        })
         configurationSnapshot?.let { put("configurationSnapshot", it.toJson()) }
         val heartRates = samples.mapNotNull { it.heartRateBpm }
         put("heartRate", JSONObject().apply {

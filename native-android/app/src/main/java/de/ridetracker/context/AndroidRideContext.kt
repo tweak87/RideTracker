@@ -8,6 +8,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.text.HtmlCompat
+import de.ridetracker.community.CatalogAttraction
+import de.ridetracker.community.CatalogCountry
+import de.ridetracker.community.CatalogPark
+import de.ridetracker.community.OfficialRideFacts
+import de.ridetracker.community.RideCatalog
 import de.ridetracker.location.AndroidPlatformLocationProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,6 +24,7 @@ import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Instant
+import java.util.Locale
 import kotlin.math.roundToInt
 
 data class GeoPoint(
@@ -91,6 +97,7 @@ data class StockImageCandidate(
 data class AndroidRideContextSnapshot(
     val park: NearbyPark?,
     val attraction: NearbyAttraction?,
+    val officialFacts: OfficialRideFacts?,
     val weatherStart: WeatherSnapshot?,
     val weatherEnd: WeatherSnapshot?,
     val thumbnail: RideThumbnail?,
@@ -105,6 +112,7 @@ class AndroidRideContextStore(private val context: Context) {
     var attractions by mutableStateOf<List<NearbyAttraction>>(emptyList()); private set
     var selectedPark by mutableStateOf<NearbyPark?>(null); private set
     var selectedAttraction by mutableStateOf<NearbyAttraction?>(null); private set
+    var officialFacts by mutableStateOf<OfficialRideFacts?>(null); private set
     var weatherStart by mutableStateOf<WeatherSnapshot?>(null); private set
     var weatherEnd by mutableStateOf<WeatherSnapshot?>(null); private set
     var thumbnail by mutableStateOf<RideThumbnail?>(null); private set
@@ -114,6 +122,15 @@ class AndroidRideContextStore(private val context: Context) {
     var weatherEnabled by mutableStateOf(preferences.getBoolean("weatherEnabled", false)); private set
     var autoParkLookupEnabled by mutableStateOf(preferences.getBoolean("autoParkLookupEnabled", true)); private set
     var radiusM by mutableStateOf(preferences.getInt("radiusM", 25_000)); private set
+    var selectedCountryCode by mutableStateOf(
+        preferences.getString("catalogCountry", null)
+            ?.takeIf { code -> RideCatalog.countries.any { it.code == code } }
+            ?: Locale.getDefault().country.takeIf { code -> RideCatalog.countries.any { it.code == code } }
+            ?: "DE",
+    ); private set
+
+    val catalogCountries: List<CatalogCountry> get() = RideCatalog.countries
+    val catalogParks: List<CatalogPark> get() = RideCatalog.parksForCountry(selectedCountryCode)
 
     fun updateWeatherEnabled(enabled: Boolean) {
         weatherEnabled = enabled
@@ -136,6 +153,7 @@ class AndroidRideContextStore(private val context: Context) {
         attractions = emptyList()
         selectedPark = null
         selectedAttraction = null
+        officialFacts = null
         weatherStart = null
         weatherEnd = null
         thumbnail = null
@@ -144,6 +162,7 @@ class AndroidRideContextStore(private val context: Context) {
 
     fun selectAttraction(attraction: NearbyAttraction?) {
         selectedAttraction = attraction
+        officialFacts = RideCatalog.findAttraction(attraction?.id)?.second?.facts
         status = attraction?.let { "Ausgewählt: ${it.name} · ${selectedPark?.name ?: "Park"}" }
             ?: "Bitte die passende Attraktion auswählen."
     }
@@ -166,11 +185,63 @@ class AndroidRideContextStore(private val context: Context) {
         )
     }
 
+    fun selectCountry(code: String) {
+        if (RideCatalog.countries.none { it.code == code }) return
+        selectedCountryCode = code
+        preferences.edit().putString("catalogCountry", code).apply()
+        status = "${RideCatalog.countries.first { it.code == code }.name}: ${catalogParks.size} Parks im Offline-Katalog."
+    }
+
+    suspend fun selectCatalogPark(park: CatalogPark) {
+        selectCountry(park.countryCode)
+        selectPark(
+            NearbyPark(
+                id = park.id,
+                name = park.name,
+                latitude = park.latitude,
+                longitude = park.longitude,
+                distanceM = currentLocation?.let { RideCatalog.distanceMeters(it.latitude, it.longitude, park) } ?: 0.0,
+                provider = "RideTracker-Katalog",
+            ),
+        )
+    }
+
+    fun selectCatalogAttraction(attraction: CatalogAttraction) {
+        selectAttraction(
+            NearbyAttraction(
+                id = attraction.id,
+                name = attraction.name,
+                latitude = selectedPark?.latitude,
+                longitude = selectedPark?.longitude,
+                distanceM = currentLocation?.let { location ->
+                    selectedPark?.let { park -> distanceMeters(location.latitude, location.longitude, park.latitude, park.longitude) }
+                },
+                provider = "RideTracker-Katalog${attraction.manufacturer?.let { " · $it" }.orEmpty()}",
+            ),
+        )
+    }
+
     suspend fun selectPark(park: NearbyPark) {
         selectedPark = park
         selectedAttraction = null
+        officialFacts = null
         attractions = emptyList()
         status = "Attraktionen in ${park.name} werden geladen …"
+        val catalogPark = RideCatalog.findPark(park.id)
+        if (catalogPark != null) {
+            attractions = catalogPark.attractions.map { attraction ->
+                NearbyAttraction(
+                    id = attraction.id,
+                    name = attraction.name,
+                    latitude = park.latitude,
+                    longitude = park.longitude,
+                    distanceM = currentLocation?.let { distanceMeters(it.latitude, it.longitude, park.latitude, park.longitude) },
+                    provider = "RideTracker-Katalog${attraction.manufacturer?.let { " · $it" }.orEmpty()}",
+                )
+            }
+            status = "${attractions.size} Attraktionen aus dem Offline-Katalog. Bitte die gefahrene Attraktion auswählen."
+            return
+        }
         runCatching { loadAttractions(park) }
             .onSuccess { values ->
                 attractions = values
@@ -196,9 +267,9 @@ class AndroidRideContextStore(private val context: Context) {
             val queryLat = "%.3f".format(java.util.Locale.US, location.latitude)
             val queryLon = "%.3f".format(java.util.Locale.US, location.longitude)
             val query = "[out:json][timeout:15];(nwr(around:$radiusM,$queryLat,$queryLon)[\"tourism\"=\"theme_park\"];nwr(around:$radiusM,$queryLat,$queryLon)[\"leisure\"=\"amusement_park\"];);out center tags;"
-            val data = postOverpass(query)
-            val elements = data.optJSONArray("elements")
-            val result = buildList {
+            val data = runCatching { postOverpass(query) }.getOrNull()
+            val elements = data?.optJSONArray("elements")
+            val onlineResult = buildList {
                 if (elements != null) for (index in 0 until elements.length()) {
                     val element = elements.optJSONObject(index) ?: continue
                     val center = element.optJSONObject("center")
@@ -210,11 +281,27 @@ class AndroidRideContextStore(private val context: Context) {
                     val distance = distanceMeters(location.latitude, location.longitude, latitude, longitude)
                     if (distance <= radiusM) add(NearbyPark("${element.optString("type")}/${element.optLong("id")}", name, latitude, longitude, distance))
                 }
-            }.sortedBy { it.distanceM }
+            }
+            val catalogResult = RideCatalog.parks.mapNotNull { park ->
+                val distance = RideCatalog.distanceMeters(location.latitude, location.longitude, park)
+                park.takeIf { distance <= radiusM }?.let {
+                    NearbyPark(it.id, it.name, it.latitude, it.longitude, distance, "RideTracker-Katalog")
+                }
+            }
+            val result = (catalogResult + onlineResult)
+                .distinctBy { it.name.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "") }
+                .sortedBy { it.distanceM }
             parks = result
-            if (selectedPark == null && result.isNotEmpty()) selectPark(result.first())
-            status = if (result.isEmpty()) "Im gewählten Umkreis wurde kein Park gefunden. Park und Bahn können später manuell eingetragen werden."
-            else "${result.size} Parks im Umkreis gefunden. Der nächste Park ist vorausgewählt."
+            val nearestCatalog = RideCatalog.nearestPark(location.latitude, location.longitude, radiusM.toDouble())
+            if (selectedPark == null && result.isNotEmpty()) {
+                val candidate = nearestCatalog?.let { catalog -> result.firstOrNull { it.id == catalog.id } } ?: result.first()
+                selectPark(candidate)
+            }
+            status = when {
+                result.isEmpty() -> "Im gewählten Umkreis wurde kein Park gefunden. Nutze die Länderauswahl oder trage die Attraktion manuell ein."
+                data == null -> "${result.size} Parks aus dem Offline-Katalog gefunden; der Kartendienst ist gerade nicht erreichbar."
+                else -> "${result.size} Parks im Umkreis gefunden. Der nächste Park ist vorausgewählt."
+            }
         } finally {
             busy = false
         }
@@ -339,7 +426,7 @@ class AndroidRideContextStore(private val context: Context) {
         } finally { busy = false }
     }
 
-    fun snapshot() = AndroidRideContextSnapshot(selectedPark, selectedAttraction, weatherStart, weatherEnd, thumbnail)
+    fun snapshot() = AndroidRideContextSnapshot(selectedPark, selectedAttraction, officialFacts, weatherStart, weatherEnd, thumbnail)
 
     private suspend fun loadAttractions(park: NearbyPark): List<NearbyAttraction> {
         val query = "[out:json][timeout:15];(nwr(around:3500,${park.latitude},${park.longitude})[\"roller_coaster\"];nwr(around:3500,${park.latitude},${park.longitude})[\"attraction\"=\"roller_coaster\"];nwr(around:3500,${park.latitude},${park.longitude})[\"tourism\"=\"attraction\"];);out center tags;"
@@ -469,6 +556,18 @@ fun AndroidRideContextSnapshot.contextJson(): JSONObject = JSONObject()
     .put("rideName", attraction?.name ?: JSONObject.NULL)
     .put("parkProvider", park?.provider ?: JSONObject.NULL)
     .put("rideProvider", attraction?.provider ?: JSONObject.NULL)
+    .put("officialData", officialFacts?.toJson() ?: JSONObject.NULL)
+
+private fun OfficialRideFacts.toJson(): JSONObject = JSONObject()
+    .put("maxSpeedKmh", maxSpeedKmh ?: JSONObject.NULL)
+    .put("heightM", heightM ?: JSONObject.NULL)
+    .put("lengthM", lengthM ?: JSONObject.NULL)
+    .put("durationSeconds", durationSeconds ?: JSONObject.NULL)
+    .put("inversions", inversions ?: JSONObject.NULL)
+    .put("publishedMaxG", publishedMaxG ?: JSONObject.NULL)
+    .put("sourceTitle", sourceTitle)
+    .put("sourceUrl", sourceUrl)
+    .put("verifiedAt", verifiedAt)
 
 fun AndroidRideContextSnapshot.environmentJson(): JSONObject = JSONObject()
     .put("weather", JSONObject().put("start", weatherStart?.toJson() ?: JSONObject.NULL).put("end", weatherEnd?.toJson() ?: JSONObject.NULL))

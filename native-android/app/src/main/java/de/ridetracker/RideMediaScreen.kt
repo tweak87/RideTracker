@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import de.ridetracker.session.LocalProfileStore
 import de.ridetracker.session.RideSessionSample
 import de.ridetracker.session.rideSessionSamplesFromJson
+import de.ridetracker.community.calculateRideMetrics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,6 +45,7 @@ data class AndroidRideMediaItem(
     val telemetrySamples: List<RideSessionSample>,
     val videoStartOffsetSeconds: Double,
     val videoHudEmbedded: Boolean,
+    val publicationStatus: String,
 )
 
 private fun loadRideMedia(context: Context, profileId: String): List<AndroidRideMediaItem> {
@@ -86,6 +88,7 @@ private fun loadRideMedia(context: Context, profileId: String): List<AndroidRide
                 telemetrySamples = telemetrySamples,
                 videoStartOffsetSeconds = videoNode?.optDouble("startOffsetSeconds", 0.0) ?: 0.0,
                 videoHudEmbedded = videoNode?.optBoolean("hudEmbedded", false) == true,
+                publicationStatus = root.optJSONObject("community")?.optString("publicationStatus", "private") ?: "private",
             )
         }.getOrNull()
     }?.sortedByDescending { it.id } ?: emptyList()
@@ -154,7 +157,10 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
                         if (bitmap != null) Image(bitmap.asImageBitmap(), contentDescription = ride.title, modifier = Modifier.size(88.dp), contentScale = ContentScale.Crop)
                         else Surface(Modifier.size(88.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {}
                         Column(Modifier.weight(1f)) {
-                            Text(ride.title, style = MaterialTheme.typography.titleMedium)
+                            Row(Modifier.fillMaxWidth()) {
+                                Text(ride.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                                Text(if (ride.publicationStatus == "ready_to_publish") "COMMUNITY" else "PRIVAT", style = MaterialTheme.typography.labelSmall, color = if (ride.publicationStatus == "ready_to_publish") RideGreen else RideMuted)
+                            }
                             Text(ride.park, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             ride.weatherSummary?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             Row {
@@ -167,6 +173,13 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
                             }
                             TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Details schließen" else "Öffnen & bearbeiten") }
                         }
+                    }
+                    val metrics = remember(ride.id, ride.telemetrySamples.size) { calculateRideMetrics(ride.telemetrySamples) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        SavedRideValue("TEMPO", "${metrics.maxSpeedKmh.toInt()} km/h", RideCyan)
+                        SavedRideValue("VERTIKAL", "%+.1f G".format(metrics.maxNormalG), RideGreen)
+                        SavedRideValue("SEITLICH", "%.1f G".format(metrics.maxLateralG), RideAmber)
+                        SavedRideValue("QUALITÄT", "${metrics.qualityScore}%", RideRose)
                     }
                     if (expanded) {
                         ride.imageCredit?.let { credit ->
@@ -204,5 +217,13 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SavedRideValue(label: String, value: String, color: androidx.compose.ui.graphics.Color) {
+    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = RideMuted)
+        Text(value, style = MaterialTheme.typography.labelLarge, color = color)
     }
 }

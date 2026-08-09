@@ -63,6 +63,8 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     var recordingStartNs by mutableStateOf(0L); private set
     var privateNote by mutableStateOf("")
     var communityComment by mutableStateOf("")
+    var publicationStatus by mutableStateOf("private")
+    var shareExactLocation by mutableStateOf(false)
     var latestHeartRateBpm by mutableStateOf<Int?>(null); private set
     var heartRateSource by mutableStateOf<String?>(null); private set
     var locationProviderStatus by mutableStateOf("Android-Systemstandort bereit"); private set
@@ -201,7 +203,8 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
             summary = RideSessionSummary(duration, sampleCount, distanceMeters, acceptedLocations, rejectedLocations, qualityScore, ridePhase),
             calibrationMode = "automatic", forwardEdge = forwardEdge.name.lowercase(), calibration = rideEngine.calibration,
             videoFilename = videoFilename, videoStartOffsetSeconds = videoStartOffsetSeconds, videoHudEmbedded = videoHudEmbedded,
-            privateNote = privateNote, communityComment = communityComment, heartRateSource = sourceRouter.resolve<Int>("heartRateBpm")?.sourceId ?: heartRateSource,
+            privateNote = privateNote, communityComment = communityComment, publicationStatus = publicationStatus,
+            shareExactLocation = shareExactLocation, heartRateSource = sourceRouter.resolve<Int>("heartRateBpm")?.sourceId ?: heartRateSource,
             configurationSnapshot = configurationSnapshot, rideContext = rideContextSnapshot,
         )
         return document.save(context).also { lastSavedPath = it.absolutePath; status = "Session gespeichert: ${it.name}" }
@@ -212,6 +215,7 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
         qualityScore = 0; acceptedLocations = 0; rejectedLocations = 0; distanceMeters = 0.0
         latestLocation = null; latestSpeedMs = 0.0; latestAltitude = 0.0; lastAltitudeTime = 0.0; climbRate = 0.0
         hasBarometer = pressure != null; lastSavedPath = null; videoFilename = null; videoStartOffsetSeconds = 0.0; videoHudEmbedded = false
+        privateNote = ""; communityComment = ""; publicationStatus = "private"; shareExactLocation = false
         liveGForceSample = AndroidLiveGForceSample()
         rideContextSnapshot = null; sessionSamples.clear(); sessionEvents.clear(); sourceRouter.reset(); coreAdapter.resetRuntime(); altitudeFusion.reset(); rideEngine.reset(); gpsSpeedEstimator.reset()
     }
