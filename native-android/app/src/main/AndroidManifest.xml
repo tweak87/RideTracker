@@ -24,6 +24,8 @@
     <application
         android:allowBackup="false"
         android:extractNativeLibs="true"
+        android:icon="@drawable/ic_ridetracker_logo"
+        android:roundIcon="@drawable/ic_ridetracker_logo"
         android:label="${appLabel}"
         android:theme="@style/Theme.RideTracker">
         <activity

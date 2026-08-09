@@ -13,7 +13,7 @@
   }
 
   function createTrail(options = {}) {
-    const maxAgeMs = Math.max(250, Number(options.maxAgeMs ?? 2200));
+    const maxAgeMs = Math.max(250, Number(options.maxAgeMs ?? 3000));
     const maxPoints = Math.max(4, Number(options.maxPoints ?? 72));
     const minimumIntervalMs = Math.max(0, Number(options.minimumIntervalMs ?? 24));
     const points = [];
@@ -78,15 +78,35 @@
     else ctx.rect(x, y, width, height);
   }
 
+  function trailAppearance(ageRatio) {
+    const freshness = 1 - clamp(Number(ageRatio) || 0, 0, 1);
+    return {
+      alpha:Math.pow(freshness, 1.45) * 0.82,
+      glowAlpha:Math.pow(freshness, 1.8) * 0.24,
+      widthFactor:0.22 + Math.pow(freshness, 0.7) * 0.78,
+    };
+  }
+
   function drawTrail(ctx, points, projector, color, lineWidth) {
     if (!points.length) return;
-    for (let index = 1; index < points.length; index += 1) {
-      const previous = projector(points[index - 1]), current = projector(points[index]);
-      ctx.beginPath(); ctx.moveTo(previous.x, previous.y); ctx.lineTo(current.x, current.y);
-      ctx.strokeStyle = color; ctx.globalAlpha = clamp((1 - points[index].ageRatio) * 0.72, 0.04, 0.72);
-      ctx.lineWidth = lineWidth; ctx.lineCap = 'round'; ctx.stroke();
+    const projected = points.map(point => ({ ...projector(point), ageRatio:point.ageRatio }));
+    ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+    if (projected.length === 1) {
+      const point=projected[0],appearance=trailAppearance(point.ageRatio);
+      ctx.globalAlpha=appearance.glowAlpha;ctx.fillStyle=color;ctx.shadowColor=color;ctx.shadowBlur=lineWidth*3;
+      ctx.beginPath();ctx.arc(point.x,point.y,lineWidth*1.35,0,Math.PI*2);ctx.fill();ctx.restore();return;
     }
-    ctx.globalAlpha = 1;
+    for (let index = 1; index < points.length; index += 1) {
+      const before=projected[Math.max(0,index-2)],previous=projected[index-1],current=projected[index];
+      const start=index===1?previous:{x:(before.x+previous.x)/2,y:(before.y+previous.y)/2};
+      const end=index===projected.length-1?current:{x:(previous.x+current.x)/2,y:(previous.y+current.y)/2};
+      const appearance=trailAppearance((Number(previous.ageRatio)+Number(current.ageRatio))/2);
+      if(appearance.alpha<=0)continue;
+      const stroke=()=>{ctx.beginPath();ctx.moveTo(start.x,start.y);ctx.quadraticCurveTo(previous.x,previous.y,end.x,end.y);ctx.stroke()};
+      ctx.strokeStyle=color;ctx.globalAlpha=appearance.glowAlpha;ctx.lineWidth=lineWidth*2.8*appearance.widthFactor;ctx.shadowColor=color;ctx.shadowBlur=lineWidth*2.4;stroke();
+      ctx.globalAlpha=appearance.alpha;ctx.lineWidth=lineWidth*appearance.widthFactor;ctx.shadowBlur=lineWidth*.7;stroke();
+    }
+    ctx.restore();
   }
 
   function draw(ctx, rect, sample, history = [], options = {}) {
@@ -137,5 +157,5 @@
     return { horizontal, vertical, value };
   }
 
-  globalThis.RideTrackerGForceVisualizer = Object.freeze({ normalizeSample, createTrail, horizontalPoint, verticalPoint, forceColor, draw });
+  globalThis.RideTrackerGForceVisualizer = Object.freeze({ normalizeSample, createTrail, horizontalPoint, verticalPoint, forceColor, trailAppearance, draw });
 })();

@@ -8,23 +8,28 @@ import android.net.Uri
 import android.widget.MediaController
 import android.widget.VideoView
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FiberManualRecord
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import de.ridetracker.context.AndroidRideContextPanel
 import de.ridetracker.context.AndroidRideContextStore
@@ -98,16 +103,32 @@ fun FunctionalRideTrackerApp(activity: Activity) {
     var permissionMessage by remember { mutableStateOf("") }
     var pendingTarget by remember { mutableStateOf<FunctionalSection?>(null) }
     var showUnsavedDialog by remember { mutableStateOf(false) }
+    var recordingMinimized by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { videoRecorder.configure() }
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) videoRecorder.configure()
+    }
     LaunchedEffect(heartRate.latestHeartRate, heartRate.deviceName) { recorder.setHeartRate(heartRate.latestHeartRate, heartRate.deviceName) }
 
     fun beginAutomaticRecording(withVideo: Boolean) {
         if (recorder.isRecording || starting) return
+        recordingMinimized = !withVideo
         starting = true
         permissionMessage = "Sensoren, GPS und Kalibrierung werden automatisch vorbereitet …"
-        if (withVideo) videoRecorder.configure()
         scope.launch {
+            if (withVideo) {
+                videoRecorder.configure()
+                var cameraAttempts = 0
+                while (!videoRecorder.isConfigured && cameraAttempts < 60) {
+                    delay(100)
+                    cameraAttempts += 1
+                }
+                if (!videoRecorder.isConfigured) {
+                    permissionMessage = "Kamera konnte nicht vorbereitet werden: ${videoRecorder.status}"
+                    starting = false
+                    return@launch
+                }
+            }
             val contextPreparation = async { rideContext.prepareForRecording() }
             var attempts = 0
             while (recorder.calibrationSampleCount < 20 && attempts < 40) {
@@ -169,8 +190,10 @@ fun FunctionalRideTrackerApp(activity: Activity) {
         when (pendingPermissionAction) {
             PendingPermissionAction.START -> {
                 val cameraGranted = !pendingVideo || ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-                if (locationGranted && cameraGranted) beginAutomaticRecording(pendingVideo)
-                else permissionMessage = "Standort${if (pendingVideo) " und Kamera" else ""} müssen für diesen Start freigegeben werden."
+                if (cameraGranted) {
+                    permissionMessage = if (locationGranted) "Berechtigungen erteilt." else "GPS nicht freigegeben · Kamera und Kraftsensoren starten trotzdem."
+                    beginAutomaticRecording(pendingVideo)
+                } else permissionMessage = "Die Kamera muss für eine Videoaufnahme freigegeben werden."
             }
             PendingPermissionAction.PARK_SEARCH -> if (locationGranted) loadNearbyParks() else permissionMessage = "Für die Parkkarte wird die Standortfreigabe benötigt."
             PendingPermissionAction.NONE -> Unit
@@ -181,7 +204,9 @@ fun FunctionalRideTrackerApp(activity: Activity) {
     fun requestAutomaticStart(withVideo: Boolean) {
         pendingVideo = withVideo
         val permissions = requiredPermissions(withVideo)
-        if (permissionsGranted(permissions)) beginAutomaticRecording(withVideo)
+        val cameraGranted = !withVideo || ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        val locationGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (cameraGranted && locationGranted) beginAutomaticRecording(withVideo)
         else {
             pendingPermissionAction = PendingPermissionAction.START
             permissionLauncher.launch(permissions)
@@ -207,6 +232,7 @@ fun FunctionalRideTrackerApp(activity: Activity) {
             recorder.attachRideContext(rideContext.snapshot())
             permissionMessage = "Aufnahme beendet. Fahrt kann jetzt bewusst gespeichert werden."
             stopping = false
+            recordingMinimized = false
         }
     }
 
@@ -230,6 +256,16 @@ fun FunctionalRideTrackerApp(activity: Activity) {
         } else completeNavigation(target)
     }
 
+    val primarySections = remember { listOf(FunctionalSection.HOME, FunctionalSection.RECORD, FunctionalSection.RIDES, FunctionalSection.COMMUNITY, FunctionalSection.PROFILE) }
+    val fullscreenRecording = recordVideo && (starting || recorder.isRecording) && !recordingMinimized
+    BackHandler(enabled = fullscreenRecording || menuOpen || section != FunctionalSection.HOME) {
+        when {
+            fullscreenRecording -> recordingMinimized = true
+            menuOpen -> menuOpen = false
+            else -> navigate(FunctionalSection.HOME)
+        }
+    }
+
     if (showUnsavedDialog) AlertDialog(
         onDismissRequest = { showUnsavedDialog = false; pendingTarget = null },
         title = { Text("Fahrt noch nicht gespeichert") },
@@ -243,55 +279,117 @@ fun FunctionalRideTrackerApp(activity: Activity) {
         },
     )
 
-    Scaffold(
-        contentWindowInsets = WindowInsets.safeDrawing,
-        topBar = {
-            TopAppBar(
-                title = { Column { Text("RideTracker"); Text("Lokales Profil · ${profiles.activeProfile.name}", style = MaterialTheme.typography.labelSmall) } },
-                navigationIcon = { IconButton(onClick = { menuOpen = true }) { Text("☰") } },
-            )
-        },
-        bottomBar = {
-            Column {
-                if (section == FunctionalSection.RECORD || recorder.isRecording || starting) RecordingControlBar(
-                    recorder = recorder,
-                    videoRecorder = videoRecorder,
-                    recordVideo = recordVideo,
-                    setRecordVideo = { recordVideo = it },
-                    starting = starting,
-                    stopping = stopping,
-                    message = permissionMessage,
-                    start = { requestAutomaticStart(recordVideo) },
-                    stop = ::stopRecording,
-                    openSensors = { navigate(FunctionalSection.DEVICES) },
-                )
-                NavigationBar {
-                    listOf(
-                        Triple(FunctionalSection.HOME, "Start", Icons.Filled.Home),
-                        Triple(FunctionalSection.RECORD, "Aufnahme", Icons.Filled.FiberManualRecord),
-                        Triple(FunctionalSection.RIDES, "Fahrten", Icons.Filled.Folder),
-                        Triple(FunctionalSection.COMMUNITY, "Community", Icons.Filled.Groups),
-                        Triple(FunctionalSection.PROFILE, "Profil", Icons.Filled.Person),
-                    ).forEach { (target, label, icon) -> NavigationBarItem(section == target, { navigate(target) }, { Icon(icon, contentDescription = label) }, label = { Text(label) }) }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(RideMidnight)
+            .pointerInput(section, recorder.isRecording, starting) {
+                if (!recorder.isRecording && !starting && section in primarySections) {
+                    var horizontalDrag = 0f
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { change, amount -> change.consume(); horizontalDrag += amount },
+                        onDragCancel = { horizontalDrag = 0f },
+                        onDragEnd = {
+                            val current = primarySections.indexOf(section)
+                            val threshold = 96.dp.toPx()
+                            val next = when {
+                                horizontalDrag < -threshold -> (current + 1).coerceAtMost(primarySections.lastIndex)
+                                horizontalDrag > threshold -> (current - 1).coerceAtLeast(0)
+                                else -> current
+                            }
+                            if (next != current) navigate(primarySections[next])
+                            horizontalDrag = 0f
+                        },
+                    )
                 }
+            },
+    ) {
+        Scaffold(
+            containerColor = RideMidnight,
+            contentWindowInsets = WindowInsets.safeDrawing,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RideTrackerLogo()
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text("RideTracker", style = MaterialTheme.typography.titleLarge)
+                                Text("Fahrten · Telemetrie · Community", style = MaterialTheme.typography.labelSmall, color = RideMuted)
+                            }
+                        }
+                    },
+                    navigationIcon = { IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.Menu, "Menü") } },
+                    actions = {
+                        Surface(color = RideSurfaceHigh, shape = CircleShape, modifier = Modifier.padding(end = 10.dp)) {
+                            Row(Modifier.padding(horizontal = 11.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Person, null, Modifier.size(17.dp), tint = RideCyan)
+                                Spacer(Modifier.width(6.dp)); Text(profiles.activeProfile.name, style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = RideSurface),
+                )
+            },
+            bottomBar = {
+                Column {
+                    if (section == FunctionalSection.RECORD || recorder.isRecording || starting) RecordingControlBar(
+                        recorder = recorder,
+                        videoRecorder = videoRecorder,
+                        recordVideo = recordVideo,
+                        setRecordVideo = { recordVideo = it },
+                        starting = starting,
+                        stopping = stopping,
+                        message = permissionMessage,
+                        start = { requestAutomaticStart(recordVideo) },
+                        stop = ::stopRecording,
+                        openSensors = { navigate(FunctionalSection.DEVICES) },
+                    )
+                    NavigationBar(containerColor = RideSurface, tonalElevation = 10.dp) {
+                        listOf(
+                            Triple(FunctionalSection.HOME, "Start", Icons.Filled.Home),
+                            Triple(FunctionalSection.RECORD, "Aufnahme", Icons.Filled.FiberManualRecord),
+                            Triple(FunctionalSection.RIDES, "Fahrten", Icons.Filled.Folder),
+                            Triple(FunctionalSection.COMMUNITY, "Community", Icons.Filled.Groups),
+                            Triple(FunctionalSection.PROFILE, "Profil", Icons.Filled.Person),
+                        ).forEach { (target, label, icon) ->
+                            NavigationBarItem(
+                                selected = section == target,
+                                onClick = { navigate(target) },
+                                icon = { Icon(icon, contentDescription = label) },
+                                label = { Text(label) },
+                                colors = NavigationBarItemDefaults.colors(indicatorColor = RideCyan.copy(alpha = .22f)),
+                            )
+                        }
+                    }
+                }
+            },
+        ) { padding ->
+            when (section) {
+                FunctionalSection.HOME -> AndroidDashboard(Modifier.padding(padding), profiles.activeProfile.name, navigate)
+                FunctionalSection.RECORD -> AndroidRecording(Modifier.padding(padding), recorder, videoRecorder, rideContext, stopping, ::requestParkSearch, ::saveRide) { recordingMinimized = false }
+                FunctionalSection.RIDES -> RideMediaScreen(Modifier.padding(padding), profiles)
+                FunctionalSection.COMMUNITY -> AndroidCommunityOverview(Modifier.padding(padding), profiles.activeProfile.name)
+                FunctionalSection.PROFILE -> AndroidProfileScreen(Modifier.padding(padding), profiles)
+                FunctionalSection.MAP -> AndroidRideMapList(Modifier.padding(padding), context)
+                FunctionalSection.DEVICES -> AndroidDeviceCenter(Modifier.padding(padding), devices, heartRate)
+                FunctionalSection.SETTINGS -> AndroidSettings(Modifier.padding(padding), recorder, heartRate, { navigate(FunctionalSection.HUD) }, { navigate(FunctionalSection.DEVICES) }, { navigate(FunctionalSection.COMPATIBILITY) })
+                FunctionalSection.HUD -> AndroidHudFullscreenEditor(Modifier.padding(padding))
+                FunctionalSection.STATISTICS -> StatisticsScreen(Modifier.padding(padding))
+                FunctionalSection.ACHIEVEMENTS -> AchievementsScreen(Modifier.padding(padding))
+                FunctionalSection.FAQ -> AndroidSensorFaq(Modifier.padding(padding))
+                FunctionalSection.COMPATIBILITY -> AndroidCompatibilityScreen(Modifier.padding(padding))
             }
-        },
-    ) { padding ->
-        when (section) {
-            FunctionalSection.HOME -> AndroidDashboard(Modifier.padding(padding), profiles.activeProfile.name, navigate)
-            FunctionalSection.RECORD -> AndroidRecording(Modifier.padding(padding), recorder, videoRecorder, rideContext, stopping, ::requestParkSearch, ::saveRide)
-            FunctionalSection.RIDES -> RideMediaScreen(Modifier.padding(padding), profiles)
-            FunctionalSection.COMMUNITY -> AndroidCommunityOverview(Modifier.padding(padding), profiles.activeProfile.name)
-            FunctionalSection.PROFILE -> AndroidProfileScreen(Modifier.padding(padding), profiles)
-            FunctionalSection.MAP -> AndroidRideMapList(Modifier.padding(padding), context)
-            FunctionalSection.DEVICES -> AndroidDeviceCenter(Modifier.padding(padding), devices, heartRate)
-            FunctionalSection.SETTINGS -> AndroidSettings(Modifier.padding(padding), recorder, heartRate, { navigate(FunctionalSection.HUD) }, { navigate(FunctionalSection.DEVICES) }, { navigate(FunctionalSection.COMPATIBILITY) })
-            FunctionalSection.HUD -> AndroidHudFullscreenEditor(Modifier.padding(padding))
-            FunctionalSection.STATISTICS -> StatisticsScreen(Modifier.padding(padding))
-            FunctionalSection.ACHIEVEMENTS -> AchievementsScreen(Modifier.padding(padding))
-            FunctionalSection.FAQ -> AndroidSensorFaq(Modifier.padding(padding))
-            FunctionalSection.COMPATIBILITY -> AndroidCompatibilityScreen(Modifier.padding(padding))
         }
+
+        if (fullscreenRecording) AndroidLiveRecordingFullscreen(
+            activity = activity,
+            recorder = recorder,
+            video = videoRecorder,
+            preparing = starting,
+            minimize = { recordingMinimized = true },
+            stop = ::stopRecording,
+        )
     }
 
     if (menuOpen) ModalBottomSheet(onDismissRequest = { menuOpen = false }) {
@@ -324,13 +422,18 @@ private fun RecordingControlBar(
     openSensors: () -> Unit,
 ) {
     Surface(
-        color = if (recorder.isRecording) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        color = if (recorder.isRecording) Color(0xFF4D1020) else RideSurfaceHigh,
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(1.dp, if (recorder.isRecording) RideRose.copy(alpha = .75f) else RideCyan.copy(alpha = .45f)),
         tonalElevation = 8.dp,
     ) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (recorder.isRecording) "● Aufnahme läuft" else if (starting) "Fahrt wird vorbereitet" else "Fahrt automatisch starten", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                if (recorder.isRecording) Text("${"%.0f".format(recorder.speedKmh)} km/h")
+                Surface(color = if (recorder.isRecording) RideRose else RideCyan, shape = CircleShape, modifier = Modifier.size(10.dp)) {}
+                Spacer(Modifier.width(9.dp))
+                Text(if (recorder.isRecording) "Aufnahme läuft" else if (starting) "Fahrt wird vorbereitet" else "Fahrt automatisch starten", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                if (recorder.isRecording) Text("${"%.0f".format(recorder.speedKmh)} km/h", color = RideCyan, style = MaterialTheme.typography.titleMedium)
             }
             Text(
                 when {
@@ -342,11 +445,12 @@ private fun RecordingControlBar(
             )
             if (!recorder.isRecording && !starting) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { Checkbox(recordVideo, setRecordVideo); Text("Video") }
-                    TextButton(openSensors) { Text("Sensoren") }
-                    Button(start) { Text("Automatisch starten") }
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { Checkbox(recordVideo, setRecordVideo); Icon(Icons.Filled.Videocam, null, Modifier.size(18.dp)); Spacer(Modifier.width(5.dp)); Text("Video") }
+                    FilledTonalIconButton(openSensors) { Icon(Icons.Filled.Sensors, "Sensoren") }
+                    Spacer(Modifier.width(7.dp))
+                    Button(start, contentPadding = PaddingValues(horizontal = 15.dp, vertical = 11.dp)) { Icon(Icons.Filled.PlayArrow, null); Spacer(Modifier.width(5.dp)); Text("Start") }
                 }
-            } else if (recorder.isRecording) Button(stop, enabled = !stopping, modifier = Modifier.fillMaxWidth()) { Text(if (stopping) "Wird beendet …" else "Stoppen") }
+            } else if (recorder.isRecording) Button(stop, enabled = !stopping, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = RideRose)) { Icon(Icons.Filled.Stop, null); Spacer(Modifier.width(7.dp)); Text(if (stopping) "Wird beendet …" else "Aufnahme stoppen") }
         }
     }
 }
@@ -370,26 +474,44 @@ private fun FunctionalSection.displayName() = when (this) {
 @Composable
 private fun AndroidDashboard(modifier: Modifier, profile: String, select: (FunctionalSection) -> Unit) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Übersicht", style = MaterialTheme.typography.headlineLarge)
-        Text("Lokales Profil: $profile")
-        DashboardCard("Neue Fahrt", "Automatisch kalibrieren, Park wählen, Wetter und Telemetrie aufzeichnen") { select(FunctionalSection.RECORD) }
-        DashboardCard("Meine Fahrten", "Thumbnails, Wetter, Videos und räumliche 3D-Auswertung") { select(FunctionalSection.RIDES) }
-        DashboardCard("Community", "Lokaler Datenschutzstatus und vorbereitete Online-Funktionen") { select(FunctionalSection.COMMUNITY) }
-        DashboardCard("Profile", "Lokale Nutzer anlegen und Fahrten sauber trennen") { select(FunctionalSection.PROFILE) }
-        DashboardCard("Parks & Strecken", "GPS-Fahrten und Startpositionen") { select(FunctionalSection.MAP) }
-        DashboardCard("Geräte & Sensoren", "Interne und externe Quellen konfigurieren") { select(FunctionalSection.DEVICES) }
-        DashboardCard("Einstellungen", "Manuelle Kalibrierung, Sensoren und Berechtigungen") { select(FunctionalSection.SETTINGS) }
-        DashboardCard("HUD-Konfiguration", "Vollbild-Editor für Hoch- und Querformat") { select(FunctionalSection.HUD) }
-        DashboardCard("FAQ & Messmethode", "G-Kräfte, GPS-Filter, Kompass und Messqualität") { select(FunctionalSection.FAQ) }
-        DashboardCard("Statistiken", "Kilometer, Fahrzeit und Rekorde") { select(FunctionalSection.STATISTICS) }
-        DashboardCard("Achievements", "Persönliche Meilensteine") { select(FunctionalSection.ACHIEVEMENTS) }
-        DashboardCard("Kompatibilität & Diagnose", "Fire OS, Standortanbieter, Speicher und Sensoren prüfen") { select(FunctionalSection.COMPATIBILITY) }
+        Surface(color = RideSurfaceHigh, shape = MaterialTheme.shapes.large, border = BorderStroke(1.dp, RideCyan.copy(alpha = .25f))) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("Bereit für die nächste Fahrt?", style = MaterialTheme.typography.headlineMedium)
+                Text("Hallo $profile · Aufnahme, Kalibrierung und Kamera starten mit einem Tipp automatisch.", color = RideMuted)
+                Button({ select(FunctionalSection.RECORD) }, Modifier.fillMaxWidth()) { Icon(Icons.Filled.FiberManualRecord, null); Spacer(Modifier.width(8.dp)); Text("Neue Fahrt aufnehmen") }
+                Text("Zwischen Hauptseiten kannst du auch nach links oder rechts wischen.", style = MaterialTheme.typography.labelSmall, color = RideMuted)
+            }
+        }
+        Text("Entdecken", style = MaterialTheme.typography.titleLarge)
+        DashboardCard(Icons.Filled.Folder, RideCyan, "Meine Fahrten", "Thumbnails, Wetter, Videos und räumliche 3D-Auswertung") { select(FunctionalSection.RIDES) }
+        DashboardCard(Icons.Filled.Groups, RideGreen, "Community", "Lokaler Datenschutzstatus und vorbereitete Online-Funktionen") { select(FunctionalSection.COMMUNITY) }
+        DashboardCard(Icons.Filled.Map, RideAmber, "Parks & Strecken", "GPS-Fahrten und Startpositionen") { select(FunctionalSection.MAP) }
+        DashboardCard(Icons.Filled.Sensors, RideCyan, "Geräte & Sensoren", "Interne und externe Quellen konfigurieren") { select(FunctionalSection.DEVICES) }
+        DashboardCard(Icons.Filled.Tune, RideGreen, "HUD-Konfiguration", "Vollbild-Editor für Hoch- und Querformat") { select(FunctionalSection.HUD) }
+        DashboardCard(Icons.Filled.Help, RideAmber, "FAQ & Messmethode", "G-Kräfte, GPS-Filter, Kompass und Messqualität") { select(FunctionalSection.FAQ) }
+        DashboardCard(Icons.Filled.QueryStats, RideCyan, "Statistiken", "Kilometer, Fahrzeit und Rekorde") { select(FunctionalSection.STATISTICS) }
+        DashboardCard(Icons.Filled.EmojiEvents, RideAmber, "Achievements", "Persönliche Meilensteine") { select(FunctionalSection.ACHIEVEMENTS) }
+        DashboardCard(Icons.Filled.Person, RideGreen, "Profile", "Lokale Nutzer anlegen und Fahrten sauber trennen") { select(FunctionalSection.PROFILE) }
+        DashboardCard(Icons.Filled.Settings, RideCyan, "Einstellungen", "Manuelle Kalibrierung, Sensoren und Berechtigungen") { select(FunctionalSection.SETTINGS) }
+        DashboardCard(Icons.Filled.Build, RideRose, "Kompatibilität & Diagnose", "Fire OS, Standortanbieter, Speicher und Sensoren prüfen") { select(FunctionalSection.COMPATIBILITY) }
     }
 }
 
 @Composable
-private fun DashboardCard(title: String, subtitle: String, click: () -> Unit) {
-    Card(onClick = click, modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) { Text(title, style = MaterialTheme.typography.titleMedium); Text(subtitle, style = MaterialTheme.typography.bodySmall) } }
+private fun DashboardCard(icon: ImageVector, tint: Color, title: String, subtitle: String, click: () -> Unit) {
+    Card(
+        onClick = click,
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = RideSurface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(color = tint.copy(alpha = .14f), shape = CircleShape) { Icon(icon, null, Modifier.padding(11.dp).size(23.dp), tint = tint) }
+            Spacer(Modifier.width(13.dp))
+            Column(Modifier.weight(1f)) { Text(title, style = MaterialTheme.typography.titleMedium); Text(subtitle, style = MaterialTheme.typography.bodySmall, color = RideMuted) }
+            Icon(Icons.Filled.ChevronRight, null, tint = RideMuted)
+        }
+    }
 }
 
 @Composable
@@ -401,6 +523,7 @@ private fun AndroidRecording(
     stopping: Boolean,
     requestParkSearch: () -> Unit,
     saveRide: () -> Boolean,
+    openFullscreen: () -> Unit,
 ) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Neue Fahrt", style = MaterialTheme.typography.headlineMedium)
@@ -412,8 +535,26 @@ private fun AndroidRecording(
                 update = { it.setVideoURI(Uri.fromFile(videoFile)) },
                 modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
             )
-        } else Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.large) {
-            Box(Modifier.fillMaxWidth().aspectRatio(16 / 9f), contentAlignment = Alignment.Center) { Text("Kamera: ${video.status}") }
+        } else Surface(color = Color.Black, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f), contentAlignment = Alignment.Center) {
+                AndroidView(
+                    factory = { cameraContext ->
+                        PreviewView(cameraContext).apply {
+                            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                            scaleType = PreviewView.ScaleType.FILL_CENTER
+                            video.attachPreview(surfaceProvider)
+                        }
+                    },
+                    update = { video.attachPreview(it.surfaceProvider) },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                Surface(color = Color(0x99030B14), shape = MaterialTheme.shapes.small, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp)) {
+                    Text("Kamera · ${video.status}", Modifier.padding(horizontal = 10.dp, vertical = 7.dp), style = MaterialTheme.typography.labelMedium)
+                }
+                if (recorder.isRecording || video.isRecording) FilledTonalIconButton(onClick = openFullscreen, modifier = Modifier.align(Alignment.TopEnd).padding(10.dp)) {
+                    Icon(Icons.Filled.Fullscreen, "Kamera und HUD im Vollbild öffnen")
+                }
+            }
         }
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -424,6 +565,7 @@ private fun AndroidRecording(
                 Text("Kompass: ${recorder.headingDegrees?.let { "${"%.0f".format(it)}° ${compassDirection(it)}" } ?: "noch ohne Richtung"}")
             }
         }
+        AndroidGForceTrail(recorder.liveGForceSample, Modifier.fillMaxWidth())
         AndroidRideContextPanel(rideContext, requestParkSearch)
         Button(enabled = !recorder.isRecording && !stopping && recorder.sampleCount > 0 && recorder.lastSavedPath == null, onClick = { saveRide() }, modifier = Modifier.fillMaxWidth()) { Text("Fahrt bewusst speichern") }
         Spacer(Modifier.height(190.dp))

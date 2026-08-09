@@ -122,6 +122,20 @@
     return false;
   }
 
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  async function waitForAutomaticCalibration(timeoutMs = 14000) {
+    if (currentCalibration() && activeCompatible()) return true;
+    window.dispatchEvent(new CustomEvent('ridetracker:recording-stage', { detail:{ stage:'calibration', message:'Telefon ruhig halten · automatische Kalibrierung läuft …' } }));
+    if (!beginCalibration()) return false;
+    const started = performance.now();
+    while (performance.now() - started < timeoutMs) {
+      if (currentCalibration() && activeCompatible()) return true;
+      await sleep(120);
+    }
+    return false;
+  }
+
   function ensureDialog() {
     let dialog = byId('rtCalibrationPrompt');
     if (dialog) return dialog;
@@ -167,6 +181,7 @@
     if (currentCalibration() && activeCompatible()) return true;
     if (currentCalibration() && state.restored) clearCurrentKeepStored(true);
     if (applyStored()) return true;
+    if (await waitForAutomaticCalibration()) return true;
     showCalibrationPrompt();
     return false;
   }

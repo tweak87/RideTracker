@@ -4,7 +4,7 @@
   if (window.RideTrackerGForceDiagnostics) return;
   const quality = window.RideTrackerGForceQuality;
   const visualizer = window.RideTrackerGForceVisualizer;
-  const state = { latest:null, maximumHorizontalG:0, maximumNormalG:0, minimumNormalG:Infinity, sampleRateHz:0, samples:0, trail:visualizer?.createTrail?.({maxAgeMs:3200,maxPoints:100,minimumIntervalMs:24}) };
+  const state = { latest:null, maximumHorizontalG:0, maximumNormalG:0, minimumNormalG:Infinity, sampleRateHz:0, samples:0, trail:visualizer?.createTrail?.({maxAgeMs:3000,maxPoints:150,minimumIntervalMs:20}) };
   const finite = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
 
   function transformedLinear(event) {

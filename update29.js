@@ -12,7 +12,7 @@
   const compass={heading:null,source:'unavailable',accuracy:null};
   const replay={active:false,video:null,host:null,samples:[],offset:0,lastSample:null,cleanup:[]};
   const gVisualizer=window.RideTrackerGForceVisualizer;
-  const gTrail=gVisualizer?.createTrail?.({maxAgeMs:2100,maxPoints:72,minimumIntervalMs:24});
+  const gTrail=gVisualizer?.createTrail?.({maxAgeMs:3000,maxPoints:150,minimumIntervalMs:20});
   let gTrailClock=null;
 
   function num(id,fallback=0){const text=document.getElementById(id)?.textContent||'';const m=String(text).replace(',','.').match(/[-+]?\d+(?:\.\d+)?/);return m?Number(m[0]):fallback;}
