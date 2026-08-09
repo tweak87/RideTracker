@@ -299,7 +299,7 @@ fun FunctionalRideTrackerApp(activity: Activity) {
         } else completeNavigation(target)
     }
 
-    val primarySections = remember { listOf(FunctionalSection.HOME, FunctionalSection.RECORD, FunctionalSection.RIDES, FunctionalSection.COMMUNITY, FunctionalSection.PROFILE) }
+    val primarySections = remember { listOf(FunctionalSection.COMMUNITY, FunctionalSection.HOME, FunctionalSection.RECORD, FunctionalSection.RIDES, FunctionalSection.PROFILE) }
     val fullscreenRecording = recordVideo && (starting || recorder.isRecording) && !recordingMinimized
     BackHandler(enabled = fullscreenRecording || menuOpen || section != FunctionalSection.HOME) {
         when {
@@ -373,7 +373,7 @@ fun FunctionalRideTrackerApp(activity: Activity) {
                             Spacer(Modifier.width(10.dp))
                             Column {
                                 Text("RideTracker", style = MaterialTheme.typography.titleLarge)
-                                Text("Fahrten · Telemetrie · Community", style = MaterialTheme.typography.labelSmall, color = RideMuted)
+                                Text("Ride Stories · Telemetrie · Community", style = MaterialTheme.typography.labelSmall, color = RideMuted)
                             }
                         }
                     },
@@ -391,24 +391,31 @@ fun FunctionalRideTrackerApp(activity: Activity) {
             },
             bottomBar = {
                 Column {
-                    if (section == FunctionalSection.RECORD || recorder.isRecording || starting) RecordingControlBar(
-                        recorder = recorder,
-                        videoRecorder = videoRecorder,
-                        recordVideo = recordVideo,
-                        setRecordVideo = { recordVideo = it },
-                        starting = starting,
-                        stopping = stopping,
-                        message = permissionMessage,
-                        start = { requestAutomaticStart(recordVideo) },
-                        stop = ::stopRecording,
-                        openSensors = { navigate(FunctionalSection.DEVICES) },
-                    )
+                    val unsavedDraft = !recorder.isRecording && recorder.sampleCount > 0 && recorder.lastSavedPath == null
+                    if (section == FunctionalSection.RECORD && unsavedDraft) {
+                        RideDraftActionBar(
+                            enabled = !stopping && !videoRecorder.isFinalizing,
+                            readyForCommunity = recorder.publicationStatus == "ready_to_publish",
+                            save = { if (saveRide()) completeNavigation(FunctionalSection.RIDES) },
+                        )
+                    } else if (section == FunctionalSection.RECORD || recorder.isRecording || starting) RecordingControlBar(
+                            recorder = recorder,
+                            videoRecorder = videoRecorder,
+                            recordVideo = recordVideo,
+                            setRecordVideo = { recordVideo = it },
+                            starting = starting,
+                            stopping = stopping,
+                            message = permissionMessage,
+                            start = { requestAutomaticStart(recordVideo) },
+                            stop = ::stopRecording,
+                            openSensors = { navigate(FunctionalSection.DEVICES) },
+                        )
                     NavigationBar(containerColor = RideSurface, tonalElevation = 10.dp) {
                         listOf(
-                            Triple(FunctionalSection.HOME, "Start", Icons.Filled.Home),
+                            Triple(FunctionalSection.COMMUNITY, "Feed", Icons.Filled.DynamicFeed),
+                            Triple(FunctionalSection.HOME, "Entdecken", Icons.Filled.Explore),
                             Triple(FunctionalSection.RECORD, "Aufnahme", Icons.Filled.FiberManualRecord),
                             Triple(FunctionalSection.RIDES, "Fahrten", Icons.Filled.Folder),
-                            Triple(FunctionalSection.COMMUNITY, "Community", Icons.Filled.Groups),
                             Triple(FunctionalSection.PROFILE, "Profil", Icons.Filled.Person),
                         ).forEach { (target, label, icon) ->
                             NavigationBarItem(
@@ -454,7 +461,7 @@ fun FunctionalRideTrackerApp(activity: Activity) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Hauptmenü", style = MaterialTheme.typography.headlineSmall)
             Text("Hauptbereiche", style = MaterialTheme.typography.titleMedium)
-            listOf(FunctionalSection.HOME, FunctionalSection.RECORD, FunctionalSection.RIDES, FunctionalSection.COMMUNITY, FunctionalSection.PROFILE).forEach { target ->
+            listOf(FunctionalSection.COMMUNITY, FunctionalSection.HOME, FunctionalSection.RECORD, FunctionalSection.RIDES, FunctionalSection.PROFILE).forEach { target ->
                 TextButton(onClick = { navigate(target) }, modifier = Modifier.fillMaxWidth()) { Text(target.displayName(), modifier = Modifier.fillMaxWidth()) }
             }
             HorizontalDivider()
@@ -513,11 +520,43 @@ private fun RecordingControlBar(
     }
 }
 
+@Composable
+private fun RideDraftActionBar(
+    enabled: Boolean,
+    readyForCommunity: Boolean,
+    save: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        color = RideSurfaceHigh,
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(1.dp, RideGreen.copy(alpha = .48f)),
+        tonalElevation = 10.dp,
+    ) {
+        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Ride Story fertigstellen", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (readyForCommunity) "Lokal speichern · für späteren Community-Upload markiert"
+                    else "Privat und lokal speichern",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = RideMuted,
+                )
+            }
+            Button(onClick = save, enabled = enabled) {
+                Icon(Icons.Filled.Save, null)
+                Spacer(Modifier.width(6.dp))
+                Text(if (enabled) "Speichern" else "Warten …")
+            }
+        }
+    }
+}
+
 private fun FunctionalSection.displayName() = when (this) {
-    FunctionalSection.HOME -> "Start"
+    FunctionalSection.HOME -> "Entdecken"
     FunctionalSection.RECORD -> "Neue Fahrt"
     FunctionalSection.RIDES -> "Meine Fahrten"
-    FunctionalSection.COMMUNITY -> "Community"
+    FunctionalSection.COMMUNITY -> "Community-Feed"
     FunctionalSection.PROFILE -> "Profile"
     FunctionalSection.MAP -> "Parks & Strecken"
     FunctionalSection.DEVICES -> "Geräte & Sensoren"
@@ -540,7 +579,7 @@ private fun AndroidDashboard(modifier: Modifier, profile: String, select: (Funct
                 Text("Zwischen Hauptseiten kannst du auch nach links oder rechts wischen.", style = MaterialTheme.typography.labelSmall, color = RideMuted)
             }
         }
-        Text("Entdecken", style = MaterialTheme.typography.titleLarge)
+        Text("Deine Bereiche", style = MaterialTheme.typography.titleLarge)
         DashboardCard(Icons.Filled.Folder, RideCyan, "Meine Fahrten", "Thumbnails, Wetter, Videos und räumliche 3D-Auswertung") { select(FunctionalSection.RIDES) }
         DashboardCard(Icons.Filled.Groups, RideGreen, "Community", "Lokaler Datenschutzstatus und vorbereitete Online-Funktionen") { select(FunctionalSection.COMMUNITY) }
         DashboardCard(Icons.Filled.Map, RideAmber, "Parks & Strecken", "GPS-Fahrten und Startpositionen") { select(FunctionalSection.MAP) }
@@ -602,6 +641,24 @@ private fun AndroidRecording(
                 "Video wurde am ausgewählten Ort gespeichert."
             }.getOrElse { "Videoexport fehlgeschlagen: ${it.message}" }
         }
+    }
+    if (!recorder.isRecording && recorder.sampleCount > 0 && recorder.lastSavedPath == null) {
+        RideStoryDraftScreen(
+            modifier = modifier,
+            recorder = recorder,
+            rideContext = rideContext,
+            samples = previewSamples,
+            trackPoints = previewTrack,
+            videoFile = video.playableVideoFile?.takeIf(File::exists),
+            videoStartOffsetSeconds = video.startOffsetSeconds,
+            videoHudEmbedded = video.isHudEmbedded,
+            videoFinalizing = video.isFinalizing,
+            videoStatus = video.status,
+            requestParkSearch = requestParkSearch,
+            exportVideo = { exportVideo.launch("RideTracker-${recorder.sessionId.take(8)}.mp4") },
+            exportStatus = exportStatus,
+        )
+        return
     }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Neue Fahrt", style = MaterialTheme.typography.headlineMedium)
@@ -665,6 +722,15 @@ private fun AndroidRecording(
             }
         }
         AndroidGForceTrail(recorder.liveGForceSample, Modifier.fillMaxWidth())
+        if (!recorder.isRecording) {
+            Card(colors = CardDefaults.cardColors(containerColor = RideAmber.copy(alpha = .12f)), border = BorderStroke(1.dp, RideAmber.copy(alpha = .35f))) {
+                Row(Modifier.fillMaxWidth().padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.HealthAndSafety, null, tint = RideAmber)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Video nur mit einer vom Park erlaubten, sicher befestigten Halterung aufnehmen. Parkregeln und Anweisungen des Personals haben immer Vorrang.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
         if (!recorder.isRecording && recorder.sampleCount > 0) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = RideSurfaceHigh)) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
