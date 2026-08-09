@@ -41,6 +41,8 @@ requireToken('app', 'AndroidLiveRecordingFullscreen', 'Android camera and G-forc
 requireToken('liveHud', 'G_TRAIL_DURATION_MS = 3_000L', 'Android G-force HUD must retain exactly three seconds');
 requireToken('liveHud', 'PreviewView.ImplementationMode.COMPATIBLE', 'Huawei-compatible camera preview mode missing');
 requireToken('video', 'provider.bindToLifecycle(lifecycleOwner, selector, preview, capture)', 'Camera preview and recording must be bound together');
+requireToken('video', 'awaitFinalized', 'Video must finish and validate before playback or ride saving');
+requireToken('video', 'MediaMetadataRetriever', 'Finalized Android videos must be checked for playback metadata');
 requireToken('theme', 'darkColorScheme', 'Modern dark Android theme missing');
 requireToken('app', 'recorder.lastSavedPath == null', 'Android unsaved-ride guard missing');
 requireToken('app', 'FunctionalSection.COMMUNITY', 'Community must be a primary Android destination');
@@ -54,6 +56,8 @@ requireToken('compatibility', 'Diagnosebericht kopieren', 'Shareable Fire diagno
 requireToken('heartRate', 'requiredPermissions()', 'BLE permission compatibility guard missing');
 requireToken('heartRate', 'runCatching { adapter?.bluetoothLeScanner', 'BLE scan must not crash when Fire OS rejects access');
 requireToken('deviceScreen', 'permissionLauncher.launch(heartRate.requiredPermissions())', 'BLE permission request UI missing');
+requireToken('deviceScreen', 'AddDeviceDialog', 'Device add button must open a source selection dialog');
+requireToken('deviceScreen', 'LiveSensorDiagnostics', 'Android live sensor graphs missing');
 requireToken('context', 'open-meteo.com', 'Android weather snapshots missing');
 requireToken('context', 'commons.wikimedia.org', 'Android licensed stock image lookup missing');
 requireToken('context', 'externalLookupConsent', 'External location lookup consent missing');
@@ -63,22 +67,26 @@ requireToken('recorder', 'GpsSpeedEstimator', 'Android recorder must use canonic
 requireToken('recorder', 'TYPE_ROTATION_VECTOR', 'Android compass source missing');
 requireToken('recorder', 'AndroidPlatformLocationProvider', 'Recorder must use the Google-independent system location provider');
 requireToken('context', 'AndroidPlatformLocationProvider', 'Park and weather context must use system location on Fire OS');
+requireToken('context', 'completeAfterRecording', 'Automatic park lookup must happen after recording');
+requireToken('context', 'OVERPASS_ENDPOINTS', 'Park search needs resilient provider fallbacks');
 requireToken('platformLocation', 'LocationManager.GPS_PROVIDER', 'Platform GPS provider missing');
 requireToken('platformLocation', 'LocationManager.NETWORK_PROVIDER', 'Platform network location fallback missing');
 requireToken('gradle', 'minSdk = 21', 'Fire OS 5 compatibility floor missing');
-requireToken('gradle', 'applicationIdSuffix = ".fire8v4"', 'Side-by-side Fire OS 8 test package missing');
-requireToken('gradle', 'applicationIdSuffix = ".devicev4"', 'Side-by-side Huawei/Android test package missing');
+requireToken('gradle', 'applicationIdSuffix = ".fire8v5"', 'Side-by-side Fire OS 8 test package missing');
+requireToken('gradle', 'applicationIdSuffix = ".devicev5"', 'Side-by-side Huawei/Android test package missing');
 requireToken('gradle', 'useLegacyPackaging = true', 'Fire-compatible native library packaging missing');
 requireToken('gradle', '"armeabi-v7a", "arm64-v8a"', 'Fire APK must only package compatible ARM variants');
 rejectToken('gradle', 'play-services-location', 'Fire OS build must not depend on Google Play Services location');
 requireToken('speed', 'stationaryLocked', 'Android stationary GPS lock missing');
 requireToken('viewer', 'Räumliches XYZ-Modell', 'Android spatial XYZ viewer missing');
 requireToken('viewer', 'detectTapGestures', 'Android 3D point inspector missing');
+requireToken('viewer', 'smoothAndroidTrackPoints', 'Android coaster model smoothing missing');
+requireToken('media', 'Video in Dateien speichern', 'Finalized ride video export missing');
 requireToken('media', 'thumbnailNode', 'Android ride thumbnails missing');
 requireToken('workflow', 'assembleDebug', 'Android APK build missing');
 requireToken('workflow', 'assembleFireTest', 'Dedicated Fire OS APK build missing');
-requireToken('workflow', 'INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.08.4.apk', 'Direct Huawei/Android APK artifact missing');
-requireToken('workflow', 'INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.4.apk', 'Direct Fire APK artifact missing');
+requireToken('workflow', 'INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.1.apk', 'Direct Huawei/Android APK artifact missing');
+requireToken('workflow', 'INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.1.apk', 'Direct Fire APK artifact missing');
 requireToken('workflow', 'apksigner', 'Fire APK signature verification missing');
 requireToken('workflow', 'gh release create', 'Direct Android APK release missing');
 

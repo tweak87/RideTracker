@@ -33,6 +33,7 @@ import kotlin.math.sin
 fun AndroidRideContextPanel(
     store: AndroidRideContextStore,
     requestParkSearch: () -> Unit,
+    parkLookupAllowed: Boolean = true,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -44,7 +45,7 @@ fun AndroidRideContextPanel(
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Park, Attraktion & Wetter", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Die Aufnahme bleibt lokal. Externe Standort-, Wetter- und Bildabrufe erfolgen erst nach deiner Auswahl.",
+                "Die Aufnahme bleibt lokal. Die Parkermittlung startet erst nach dem Beenden; Wetter- und Bildabrufe sind optional.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -73,11 +74,25 @@ fun AndroidRideContextPanel(
                 Switch(store.weatherEnabled, store::updateWeatherEnabled)
             }
 
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(Modifier.weight(1f)) {
+                    Text("Park nach Fahrt automatisch ermitteln")
+                    Text("OpenStreetMap · erst nach Aufnahmeende", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(store.autoParkLookupEnabled, store::updateAutoParkLookupEnabled)
+            }
+
             Button(
                 onClick = { store.markExternalLookupConsent(); requestParkSearch() },
-                enabled = !store.busy,
+                enabled = !store.busy && parkLookupAllowed,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (store.busy) "Wird geladen …" else "Parks im Umkreis suchen") }
+            ) { Text(if (store.busy) "Wird geladen …" else "Parks jetzt manuell suchen") }
+
+            if (!parkLookupAllowed) Text(
+                "Park und Attraktion werden bewusst erst nach dem Ende der Aufzeichnung gesucht.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
 
             Text(store.status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
@@ -188,6 +203,15 @@ private fun NearbyParkMap(
                 webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                         val uri = request?.url ?: return false
+                        return handleMapUri(uri)
+                    }
+
+                    @Suppress("DEPRECATION")
+                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                        return url?.let(Uri::parse)?.let(::handleMapUri) ?: false
+                    }
+
+                    private fun handleMapUri(uri: Uri): Boolean {
                         if (uri.scheme == "ridetracker" && uri.host == "park") {
                             uri.lastPathSegment?.toIntOrNull()?.let { index -> parks.getOrNull(index)?.let(selectPark) }
                             return true

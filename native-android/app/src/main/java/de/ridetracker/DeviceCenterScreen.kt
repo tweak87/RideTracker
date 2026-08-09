@@ -3,16 +3,25 @@ package de.ridetracker
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorManager
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.unit.dp
 import de.ridetracker.sensors.AndroidHeartRateManager
+import de.ridetracker.sensors.AndroidSensorRecorder
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.math.max
+import kotlin.math.sqrt
 
 internal data class AndroidDeviceChannel(
     var id: String,
@@ -52,6 +61,7 @@ internal class AndroidDeviceRegistry(private val context: Context) {
         AndroidDeviceDescriptor("phone-motion", "Smartphone Bewegung", "phone", "internal", true, true, mutableListOf(AndroidDeviceChannel("motion", "gForce", "g", true, 100.0))),
         AndroidDeviceDescriptor("phone-gps", "Smartphone GPS", "gnss", "internal", true, true, mutableListOf(AndroidDeviceChannel("location", "location", "deg", true, 1.0), AndroidDeviceChannel("speed", "speedKmh", "km/h", true, 1.0))),
         AndroidDeviceDescriptor("phone-camera", "Smartphone Kamera", "camera", "internal", true, true, mutableListOf(AndroidDeviceChannel("video", "video", "stream", true, 30.0))),
+        AndroidDeviceDescriptor("phone-barometer", "Smartphone Barometer", "barometer", "internal", (context.getSystemService(Context.SENSOR_SERVICE) as SensorManager).getDefaultSensor(Sensor.TYPE_PRESSURE) != null, true, mutableListOf(AndroidDeviceChannel("pressure", "pressureHpa", "hPa", true, 10.0), AndroidDeviceChannel("altitude", "relativeAltitude", "m", true, 10.0))),
         AndroidDeviceDescriptor("ble-heart", "BLE Herzfrequenz", "heartRate", "bluetooth-le", false, true, mutableListOf(AndroidDeviceChannel("heartRate", "heartRateBpm", "bpm", true, 1.0))),
         AndroidDeviceDescriptor("external-imu", "Externe IMU", "imu", "bluetooth-le", false, true, mutableListOf(AndroidDeviceChannel("acceleration", "acceleration", "m/s²", true, 200.0), AndroidDeviceChannel("gyroscope", "gyroscope", "rad/s", true, 200.0))),
         AndroidDeviceDescriptor("external-gnss", "Externer GNSS-Empfänger", "gnss", "bluetooth-le", false, true, mutableListOf(AndroidDeviceChannel("position", "location", "deg", true, 10.0), AndroidDeviceChannel("speed", "speedKmh", "km/h", true, 10.0))),
@@ -69,7 +79,7 @@ internal class AndroidDeviceRegistry(private val context: Context) {
     private fun loadDevices(): MutableList<AndroidDeviceDescriptor> = runCatching {
         val raw = prefs.getString("devices", null) ?: return@runCatching defaults()
         val array = JSONArray(raw)
-        MutableList(array.length()) { i ->
+        val loaded = MutableList(array.length()) { i ->
             val d = array.getJSONObject(i)
             val channels = d.getJSONArray("channels")
             AndroidDeviceDescriptor(
@@ -81,6 +91,8 @@ internal class AndroidDeviceRegistry(private val context: Context) {
                 },
             )
         }
+        defaults().forEach { fallback -> if (loaded.none { it.id == fallback.id }) loaded += fallback }
+        loaded
     }.getOrElse { defaults() }
 
     private fun loadBindings(): MutableList<AndroidMetricBinding> = runCatching {
@@ -120,8 +132,21 @@ internal class AndroidDeviceRegistry(private val context: Context) {
         bindings = bindings.toMutableList()
     }
 
-    fun add() {
-        devices.add(AndroidDeviceDescriptor("custom-${System.currentTimeMillis()}", "Neues Gerät", "custom", "bluetooth-le", false, true, mutableListOf(AndroidDeviceChannel("value", "customValue", "", true, 1.0))))
+    fun add(type: String) {
+        val existingId = when (type) {
+            "heartRate" -> "ble-heart"
+            "imu" -> "external-imu"
+            "gnss" -> "external-gnss"
+            "camera" -> "external-camera"
+            "barometer" -> "phone-barometer"
+            else -> null
+        }
+        val existing = existingId?.let { id -> devices.firstOrNull { it.id == id } }
+        if (existing != null) {
+            existing.enabled = true
+        } else {
+            devices.add(AndroidDeviceDescriptor("custom-${System.currentTimeMillis()}", "Benutzerdefinierter Sensor", "custom", "bluetooth-le", true, true, mutableListOf(AndroidDeviceChannel("value", "customValue", "", true, 1.0))))
+        }
         save()
     }
 
@@ -135,16 +160,56 @@ internal fun AndroidDeviceCenter(
     modifier: Modifier,
     registry: AndroidDeviceRegistry,
     heartRate: AndroidHeartRateManager,
+    recorder: AndroidSensorRecorder,
 ) {
     var showRouting by remember { mutableStateOf(false) }
+    var showAddDialog by remember { mutableStateOf(false) }
+    if (showAddDialog) AddDeviceDialog(
+        hasBarometer = recorder.hasBarometer,
+        close = { showAddDialog = false },
+        select = { type -> registry.add(type); showAddDialog = false },
+    )
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row {
             Text(if (showRouting) "Quellen & Prioritäten" else "Geräte & Sensoren", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
             if (showRouting) Button(onClick = { showRouting = false }) { Text("Zurück") }
-            else Button(onClick = registry::add) { Text("Hinzufügen") }
+            else Button(onClick = { showAddDialog = true }) { Text("Hinzufügen") }
         }
-        if (showRouting) RoutingEditor(registry) else DeviceList(registry, heartRate) { showRouting = true }
+        if (showRouting) RoutingEditor(registry) else DeviceList(registry, heartRate, recorder) { showRouting = true }
     }
+}
+
+@Composable
+private fun AddDeviceDialog(hasBarometer: Boolean, close: () -> Unit, select: (String) -> Unit) {
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text("Gerät oder Sensor hinzufügen") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                listOf(
+                    Triple("heartRate", "BLE-Herzfrequenz", "Brustgurt oder kompatibler Pulssensor"),
+                    Triple("imu", "Externe IMU", "Beschleunigung und Gyroskop über Bluetooth LE"),
+                    Triple("gnss", "Externer GNSS-Empfänger", "Präzisere Position und Geschwindigkeit"),
+                    Triple("camera", "Externe Kamera", "WLAN-/Kameraquelle konfigurieren"),
+                    Triple("custom", "Benutzerdefinierter Sensor", "Eigenen Kanal und Einheit anlegen"),
+                ).forEach { (id, title, subtitle) ->
+                    OutlinedButton(onClick = { select(id) }, modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.fillMaxWidth()) {
+                            Text(title)
+                            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                Text(
+                    if (hasBarometer) "Das interne Barometer wurde erkannt und ist bereits verfügbar."
+                    else "Kein internes Barometer erkannt. Ein nicht vorhandener Telefonsensor kann nicht nachinstalliert werden.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = { TextButton(close) { Text("Schließen") } },
+    )
 }
 
 @Composable
@@ -213,10 +278,11 @@ private fun RoutingEditor(registry: AndroidDeviceRegistry) {
 }
 
 @Composable
-private fun DeviceList(registry: AndroidDeviceRegistry, heartRate: AndroidHeartRateManager, openRouting: () -> Unit) {
+private fun DeviceList(registry: AndroidDeviceRegistry, heartRate: AndroidHeartRateManager, recorder: AndroidSensorRecorder, openRouting: () -> Unit) {
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         if (heartRate.permissionsGranted()) heartRate.scan()
     }
+    LiveSensorDiagnostics(recorder, heartRate)
     Card {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("BLE Herzfrequenz", style = MaterialTheme.typography.titleMedium)
@@ -252,6 +318,74 @@ private fun DeviceList(registry: AndroidDeviceRegistry, heartRate: AndroidHeartR
                     }
                 }
             }
+        }
+    }
+}
+
+private data class TimedSensorValue(val timestampMs: Long, val value: Double)
+
+@Composable
+private fun LiveSensorDiagnostics(recorder: AndroidSensorRecorder, heartRate: AndroidHeartRateManager) {
+    val acceleration = remember { mutableStateListOf<TimedSensorValue>() }
+    val gyroscope = remember { mutableStateListOf<TimedSensorValue>() }
+    val pressure = remember { mutableStateListOf<TimedSensorValue>() }
+    val speed = remember { mutableStateListOf<TimedSensorValue>() }
+    val heart = remember { mutableStateListOf<TimedSensorValue>() }
+    DisposableEffect(recorder) {
+        recorder.startDiagnostics()
+        onDispose { recorder.stopDiagnostics() }
+    }
+    val sample = recorder.liveSensorSample
+    LaunchedEffect(sample.timestampMs, recorder.speedKmh, heartRate.latestHeartRate) {
+        if (sample.timestampMs <= 0L) return@LaunchedEffect
+        val now = android.os.SystemClock.elapsedRealtime()
+        fun add(list: MutableList<TimedSensorValue>, value: Double?) {
+            if (value != null && value.isFinite()) list += TimedSensorValue(now, value)
+            while (list.isNotEmpty() && now - list.first().timestampMs > 8_000L) list.removeAt(0)
+        }
+        add(acceleration, sqrt(sample.accelerationXG * sample.accelerationXG + sample.accelerationYG * sample.accelerationYG + sample.accelerationZG * sample.accelerationZG))
+        add(gyroscope, sqrt(sample.gyroscopeX * sample.gyroscopeX + sample.gyroscopeY * sample.gyroscopeY + sample.gyroscopeZ * sample.gyroscopeZ))
+        add(pressure, sample.pressureHpa)
+        add(speed, recorder.speedKmh)
+        add(heart, heartRate.latestHeartRate?.toDouble())
+    }
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .35f))) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Live-Sensordiagnose", style = MaterialTheme.typography.titleMedium)
+            Text("Die letzten 8 Sekunden werden direkt vom Gerät dargestellt. So erkennst du vor der Fahrt Ausfälle und eingefrorene Sensoren.", style = MaterialTheme.typography.bodySmall)
+            SensorGraph("Beschleunigung", "${"%.2f".format(acceleration.lastOrNull()?.value ?: 0.0)} G", acceleration, Color(0xFF5FD0FF))
+            SensorGraph("Gyroskop", "${"%.2f".format(gyroscope.lastOrNull()?.value ?: 0.0)} rad/s", gyroscope, Color(0xFFFFD166))
+            if (recorder.hasBarometer) SensorGraph("Luftdruck", "${"%.1f".format(pressure.lastOrNull()?.value ?: 0.0)} hPa", pressure, Color(0xFF65F0B7))
+            else Text("Barometer · auf diesem Gerät nicht vorhanden", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            SensorGraph("GPS-Geschwindigkeit", "${"%.1f".format(recorder.speedKmh)} km/h", speed, Color(0xFFFF6B81))
+            SensorGraph("Herzfrequenz", heartRate.latestHeartRate?.let { "$it bpm" } ?: "nicht verbunden", heart, Color(0xFFFF5A9D))
+        }
+    }
+}
+
+@Composable
+private fun SensorGraph(title: String, value: String, values: List<TimedSensorValue>, color: Color) {
+    val graphBackground = MaterialTheme.colorScheme.surface.copy(alpha = .65f)
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(title, style = MaterialTheme.typography.labelMedium)
+            Text(value, style = MaterialTheme.typography.labelMedium, color = color)
+        }
+        Canvas(Modifier.fillMaxWidth().height(54.dp)) {
+            drawRoundRect(graphBackground, cornerRadius = androidx.compose.ui.geometry.CornerRadius(10f, 10f))
+            if (values.size < 2) return@Canvas
+            val minimum = values.minOf { it.value }
+            val maximum = values.maxOf { it.value }
+            val range = max(maximum - minimum, 0.02)
+            val start = values.first().timestampMs
+            val duration = max((values.last().timestampMs - start).toDouble(), 1.0)
+            val path = Path()
+            values.forEachIndexed { index, point ->
+                val x = ((point.timestampMs - start) / duration * size.width).toFloat()
+                val y = (size.height - 7f - ((point.value - minimum) / range * (size.height - 14f))).toFloat()
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.5f))
         }
     }
 }
