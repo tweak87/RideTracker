@@ -99,6 +99,7 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     private var previousPhase = "idle"
     private var videoFilename: String? = null
     private var videoStartOffsetSeconds = 0.0
+    private var videoHudEmbedded = false
     private var rideContextSnapshot: AndroidRideContextSnapshot? = null
     private var diagnosticsActive = false
     private var lastLiveSensorPublishMs = 0L
@@ -153,8 +154,13 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
         pressure?.also { hasBarometer = true; sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
     }
 
-    fun attachVideo(filename: String?, startOffsetSeconds: Double) { videoFilename = filename; videoStartOffsetSeconds = startOffsetSeconds }
+    fun attachVideo(filename: String?, startOffsetSeconds: Double, hudEmbedded: Boolean = false) {
+        videoFilename = filename
+        videoStartOffsetSeconds = startOffsetSeconds
+        videoHudEmbedded = hudEmbedded
+    }
     fun attachRideContext(snapshot: AndroidRideContextSnapshot) { rideContextSnapshot = snapshot }
+    fun sessionSamplesSnapshot(): List<RideSessionSample> = sessionSamples.toList()
 
     fun stop() {
         if (!isRecording) return
@@ -194,7 +200,7 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
             id = sessionId, startedAt = startedAtInstant, endedAt = Instant.now(), events = sessionEvents.toList() + sourceEvents, samples = sessionSamples.toList(),
             summary = RideSessionSummary(duration, sampleCount, distanceMeters, acceptedLocations, rejectedLocations, qualityScore, ridePhase),
             calibrationMode = "automatic", forwardEdge = forwardEdge.name.lowercase(), calibration = rideEngine.calibration,
-            videoFilename = videoFilename, videoStartOffsetSeconds = videoStartOffsetSeconds,
+            videoFilename = videoFilename, videoStartOffsetSeconds = videoStartOffsetSeconds, videoHudEmbedded = videoHudEmbedded,
             privateNote = privateNote, communityComment = communityComment, heartRateSource = sourceRouter.resolve<Int>("heartRateBpm")?.sourceId ?: heartRateSource,
             configurationSnapshot = configurationSnapshot, rideContext = rideContextSnapshot,
         )
@@ -205,7 +211,7 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
         sampleCount = 0; speedKmh = 0.0; speedSource = "unavailable"; stationaryLocked = false; relativeAltitudeM = 0.0; ridePhase = "idle"; previousPhase = "idle"
         qualityScore = 0; acceptedLocations = 0; rejectedLocations = 0; distanceMeters = 0.0
         latestLocation = null; latestSpeedMs = 0.0; latestAltitude = 0.0; lastAltitudeTime = 0.0; climbRate = 0.0
-        hasBarometer = pressure != null; lastSavedPath = null; videoFilename = null; videoStartOffsetSeconds = 0.0
+        hasBarometer = pressure != null; lastSavedPath = null; videoFilename = null; videoStartOffsetSeconds = 0.0; videoHudEmbedded = false
         liveGForceSample = AndroidLiveGForceSample()
         rideContextSnapshot = null; sessionSamples.clear(); sessionEvents.clear(); sourceRouter.reset(); coreAdapter.resetRuntime(); altitudeFusion.reset(); rideEngine.reset(); gpsSpeedEstimator.reset()
     }

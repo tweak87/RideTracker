@@ -12,8 +12,8 @@ android {
         applicationId = "de.ridetracker"
         minSdk = 21
         targetSdk = 35
-        versionCode = 202608091
-        versionName = "2026.08.09.1"
+        versionCode = 202608092
+        versionName = "2026.08.09.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["appLabel"] = "RideTracker"
     }
@@ -29,18 +29,18 @@ android {
     buildTypes {
         create("fireTest") {
             initWith(getByName("debug"))
-            applicationIdSuffix = ".fire8v5"
+            applicationIdSuffix = ".fire8v6"
             versionNameSuffix = "-fire"
             matchingFallbacks += listOf("debug")
-            manifestPlaceholders["appLabel"] = "RideTracker FIRE 8 v5"
+            manifestPlaceholders["appLabel"] = "RideTracker FIRE 8 v6"
             ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
         }
         create("deviceTest") {
             initWith(getByName("debug"))
-            applicationIdSuffix = ".devicev5"
+            applicationIdSuffix = ".devicev6"
             versionNameSuffix = "-device"
             matchingFallbacks += listOf("debug")
-            manifestPlaceholders["appLabel"] = "RideTracker DEVICE v5"
+            manifestPlaceholders["appLabel"] = "RideTracker DEVICE v6"
         }
     }
 
@@ -84,6 +84,7 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$cameraXVersion")
     implementation("androidx.camera:camera-video:$cameraXVersion")
     implementation("androidx.camera:camera-view:$cameraXVersion")
+    implementation("androidx.camera:camera-effects:$cameraXVersion")
 
     testImplementation("junit:junit:4.13.2")
 }

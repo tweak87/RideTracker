@@ -7,8 +7,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
-import android.widget.MediaController
-import android.widget.VideoView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -41,6 +39,7 @@ import de.ridetracker.sensors.AndroidHeartRateManager
 import de.ridetracker.sensors.AndroidSensorRecorder
 import de.ridetracker.session.LocalProfileStore
 import de.ridetracker.video.AndroidVideoRecorder
+import de.ridetracker.video.VideoHudSample
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -116,6 +115,24 @@ fun FunctionalRideTrackerApp(activity: Activity) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) videoRecorder.configure()
     }
     LaunchedEffect(heartRate.latestHeartRate, heartRate.deviceName) { recorder.setHeartRate(heartRate.latestHeartRate, heartRate.deviceName) }
+    LaunchedEffect(recorder.liveGForceSample.timestampMs, recorder.speedKmh, recorder.ridePhase, recorder.latestHeartRateBpm) {
+        val g = recorder.liveGForceSample
+        if (recorder.isRecording && g.timestampMs > 0L) {
+            videoRecorder.updateHud(
+                VideoHudSample(
+                    timestampMs = g.timestampMs,
+                    elapsedSeconds = ((g.timestampMs * 1_000_000L - recorder.recordingStartNs).coerceAtLeast(0L)) / 1_000_000_000.0,
+                    speedKmh = recorder.speedKmh,
+                    normalG = g.normalG,
+                    lateralG = g.lateralG,
+                    longitudinalG = g.longitudinalG,
+                    totalG = kotlin.math.sqrt(g.normalG * g.normalG + g.lateralG * g.lateralG + g.longitudinalG * g.longitudinalG),
+                    phase = recorder.ridePhase,
+                    heartRateBpm = recorder.latestHeartRateBpm,
+                ),
+            )
+        }
+    }
 
     fun beginAutomaticRecording(withVideo: Boolean) {
         if (recorder.isRecording || starting) return
@@ -259,7 +276,11 @@ fun FunctionalRideTrackerApp(activity: Activity) {
     fun saveRide(): Boolean {
         return runCatching {
             if (sessionUsesVideo && videoRecorder.isFinalizing) error("Das Video wird noch abgeschlossen. Bitte einen Moment warten.")
-            recorder.attachVideo(if (sessionUsesVideo) videoRecorder.playableVideoFile?.takeIf(File::exists)?.name else null, videoRecorder.startOffsetSeconds)
+            recorder.attachVideo(
+                if (sessionUsesVideo) videoRecorder.playableVideoFile?.takeIf(File::exists)?.name else null,
+                videoRecorder.startOffsetSeconds,
+                sessionUsesVideo && videoRecorder.isHudEmbedded,
+            )
             recorder.attachRideContext(rideContext.snapshot())
             recorder.saveSession().also { require(it.exists() && it.length() > 0L) { "Die Fahrtdaten wurden nicht geschrieben." } }
         }.onSuccess { file ->
@@ -566,6 +587,10 @@ private fun AndroidRecording(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var exportStatus by remember { mutableStateOf("") }
+    val previewSamples = if (!recorder.isRecording && recorder.sampleCount > 0) {
+        remember(recorder.sessionId, recorder.sampleCount) { recorder.sessionSamplesSnapshot() }
+    } else emptyList()
+    val previewTrack = remember(previewSamples) { deriveAndroidTrackPoints(previewSamples) }
     val exportVideo = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("video/mp4")) { destination ->
         val source = video.playableVideoFile
         if (destination != null && source != null) scope.launch {
@@ -582,20 +607,31 @@ private fun AndroidRecording(
         Text("Neue Fahrt", style = MaterialTheme.typography.headlineMedium)
         val videoFile = video.playableVideoFile
         if (!recorder.isRecording && sessionUsesVideo && videoFile != null && videoFile.exists()) {
-            Text("Videovorschau", style = MaterialTheme.typography.titleMedium)
-            AndroidView(
-                factory = { context -> VideoView(context).apply { setMediaController(MediaController(context).also { it.setAnchorView(this) }); tag = videoFile.absolutePath; setVideoURI(Uri.fromFile(videoFile)) } },
-                update = { view -> if (view.tag != videoFile.absolutePath) { view.tag = videoFile.absolutePath; view.setVideoURI(Uri.fromFile(videoFile)) } },
-                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+            Text("Aufnahme prüfen", style = MaterialTheme.typography.titleLarge)
+            Text("Abspielen, Sensorwerte kontrollieren und 3D-Strecke ansehen – erst danach entscheidest du über das Speichern.", color = RideMuted, style = MaterialTheme.typography.bodySmall)
+            AndroidRideVideoPreview(
+                file = videoFile,
+                samples = previewSamples,
+                startOffsetSeconds = video.startOffsetSeconds,
+                hudEmbedded = video.isHudEmbedded,
+                modifier = Modifier.fillMaxWidth(),
             )
             OutlinedButton(onClick = { exportVideo.launch("RideTracker-${recorder.sessionId.take(8)}.mp4") }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Filled.Download, null); Spacer(Modifier.width(7.dp)); Text("Video in Dateien speichern")
+                Icon(Icons.Filled.Download, null); Spacer(Modifier.width(7.dp)); Text(if (video.isHudEmbedded) "HUD-Video in Dateien speichern" else "Originalvideo in Dateien speichern")
             }
             if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
         } else if (video.isFinalizing) {
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(24.dp)); Spacer(Modifier.width(10.dp)); Text("Video wird abgeschlossen und auf Abspielbarkeit geprüft …")
+                }
+            }
+        } else if (!recorder.isRecording && sessionUsesVideo && recorder.sampleCount > 0) {
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = RideRose.copy(alpha = .15f))) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text("Video konnte nicht als Vorschau geöffnet werden", style = MaterialTheme.typography.titleMedium, color = RideRose)
+                    Text(video.status, style = MaterialTheme.typography.bodySmall)
+                    Text("Die Sensordaten und die 3D-Auswertung sind weiterhin vorhanden und können gespeichert werden.", color = RideMuted, style = MaterialTheme.typography.bodySmall)
                 }
             }
         } else Surface(color = Color.Black, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
@@ -629,7 +665,24 @@ private fun AndroidRecording(
             }
         }
         AndroidGForceTrail(recorder.liveGForceSample, Modifier.fillMaxWidth())
-        AndroidRideContextPanel(rideContext, requestParkSearch, parkLookupAllowed = !recorder.isRecording && recorder.sampleCount > 0)
+        if (!recorder.isRecording && recorder.sampleCount > 0) {
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = RideSurfaceHigh)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("3D-Auswertung vor dem Speichern", style = MaterialTheme.typography.titleLarge)
+                    Text("Die räumliche Strecke wird direkt aus der noch ungespeicherten Session erzeugt.", color = RideMuted, style = MaterialTheme.typography.bodySmall)
+                    AndroidTrack3DViewer(previewTrack, Modifier.fillMaxWidth())
+                }
+            }
+            AndroidRideContextPanel(rideContext, requestParkSearch, parkLookupAllowed = true)
+        } else if (!recorder.isRecording) {
+            Card(Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.LocationOn, null, tint = RideMuted)
+                    Spacer(Modifier.width(9.dp))
+                    Text("Park, Attraktion, Wetter, Video und 3D-Auswertung erscheinen nach dem Beenden der Aufnahme.", color = RideMuted, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
         Button(enabled = !recorder.isRecording && !stopping && !video.isFinalizing && recorder.sampleCount > 0 && recorder.lastSavedPath == null, onClick = { saveRide() }, modifier = Modifier.fillMaxWidth()) { Text("Fahrt bewusst speichern") }
         Spacer(Modifier.height(190.dp))
     }

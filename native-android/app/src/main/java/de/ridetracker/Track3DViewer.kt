@@ -18,6 +18,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import de.ridetracker.session.RideSessionSample
+import de.ridetracker.session.rideSessionSamplesFromJson
 import org.json.JSONObject
 import kotlin.math.*
 
@@ -38,44 +40,37 @@ data class AndroidTrackPoint(
 
 enum class AndroidHeatMetric(val title: String) { SPEED("Geschwindigkeit"), TOTAL_G("Gesamtkraft"), NORMAL_G("Vertikalkraft"), LATERAL_G("Seitenkraft"), HEIGHT("Höhe") }
 
-fun deriveAndroidTrackPoints(root: JSONObject): List<AndroidTrackPoint> {
-    val samples = root.optJSONArray("samples") ?: return emptyList()
-    val raw = buildList {
-        for (index in 0 until samples.length()) {
-            val sample = samples.optJSONObject(index) ?: continue
-            val latitude = sample.optDouble("latitude", Double.NaN)
-            val longitude = sample.optDouble("longitude", Double.NaN)
-            if (!latitude.isFinite() || !longitude.isFinite()) continue
-            add(sample)
-        }
-    }
+fun deriveAndroidTrackPoints(root: JSONObject): List<AndroidTrackPoint> = deriveAndroidTrackPoints(rideSessionSamplesFromJson(root))
+
+fun deriveAndroidTrackPoints(samples: List<RideSessionSample>): List<AndroidTrackPoint> {
+    val raw = samples.filter { it.latitude?.isFinite() == true && it.longitude?.isFinite() == true }
     if (raw.size < 2) return emptyList()
     val step = max(1, ceil(raw.size / 400.0).toInt())
     val selected = raw.filterIndexed { index, _ -> index % step == 0 }.toMutableList().apply { if (last() !== raw.last()) add(raw.last()) }
-    val originLatitude = selected.first().optDouble("latitude")
-    val originLongitude = selected.first().optDouble("longitude")
+    val originLatitude = requireNotNull(selected.first().latitude)
+    val originLongitude = requireNotNull(selected.first().longitude)
     val latitudeScale = 111_320.0
     val longitudeScale = cos(Math.toRadians(originLatitude)) * 111_320.0
     var distance = 0.0
     var previousX = 0.0
-    var previousY = selected.first().optDouble("relativeAltitudeM", 0.0)
+    var previousY = selected.first().relativeAltitudeM ?: 0.0
     var previousZ = 0.0
     return selected.mapIndexed { index, sample ->
-        val x = (sample.optDouble("longitude") - originLongitude) * longitudeScale
-        val z = (sample.optDouble("latitude") - originLatitude) * latitudeScale
-        val y = sample.optDouble("relativeAltitudeM", 0.0).takeIf { it.isFinite() } ?: 0.0
+        val x = (requireNotNull(sample.longitude) - originLongitude) * longitudeScale
+        val z = (requireNotNull(sample.latitude) - originLatitude) * latitudeScale
+        val y = sample.relativeAltitudeM?.takeIf { it.isFinite() } ?: 0.0
         if (index > 0) distance += sqrt((x - previousX).pow(2) + (y - previousY).pow(2) + (z - previousZ).pow(2))
         previousX = x; previousY = y; previousZ = z
         AndroidTrackPoint(
             index = index,
-            timestamp = sample.optDouble("timestamp", index / 10.0),
+            timestamp = sample.timestamp,
             x = x, y = y, z = z, distanceM = distance,
-            speedKmh = if (sample.has("speedKmh")) sample.optDouble("speedKmh") else sample.optDouble("speedMS", 0.0) * 3.6,
-            normalG = sample.optDouble("normalG", 0.0),
-            lateralG = sample.optDouble("lateralG", 0.0),
-            longitudinalG = sample.optDouble("longitudinalG", 0.0),
-            totalG = sample.optDouble("totalG", 0.0),
-            confidence = (sample.optDouble("qualityScore", 0.0) / 100.0).coerceIn(0.0, 1.0),
+            speedKmh = sample.speedMS * 3.6,
+            normalG = sample.normalG,
+            lateralG = sample.lateralG,
+            longitudinalG = sample.longitudinalG,
+            totalG = sample.totalG,
+            confidence = (sample.qualityScore / 100.0).coerceIn(0.0, 1.0),
         )
     }
 }

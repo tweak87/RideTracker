@@ -18,6 +18,8 @@ const files = {
   deviceScreen: 'native-android/app/src/main/java/de/ridetracker/DeviceCenterScreen.kt',
   liveHud: 'native-android/app/src/main/java/de/ridetracker/AndroidLiveHud.kt',
   video: 'native-android/app/src/main/java/de/ridetracker/video/AndroidVideoRecorder.kt',
+  videoHud: 'native-android/app/src/main/java/de/ridetracker/video/VideoHudOverlay.kt',
+  videoPreview: 'native-android/app/src/main/java/de/ridetracker/AndroidRideVideoPreview.kt',
   theme: 'native-android/app/src/main/java/de/ridetracker/RideTrackerTheme.kt',
 };
 
@@ -40,7 +42,10 @@ requireToken('app', 'Fahrt automatisch starten', 'Android bottom recording contr
 requireToken('app', 'AndroidLiveRecordingFullscreen', 'Android camera and G-force fullscreen missing');
 requireToken('liveHud', 'G_TRAIL_DURATION_MS = 3_000L', 'Android G-force HUD must retain exactly three seconds');
 requireToken('liveHud', 'PreviewView.ImplementationMode.COMPATIBLE', 'Huawei-compatible camera preview mode missing');
-requireToken('video', 'provider.bindToLifecycle(lifecycleOwner, selector, preview, capture)', 'Camera preview and recording must be bound together');
+requireToken('video', 'provider.bindToLifecycle(lifecycleOwner, selector, useCaseGroup)', 'Camera preview, recording and HUD effect must be bound together');
+requireToken('video', 'CameraEffect.VIDEO_CAPTURE', 'Sensor HUD must be embedded in supported video recordings');
+requireToken('videoHud', 'VideoHudHistory(private val durationMs: Long = 3_000L)', 'Embedded video HUD must retain exactly three seconds');
+requireToken('videoPreview', 'telemetryTrailAt', 'Video preview needs synchronized sensor telemetry');
 requireToken('video', 'awaitFinalized', 'Video must finish and validate before playback or ride saving');
 requireToken('video', 'MediaMetadataRetriever', 'Finalized Android videos must be checked for playback metadata');
 requireToken('theme', 'darkColorScheme', 'Modern dark Android theme missing');
@@ -62,6 +67,8 @@ requireToken('context', 'open-meteo.com', 'Android weather snapshots missing');
 requireToken('context', 'commons.wikimedia.org', 'Android licensed stock image lookup missing');
 requireToken('context', 'externalLookupConsent', 'External location lookup consent missing');
 requireToken('contextScreen', 'NearbyParkMap', 'Android nearby park map missing');
+requireToken('contextScreen', 'AttractionPickerDialog', 'Android attraction picker dialog missing');
+requireToken('contextScreen', 'ridetracker://attraction/', 'Attractions must be selectable on the map');
 requireToken('contextScreen', 'AndroidSensorFaq', 'Android sensor FAQ missing');
 requireToken('recorder', 'GpsSpeedEstimator', 'Android recorder must use canonical stationary speed filtering');
 requireToken('recorder', 'TYPE_ROTATION_VECTOR', 'Android compass source missing');
@@ -72,8 +79,8 @@ requireToken('context', 'OVERPASS_ENDPOINTS', 'Park search needs resilient provi
 requireToken('platformLocation', 'LocationManager.GPS_PROVIDER', 'Platform GPS provider missing');
 requireToken('platformLocation', 'LocationManager.NETWORK_PROVIDER', 'Platform network location fallback missing');
 requireToken('gradle', 'minSdk = 21', 'Fire OS 5 compatibility floor missing');
-requireToken('gradle', 'applicationIdSuffix = ".fire8v5"', 'Side-by-side Fire OS 8 test package missing');
-requireToken('gradle', 'applicationIdSuffix = ".devicev5"', 'Side-by-side Huawei/Android test package missing');
+requireToken('gradle', 'applicationIdSuffix = ".fire8v6"', 'Side-by-side Fire OS 8 test package missing');
+requireToken('gradle', 'applicationIdSuffix = ".devicev6"', 'Side-by-side Huawei/Android test package missing');
 requireToken('gradle', 'useLegacyPackaging = true', 'Fire-compatible native library packaging missing');
 requireToken('gradle', '"armeabi-v7a", "arm64-v8a"', 'Fire APK must only package compatible ARM variants');
 rejectToken('gradle', 'play-services-location', 'Fire OS build must not depend on Google Play Services location');
@@ -81,12 +88,13 @@ requireToken('speed', 'stationaryLocked', 'Android stationary GPS lock missing')
 requireToken('viewer', 'Räumliches XYZ-Modell', 'Android spatial XYZ viewer missing');
 requireToken('viewer', 'detectTapGestures', 'Android 3D point inspector missing');
 requireToken('viewer', 'smoothAndroidTrackPoints', 'Android coaster model smoothing missing');
+requireToken('app', '3D-Auswertung vor dem Speichern', 'Unsaved rides need an immediate 3D preview');
 requireToken('media', 'Video in Dateien speichern', 'Finalized ride video export missing');
 requireToken('media', 'thumbnailNode', 'Android ride thumbnails missing');
 requireToken('workflow', 'assembleDebug', 'Android APK build missing');
 requireToken('workflow', 'assembleFireTest', 'Dedicated Fire OS APK build missing');
-requireToken('workflow', 'INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.1.apk', 'Direct Huawei/Android APK artifact missing');
-requireToken('workflow', 'INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.1.apk', 'Direct Fire APK artifact missing');
+requireToken('workflow', 'INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.09.2.apk', 'Direct Huawei/Android APK artifact missing');
+requireToken('workflow', 'INSTALL-RideTracker-FIRE-OS-8-v2026.08.09.2.apk', 'Direct Fire APK artifact missing');
 requireToken('workflow', 'apksigner', 'Fire APK signature verification missing');
 requireToken('workflow', 'gh release create', 'Direct Android APK release missing');
 
