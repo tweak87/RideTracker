@@ -38,30 +38,39 @@ jobs:
 
       - name: Android lint
         working-directory: native-android
-        run: gradle :app:lintDebug :app:lintFireTest --stacktrace
+        run: gradle :app:lintDebug :app:lintDeviceTest :app:lintFireTest --stacktrace
 
-      - name: Build standard and Fire OS APKs
+      - name: Build standard, device-test and Fire OS APKs
         working-directory: native-android
-        run: gradle :app:assembleDebug :app:assembleFireTest --stacktrace
+        run: gradle :app:assembleDebug :app:assembleDeviceTest :app:assembleFireTest --stacktrace
 
       - name: Prepare installable APK
         run: |
           mkdir -p dist
-          cp native-android/app/build/outputs/apk/debug/app-debug.apk dist/RideTracker-Android-2026.08.08.3-debug.apk
-          cp native-android/app/build/outputs/apk/fireTest/app-fireTest.apk dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.3.apk
-          test -s dist/RideTracker-Android-2026.08.08.3-debug.apk
-          test -s dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.3.apk
+          cp native-android/app/build/outputs/apk/debug/app-debug.apk dist/RideTracker-Android-2026.08.08.4-debug.apk
+          cp native-android/app/build/outputs/apk/deviceTest/app-deviceTest.apk dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.08.4.apk
+          cp native-android/app/build/outputs/apk/fireTest/app-fireTest.apk dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.4.apk
+          test -s dist/RideTracker-Android-2026.08.08.4-debug.apk
+          test -s dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.08.4.apk
+          test -s dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.4.apk
 
       - name: Verify APK package, SDK, signature and archive
         run: |
           BUILD_TOOLS_DIR="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
-          FIRE_APK="dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.3.apk"
+          DEVICE_APK="dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.08.4.apk"
+          FIRE_APK="dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.4.apk"
+          "$BUILD_TOOLS_DIR/apksigner" verify --verbose --print-certs "$DEVICE_APK" | tee dist/device-apk-signature.txt
+          "$BUILD_TOOLS_DIR/aapt" dump badging "$DEVICE_APK" | tee dist/device-apk-badging.txt
+          unzip -t "$DEVICE_APK" | tee dist/device-apk-archive-test.txt
           "$BUILD_TOOLS_DIR/apksigner" verify --verbose --print-certs "$FIRE_APK" | tee dist/fire-apk-signature.txt
           "$BUILD_TOOLS_DIR/aapt" dump badging "$FIRE_APK" | tee dist/fire-apk-badging.txt
           unzip -t "$FIRE_APK" | tee dist/fire-apk-archive-test.txt
-          grep -q "package: name='de.ridetracker.fire8v3'" dist/fire-apk-badging.txt
+          grep -q "package: name='de.ridetracker.devicev4'" dist/device-apk-badging.txt
+          grep -q "application-label:'RideTracker DEVICE v4'" dist/device-apk-badging.txt
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" dist/device-apk-signature.txt
+          grep -q "package: name='de.ridetracker.fire8v4'" dist/fire-apk-badging.txt
           grep -q "sdkVersion:'21'" dist/fire-apk-badging.txt
-          grep -q "application-label:'RideTracker FIRE 8 TEST'" dist/fire-apk-badging.txt
+          grep -q "application-label:'RideTracker FIRE 8 v4'" dist/fire-apk-badging.txt
           grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" dist/fire-apk-signature.txt
 
       - name: Upload debug APK
@@ -69,8 +78,12 @@ jobs:
         with:
           name: RideTracker-Android-debug
           path: |
-            dist/RideTracker-Android-2026.08.08.3-debug.apk
-            dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.3.apk
+            dist/RideTracker-Android-2026.08.08.4-debug.apk
+            dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.08.4.apk
+            dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.4.apk
+            dist/device-apk-signature.txt
+            dist/device-apk-badging.txt
+            dist/device-apk-archive-test.txt
             dist/fire-apk-signature.txt
             dist/fire-apk-badging.txt
             dist/fire-apk-archive-test.txt
@@ -81,14 +94,15 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
-          APK_TAG: android-v2026.08.08.3
-          STANDARD_APK: dist/RideTracker-Android-2026.08.08.3-debug.apk
-          FIRE_APK: dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.3.apk
+          APK_TAG: android-v2026.08.08.4
+          STANDARD_APK: dist/RideTracker-Android-2026.08.08.4-debug.apk
+          DEVICE_APK: dist/INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.08.4.apk
+          FIRE_APK: dist/INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.4.apk
         run: |
           if gh release view "$APK_TAG" >/dev/null 2>&1; then
-            gh release upload "$APK_TAG" "$STANDARD_APK" "$FIRE_APK" --clobber
+            gh release upload "$APK_TAG" "$STANDARD_APK" "$DEVICE_APK" "$FIRE_APK" --clobber
           else
-            gh release create "$APK_TAG" "$STANDARD_APK" "$FIRE_APK" --target "$GITHUB_SHA" --prerelease --title "RideTracker Android 2026.08.08.3 (Fire OS 8)" --notes "Für Fire OS ausschließlich INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.3.apk verwenden. Sie trägt gut sichtbar den Namen RideTracker FIRE 8 TEST und die neue Paket-ID de.ridetracker.fire8v3, damit kein Signaturkonflikt mit früheren Testbuilds entsteht. Native Bibliotheken verwenden das ältere, auf Fire OS robustere Extraktionsformat. GPS läuft ohne Google Play Services über Android LocationManager. Dies ist ein Debug-Testbuild; Installation aus unbekannten Quellen muss für Dateien/Silk bewusst erlaubt werden."
+            gh release create "$APK_TAG" "$STANDARD_APK" "$DEVICE_APK" "$FIRE_APK" --target "$GITHUB_SHA" --prerelease --title "RideTracker Android 2026.08.08.4 (Huawei & Fire OS)" --notes "Für Huawei/Android INSTALL-RideTracker-ANDROID-DEVICE-v2026.08.08.4.apk und für Fire OS ausschließlich INSTALL-RideTracker-FIRE-OS-8-v2026.08.08.4.apk verwenden. Beide tragen neue Paket-IDs und können deshalb ohne Signaturkonflikt neben älteren Testbuilds installiert werden. Neu sind der CameraX-Livepreview im Vollbild, das native Drei-Sekunden-G-Kraft-HUD, ein dunkles modernes Design und Wischgesten. Dies sind Debug-Testbuilds; Installation aus unbekannten Quellen muss für Dateien/Silk bewusst erlaubt werden."
           fi
 
       - name: Upload test and lint reports
@@ -100,6 +114,8 @@ jobs:
             native-android/app/build/reports/tests/
             native-android/app/build/reports/lint-results-debug.html
             native-android/app/build/reports/lint-results-debug.xml
+            native-android/app/build/reports/lint-results-deviceTest.html
+            native-android/app/build/reports/lint-results-deviceTest.xml
             native-android/app/build/reports/lint-results-fireTest.html
             native-android/app/build/reports/lint-results-fireTest.xml
           if-no-files-found: ignore

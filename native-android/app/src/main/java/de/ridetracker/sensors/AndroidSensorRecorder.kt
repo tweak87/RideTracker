@@ -23,6 +23,13 @@ import java.io.File
 import java.time.Instant
 import java.util.UUID
 
+data class AndroidLiveGForceSample(
+    val timestampMs: Long = 0L,
+    val normalG: Double = 1.0,
+    val lateralG: Double = 0.0,
+    val longitudinalG: Double = 0.0,
+)
+
 class AndroidSensorRecorder(private val context: Context) : SensorEventListener {
     var isRecording by mutableStateOf(false); private set
     var status by mutableStateOf("Bereit"); private set
@@ -48,6 +55,7 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
     var latestHeartRateBpm by mutableStateOf<Int?>(null); private set
     var heartRateSource by mutableStateOf<String?>(null); private set
     var locationProviderStatus by mutableStateOf("Android-Systemstandort bereit"); private set
+    var liveGForceSample by mutableStateOf(AndroidLiveGForceSample()); private set
 
     val coreAdapter = RideTrackerCoreAdapter()
 
@@ -163,6 +171,7 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
         qualityScore = 0; acceptedLocations = 0; rejectedLocations = 0; distanceMeters = 0.0
         latestLocation = null; latestSpeedMs = 0.0; latestAltitude = 0.0; lastAltitudeTime = 0.0; climbRate = 0.0
         hasBarometer = pressure != null; lastSavedPath = null; videoFilename = null; videoStartOffsetSeconds = 0.0
+        liveGForceSample = AndroidLiveGForceSample()
         rideContextSnapshot = null; sessionSamples.clear(); sessionEvents.clear(); sourceRouter.reset(); coreAdapter.resetRuntime(); altitudeFusion.reset(); rideEngine.reset(); gpsSpeedEstimator.reset()
     }
 
@@ -181,6 +190,12 @@ class AndroidSensorRecorder(private val context: Context) : SensorEventListener 
             if (!isRecording) return
             val t = (event.timestamp - recordingStartNs) / 1_000_000_000.0
             val processed = rideEngine.processMotion(MotionInput(t, vector.x, vector.y, vector.z)); sampleCount += 1
+            liveGForceSample = AndroidLiveGForceSample(
+                timestampMs = event.timestamp / 1_000_000L,
+                normalG = processed.normalG,
+                lateralG = processed.lateralG,
+                longitudinalG = processed.longitudinalG,
+            )
             val routedSpeed = sourceRouter.resolve<Double>("speedKmh")
             latestSpeedMs = (routedSpeed?.value ?: 0.0) / 3.6
             speedKmh = routedSpeed?.value ?: 0.0

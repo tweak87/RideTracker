@@ -52,6 +52,7 @@
   function primeForUserGesture({ video = true, fullscreen = true } = {}) {
     setVideoEnabled(video);
     if (video && fullscreen) window.RideTrackerRecordingFullscreen?.beginPreparation?.();
+    window.dispatchEvent(new CustomEvent('ridetracker:recording-stage', { detail:{ stage:'permissions', message:'Berechtigungen und Kamera werden vorbereitet …' } }));
     const init = button('init');
     if (!initialized() && init && !init.disabled) {
       // This click must remain in the original tap stack on iOS so the motion,
@@ -123,9 +124,12 @@
         return false;
       }
     }
-    if (video && !cameraReady() && !(await recoverCamera())) {
-      refresh();
-      return false;
+    if (video && !cameraReady()) {
+      if (state.priming) await state.priming;
+      if (!cameraReady() && !(await recoverCamera())) {
+        refresh();
+        return false;
+      }
     }
     refresh();
     return true;
@@ -150,6 +154,7 @@
       if (!(await initialization)) { await window.RideTrackerRecordingFullscreen?.abortPreparation?.(); return false; }
 
       const calibrationManager = window.RideTrackerCalibrationManager;
+      window.dispatchEvent(new CustomEvent('ridetracker:recording-stage', { detail:{ stage:'calibration', message:'Telefon ruhig halten · automatische Kalibrierung läuft …' } }));
       if (calibrationManager && !(await calibrationManager.ensureForStart())) {
         await window.RideTrackerRecordingFullscreen?.abortPreparation?.();
         refresh();
@@ -170,6 +175,7 @@
       }
 
       window.RideTrackerRecordingSession?.showLive?.();
+      window.dispatchEvent(new CustomEvent('ridetracker:recording-stage', { detail:{ stage:'recording', message:'Video und Telemetrie werden jetzt gestartet …' } }));
       start.click();
       const started = await waitFor(recordingActive, 1800);
       if (!started) {

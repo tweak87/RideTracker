@@ -29,14 +29,20 @@
     #rtRecordingMinimizeButton{right:max(12px,env(safe-area-inset-right))!important}
     #rtRecordingStopButton .rt-rec-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#ff334e;margin-right:7px;vertical-align:0;box-shadow:0 0 0 0 rgba(255,51,78,.7);animation:rtRecPulse 1.3s infinite}
     #rtRecordingStatusChip{pointer-events:none!important;position:fixed!important;left:50%!important;transform:translateX(-50%)!important;bottom:max(18px,calc(env(safe-area-inset-bottom) + 10px))!important;display:none!important;border-radius:999px!important;padding:8px 12px!important;background:rgba(0,0,0,.68)!important;color:#fff!important;border:1px solid rgba(255,255,255,.35)!important;font-size:12px!important}
+    #rtRecordingPreparationPanel{pointer-events:none!important;position:fixed!important;inset:0!important;display:none!important;place-items:center!important;padding:24px!important;background:radial-gradient(circle at 50% 42%,rgba(10,53,76,.34),rgba(0,0,0,.78))!important;color:#fff!important;text-align:center!important}
+    body.rt-app-fullscreen-active #rtRecordingPreparationPanel[data-preparing="true"]{display:grid!important}
+    #rtRecordingPreparationPanel>div{max-width:340px;border:1px solid rgba(95,208,255,.6);border-radius:22px;padding:20px 22px;background:rgba(4,18,29,.84);box-shadow:0 18px 60px rgba(0,0,0,.55);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+    #rtRecordingPreparationPanel i{display:block;width:42px;height:42px;margin:0 auto 14px;border:4px solid rgba(95,208,255,.24);border-top-color:#5fd0ff;border-radius:50%;animation:rtPrepareSpin .85s linear infinite}
+    #rtRecordingPreparationPanel strong{display:block;font-size:20px}#rtRecordingPreparationPanel span{display:block;margin-top:7px;color:#bdd4e5;font-size:13px;line-height:1.45}
     body.rt-app-fullscreen-active #rtRecordingStatusChip[data-recording="true"],body.rt-app-fullscreen-active #rtRecordingStatusChip[data-preparing="true"]{display:block!important}
     @keyframes rtRecPulse{0%{box-shadow:0 0 0 0 rgba(255,51,78,.7)}70%{box-shadow:0 0 0 8px rgba(255,51,78,0)}100%{box-shadow:0 0 0 0 rgba(255,51,78,0)}}
+    @keyframes rtPrepareSpin{to{transform:rotate(360deg)}}
     body.rt-app-fullscreen-active{overflow:hidden!important;overscroll-behavior:none!important;touch-action:none!important}
     @media(max-width:520px){#rtRecordingControlPortal .rt-record-control{top:max(8px,env(safe-area-inset-top))!important;padding:9px 11px!important;font-size:13px!important}}
   `;
   document.head.appendChild(style);
 
-  const state={recording:false,preparing:false,startedAt:0,raf:0,lastText:'',activationToken:0,syncTimer:0};
+  const state={recording:false,preparing:false,stageMessage:'Kamera, Sensoren und Kalibrierung werden vorbereitet …',startedAt:0,raf:0,lastText:'',activationToken:0,syncTimer:0};
   const wrap=()=>document.getElementById('videoWrap');
   const stopButton=()=>document.getElementById('stop');
   const preview=()=>document.getElementById('preview');
@@ -54,7 +60,7 @@
     portal=document.createElement('div');
     portal.id='rtRecordingControlPortal';
     portal.setAttribute('aria-live','polite');
-    portal.innerHTML='<button type="button" class="rt-record-control" id="rtRecordingStopButton" aria-label="Aufzeichnung stoppen"><span class="rt-rec-dot"></span><span>REC</span> <span id="rtRecordingElapsed">00:00</span></button><button type="button" class="rt-record-control" id="rtRecordingMinimizeButton">Vollbild verlassen</button><div id="rtRecordingStatusChip">Aufnahme läuft · Vollbild kann verlassen werden</div>';
+    portal.innerHTML='<div id="rtRecordingPreparationPanel"><div><i></i><strong>Aufnahme wird vorbereitet</strong><span>Kamera, Sensoren und Kalibrierung werden vorbereitet …</span></div></div><button type="button" class="rt-record-control" id="rtRecordingStopButton" aria-label="Aufzeichnung stoppen"><span class="rt-rec-dot"></span><span>REC</span> <span id="rtRecordingElapsed">00:00</span></button><button type="button" class="rt-record-control" id="rtRecordingMinimizeButton">Vollbild verlassen</button><div id="rtRecordingStatusChip">Aufnahme läuft · Vollbild kann verlassen werden</div>';
     document.body.appendChild(portal);
     portal.querySelector('#rtRecordingStopButton').onclick=()=>stopRecording();
     portal.querySelector('#rtRecordingMinimizeButton').onclick=()=>leaveFullscreen();
@@ -95,8 +101,10 @@
     ensureControls();
     const stop=document.getElementById('rtRecordingStopButton');
     const chip=document.getElementById('rtRecordingStatusChip');
+    const preparation=document.getElementById('rtRecordingPreparationPanel');
     if(stop)stop.dataset.recording=String(state.recording);
-    if(chip){chip.dataset.recording=String(state.recording);chip.dataset.preparing=String(state.preparing);chip.textContent=state.recording?'Aufnahme läuft · HUD und Video aktiv':'Kamera, Sensoren und Kalibrierung werden vorbereitet …';}
+    if(chip){chip.dataset.recording=String(state.recording);chip.dataset.preparing=String(state.preparing);chip.textContent=state.recording?'Aufnahme läuft · HUD und Video aktiv':state.stageMessage;}
+    if(preparation){preparation.dataset.preparing=String(state.preparing);const text=preparation.querySelector('span');if(text)text.textContent=state.stageMessage;}
   }
 
   function tick(){
@@ -167,7 +175,11 @@
   }
 
   function beginPreparation(){
-    state.preparing=true;forceLivePreviewMode();ensureControls();ensureAppFullscreen();updateControlState();return true;
+    state.preparing=true;state.stageMessage='Kamera, Sensoren und Kalibrierung werden vorbereitet …';forceLivePreviewMode();ensureControls();ensureAppFullscreen();updateControlState();requestAnimationFrame(ensureAppFullscreen);setTimeout(ensureAppFullscreen,120);return true;
+  }
+
+  function setStage(message){
+    if(message)state.stageMessage=String(message);if(state.preparing)ensureAppFullscreen();updateControlState();
   }
 
   async function abortPreparation(){
@@ -186,6 +198,7 @@
 
   window.addEventListener('ridetracker:recording-started',()=>setRecording(true));
   window.addEventListener('ridetracker:recording-stopped',()=>setRecording(false));
+  window.addEventListener('ridetracker:recording-stage',event=>setStage(event.detail?.message));
   document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&!wrap()?.classList.contains('rt-app-fullscreen'))document.body.classList.remove('rt-app-fullscreen-active')});
   document.addEventListener('webkitfullscreenchange',()=>{if(!document.webkitFullscreenElement&&!wrap()?.classList.contains('rt-app-fullscreen'))document.body.classList.remove('rt-app-fullscreen-active')});
 
@@ -206,6 +219,7 @@
     isRecording:()=>state.recording,
     elapsedMs:()=>state.recording?performance.now()-state.startedAt:0,
     ensureLivePreview:forceLivePreviewMode,
+    setStage,
     controls:ensureControls
   };
 })();

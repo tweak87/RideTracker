@@ -7,7 +7,9 @@ import android.os.SystemClock
 import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
@@ -31,6 +33,10 @@ class AndroidVideoRecorder(
         private set
     var isStarting by mutableStateOf(false)
         private set
+    var isConfigured by mutableStateOf(false)
+        private set
+    var isConfiguring by mutableStateOf(false)
+        private set
     var status by mutableStateOf("Video bereit zur Initialisierung")
         private set
     var lastVideoFile by mutableStateOf<File?>(null)
@@ -40,17 +46,38 @@ class AndroidVideoRecorder(
 
     val cameraSources = CameraSourceManager(context)
     private var videoCapture: VideoCapture<Recorder>? = null
+    private var previewUseCase: Preview? = null
+    private var previewSurfaceProvider: Preview.SurfaceProvider? = null
     private var activeRecording: Recording? = null
 
     fun configure() {
+        if (isConfiguring || isRecording) return
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            isConfigured = false
+            status = "Kamerafreigabe wird beim Start angefragt"
+            return
+        }
+        isConfiguring = true
+        isConfigured = false
+        status = "Kamera wird initialisiert …"
         val providerFuture = ProcessCameraProvider.getInstance(context)
         providerFuture.addListener({
             runCatching {
                 val provider = providerFuture.get()
                 val recorder = Recorder.Builder()
-                    .setQualitySelector(QualitySelector.from(Quality.FHD))
+                    .setQualitySelector(
+                        QualitySelector.fromOrderedList(
+                            listOf(Quality.FHD, Quality.HD, Quality.SD),
+                            FallbackStrategy.lowerQualityOrHigherThan(Quality.SD),
+                        ),
+                    )
                     .build()
-                videoCapture = VideoCapture.withOutput(recorder)
+                val capture = VideoCapture.withOutput(recorder)
+                val preview = Preview.Builder().build().also { preview ->
+                    previewSurfaceProvider?.let(preview::setSurfaceProvider)
+                }
+                videoCapture = capture
+                previewUseCase = preview
                 provider.unbindAll()
 
                 val orderedIds = cameraSources.orderedSources().map { it.id }
@@ -61,7 +88,7 @@ class AndroidVideoRecorder(
                         .addCameraFilter { infos -> infos.filter { Camera2CameraInfo.from(it).cameraId == cameraId } }
                         .build()
                     try {
-                        provider.bindToLifecycle(lifecycleOwner, selector, videoCapture)
+                        provider.bindToLifecycle(lifecycleOwner, selector, preview, capture)
                         boundId = cameraId
                         break
                     } catch (error: Throwable) {
@@ -70,13 +97,24 @@ class AndroidVideoRecorder(
                     }
                 }
                 if (boundId == null) {
-                    provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, videoCapture)
+                    provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture)
                     boundId = "fallback-back"
                 }
+                isConfigured = true
                 status = "Video bereit: $boundId"
                 lastError?.let { if (orderedIds.isNotEmpty()) status += " (Fallback aktiv)" }
-            }.onFailure { status = "Kamerafehler: ${it.localizedMessage}" }
+            }.onFailure {
+                isConfigured = false
+                status = "Kamerafehler: ${it.localizedMessage ?: it.javaClass.simpleName}"
+            }
+            isConfiguring = false
         }, ContextCompat.getMainExecutor(context))
+    }
+
+    fun attachPreview(surfaceProvider: Preview.SurfaceProvider) {
+        previewSurfaceProvider = surfaceProvider
+        previewUseCase?.setSurfaceProvider(surfaceProvider)
+        if (!isConfigured && !isConfiguring) configure()
     }
 
     fun reconfigureSelectedCamera() {
@@ -89,7 +127,7 @@ class AndroidVideoRecorder(
 
     fun start(sessionId: String, sensorStartNs: Long) {
         if (activeRecording != null || isStarting || isRecording) return
-        val capture = videoCapture ?: run {
+        val capture = videoCapture?.takeIf { isConfigured } ?: run {
             status = "Kamera noch nicht initialisiert"
             return
         }
