@@ -4,8 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.widget.MediaController
-import android.widget.VideoView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -20,8 +18,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import de.ridetracker.session.LocalProfileStore
+import de.ridetracker.session.RideSessionSample
+import de.ridetracker.session.rideSessionSamplesFromJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,6 +41,9 @@ data class AndroidRideMediaItem(
     val imageSourceUrl: String?,
     val weatherSummary: String?,
     val trackPoints: List<AndroidTrackPoint>,
+    val telemetrySamples: List<RideSessionSample>,
+    val videoStartOffsetSeconds: Double,
+    val videoHudEmbedded: Boolean,
 )
 
 private fun loadRideMedia(context: Context, profileId: String): List<AndroidRideMediaItem> {
@@ -62,6 +64,7 @@ private fun loadRideMedia(context: Context, profileId: String): List<AndroidRide
             val editedImageName = prefs.getString("image.$profileId.$id", null)
             val imageName = editedImageName ?: thumbnailNode?.optString("fileName")?.takeIf { it.isNotBlank() }
             val videoName = videoNode?.optString("filename")?.takeIf { it.isNotBlank() }
+            val telemetrySamples = rideSessionSamplesFromJson(root)
             AndroidRideMediaItem(
                 id = id,
                 title = title,
@@ -79,7 +82,10 @@ private fun loadRideMedia(context: Context, profileId: String): List<AndroidRide
                     val wind = it.optJSONObject("wind")
                     "$condition · ${"%.1f".format(it.optDouble("temperatureC"))} °C · Wind ${wind?.optDouble("speedKmh")?.toInt() ?: 0} km/h"
                 },
-                trackPoints = deriveAndroidTrackPoints(root),
+                trackPoints = deriveAndroidTrackPoints(telemetrySamples),
+                telemetrySamples = telemetrySamples,
+                videoStartOffsetSeconds = videoNode?.optDouble("startOffsetSeconds", 0.0) ?: 0.0,
+                videoHudEmbedded = videoNode?.optBoolean("hudEmbedded", false) == true,
             )
         }.getOrNull()
     }?.sortedByDescending { it.id } ?: emptyList()
@@ -168,10 +174,12 @@ fun RideMediaScreen(modifier: Modifier = Modifier, profiles: LocalProfileStore) 
                             ride.imageSourceUrl?.let { source -> TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(source))) }) { Text("Bildquelle öffnen") } }
                         }
                         ride.videoFile?.let { file ->
-                            AndroidView(
-                                factory = { ctx -> VideoView(ctx).apply { setMediaController(MediaController(ctx).also { it.setAnchorView(this) }); tag = file.absolutePath; setVideoURI(Uri.fromFile(file)) } },
-                                update = { view -> if (view.tag != file.absolutePath) { view.tag = file.absolutePath; view.setVideoURI(Uri.fromFile(file)) } },
-                                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                            AndroidRideVideoPreview(
+                                file = file,
+                                samples = ride.telemetrySamples,
+                                startOffsetSeconds = ride.videoStartOffsetSeconds,
+                                hudEmbedded = ride.videoHudEmbedded,
+                                modifier = Modifier.fillMaxWidth(),
                             )
                             OutlinedButton(onClick = {
                                 videoToExport = file

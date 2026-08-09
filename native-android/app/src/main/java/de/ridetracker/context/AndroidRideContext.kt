@@ -148,6 +148,24 @@ class AndroidRideContextStore(private val context: Context) {
             ?: "Bitte die passende Attraktion auswählen."
     }
 
+    fun selectManualAttraction(name: String) {
+        val normalized = name.trim()
+        if (normalized.isBlank()) {
+            status = "Bitte einen Namen für die Attraktion eingeben."
+            return
+        }
+        selectAttraction(
+            NearbyAttraction(
+                id = "manual/${normalized.lowercase().replace(Regex("[^a-z0-9äöüß]+"), "-").trim('-')}",
+                name = normalized,
+                latitude = currentLocation?.latitude,
+                longitude = currentLocation?.longitude,
+                distanceM = 0.0,
+                provider = "Manuelle Auswahl",
+            ),
+        )
+    }
+
     suspend fun selectPark(park: NearbyPark) {
         selectedPark = park
         selectedAttraction = null

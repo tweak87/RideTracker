@@ -35,6 +35,36 @@ data class RideSessionSample(
     val heartRateBpm: Int? = null,
 )
 
+fun rideSessionSamplesFromJson(root: JSONObject): List<RideSessionSample> {
+    val samples = root.optJSONArray("samples") ?: return emptyList()
+    return buildList(samples.length()) {
+        for (index in 0 until samples.length()) {
+            val sample = samples.optJSONObject(index) ?: continue
+            add(
+                RideSessionSample(
+                    timestamp = sample.optDouble("timestamp", index / 50.0),
+                    normalG = sample.optDouble("normalG", 1.0),
+                    lateralG = sample.optDouble("lateralG", 0.0),
+                    longitudinalG = sample.optDouble("longitudinalG", 0.0),
+                    totalG = sample.optDouble("totalG", 1.0),
+                    relativeAltitudeM = sample.optNullableDouble("relativeAltitudeM"),
+                    speedMS = when {
+                        sample.has("speedMS") -> sample.optDouble("speedMS", 0.0)
+                        else -> sample.optDouble("speedKmh", 0.0) / 3.6
+                    },
+                    latitude = sample.optNullableDouble("latitude"),
+                    longitude = sample.optNullableDouble("longitude"),
+                    horizontalAccuracyM = sample.optNullableDouble("horizontalAccuracyM"),
+                    phase = sample.optString("phase", "unknown"),
+                    qualityScore = sample.optInt("qualityScore", 0),
+                    source = sample.optString("source", "android_phone"),
+                    heartRateBpm = sample.optNullableInt("heartRateBpm"),
+                ),
+            )
+        }
+    }
+}
+
 data class RideSessionSummary(
     val durationSeconds: Double,
     val sampleCount: Int,
@@ -57,6 +87,7 @@ data class RideSessionDocument(
     val calibration: SeatCalibration?,
     val videoFilename: String? = null,
     val videoStartOffsetSeconds: Double = 0.0,
+    val videoHudEmbedded: Boolean = false,
     val privateNote: String = "",
     val communityComment: String = "",
     val heartRateSource: String? = null,
@@ -78,7 +109,13 @@ data class RideSessionDocument(
             put("mode", calibrationMode); put("source", "android_phone"); put("isCalibrated", calibration != null); put("forwardEdge", forwardEdge)
             putVector("up", calibration?.up); putVector("lateral", calibration?.lateral); putVector("forward", calibration?.forward)
         })
-        put("video", JSONObject().apply { put("sessionID", id); putNullable("filename", videoFilename); put("startOffsetSeconds", videoStartOffsetSeconds) })
+        put("video", JSONObject().apply {
+            put("sessionID", id)
+            putNullable("filename", videoFilename)
+            put("startOffsetSeconds", videoStartOffsetSeconds)
+            put("hudEmbedded", videoHudEmbedded)
+            put("hudTrailSeconds", 3)
+        })
         put("notes", JSONObject().apply { put("private", privateNote); put("privateNote", privateNote); put("comment", communityComment); put("communityComment", communityComment) })
         configurationSnapshot?.let { put("configurationSnapshot", it.toJson()) }
         val heartRates = samples.mapNotNull { it.heartRateBpm }
@@ -108,3 +145,6 @@ data class RideSessionDocument(
 
 private fun JSONObject.putNullable(key: String, value: Any?) { if (value == null) put(key, JSONObject.NULL) else put(key, value) }
 private fun JSONObject.putVector(key: String, value: de.ridetracker.engine.Vector3?) { if (value == null) put(key, JSONObject.NULL) else put(key, JSONArray(listOf(value.x, value.y, value.z))) }
+private fun JSONObject.optNullableDouble(key: String): Double? =
+    takeIf { has(key) && !isNull(key) }?.optDouble(key, Double.NaN)?.takeIf(Double::isFinite)
+private fun JSONObject.optNullableInt(key: String): Int? = takeIf { has(key) && !isNull(key) }?.optInt(key)

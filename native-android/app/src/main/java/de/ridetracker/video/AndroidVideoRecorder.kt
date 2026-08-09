@@ -4,11 +4,16 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaMetadataRetriever
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.SystemClock
 import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.CameraEffect
 import androidx.camera.core.Preview
+import androidx.camera.core.UseCaseGroup
+import androidx.camera.effects.OverlayEffect
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.FileOutputOptions
@@ -22,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import androidx.core.util.Consumer
 import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.delay
 import java.io.File
@@ -51,12 +57,29 @@ class AndroidVideoRecorder(
         private set
     var startOffsetSeconds by mutableStateOf(0.0)
         private set
+    var isHudEmbedded by mutableStateOf(false)
+        private set
 
     val cameraSources = CameraSourceManager(context)
     private var videoCapture: VideoCapture<Recorder>? = null
     private var previewUseCase: Preview? = null
     private var previewSurfaceProvider: Preview.SurfaceProvider? = null
     private var activeRecording: Recording? = null
+    private val hudRenderer = VideoHudOverlayRenderer()
+    private val hudThread = HandlerThread("RideTrackerVideoHud").apply { start() }
+    private val hudEffect = OverlayEffect(
+        CameraEffect.VIDEO_CAPTURE,
+        0,
+        Handler(hudThread.looper),
+        Consumer { error ->
+            isHudEmbedded = false
+            status = "Video-HUD-Fallback: ${error.localizedMessage ?: error.javaClass.simpleName}"
+        },
+    ).apply {
+        setOnDrawListener { frame -> hudRenderer.draw(frame.overlayCanvas) }
+    }
+
+    fun updateHud(sample: VideoHudSample) = hudRenderer.update(sample)
 
     fun configure() {
         if (isConfiguring || isRecording) return
@@ -88,16 +111,24 @@ class AndroidVideoRecorder(
                 previewUseCase = preview
                 provider.unbindAll()
 
+                val useCaseGroup = UseCaseGroup.Builder()
+                    .addUseCase(preview)
+                    .addUseCase(capture)
+                    .addEffect(hudEffect)
+                    .build()
+
                 val orderedIds = cameraSources.orderedSources().map { it.id }
                 var boundId: String? = null
                 var lastError: Throwable? = null
+                var hudBound = false
                 for (cameraId in orderedIds) {
                     val selector = CameraSelector.Builder()
                         .addCameraFilter { infos -> infos.filter { Camera2CameraInfo.from(it).cameraId == cameraId } }
                         .build()
                     try {
-                        provider.bindToLifecycle(lifecycleOwner, selector, preview, capture)
+                        provider.bindToLifecycle(lifecycleOwner, selector, useCaseGroup)
                         boundId = cameraId
+                        hudBound = true
                         break
                     } catch (error: Throwable) {
                         lastError = error
@@ -105,14 +136,22 @@ class AndroidVideoRecorder(
                     }
                 }
                 if (boundId == null) {
-                    provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture)
+                    runCatching { provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, useCaseGroup) }
+                        .onSuccess { hudBound = true }
+                        .onFailure {
+                            lastError = it
+                            provider.unbindAll()
+                            provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture)
+                        }
                     boundId = "fallback-back"
                 }
+                isHudEmbedded = hudBound
                 isConfigured = true
-                status = "Video bereit: $boundId"
-                lastError?.let { if (orderedIds.isNotEmpty()) status += " (Fallback aktiv)" }
+                status = "Video bereit: $boundId · HUD ${if (hudBound) "wird eingebettet" else "erscheint synchron in der App"}"
+                lastError?.let { if (orderedIds.isNotEmpty() && !hudBound) status += " (Kameraeffekt-Fallback)" }
             }.onFailure {
                 isConfigured = false
+                isHudEmbedded = false
                 status = "Kamerafehler: ${it.localizedMessage ?: it.javaClass.simpleName}"
             }
             isConfiguring = false
@@ -153,6 +192,7 @@ class AndroidVideoRecorder(
         playableVideoFile = null
         videoDurationMs = 0L
         isFinalizing = false
+        hudRenderer.reset()
 
         var pending = capture.output.prepareRecording(context, output)
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {

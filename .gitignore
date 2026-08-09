@@ -2,3 +2,5 @@ dist/
 node_modules/
 playwright-report/
 test-results/
+native-android/.gradle/
+native-android/app/build/

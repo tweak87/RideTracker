@@ -11,6 +11,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -37,6 +39,7 @@ fun AndroidRideContextPanel(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var showAttractionPicker by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) scope.launch { runCatching { store.useUserImage(uri) } }
     }
@@ -102,8 +105,10 @@ fun AndroidRideContextPanel(
                     parks = store.parks,
                     attractions = store.attractions,
                     selectedPark = store.selectedPark,
+                    selectedAttraction = store.selectedAttraction,
                     radiusM = store.radiusM,
                     selectPark = { park -> scope.launch { store.selectPark(park) } },
+                    selectAttraction = store::selectAttraction,
                 )
                 Text(AndroidRideContextStore.OSM_ATTRIBUTION, style = MaterialTheme.typography.labelSmall)
                 store.parks.take(12).forEachIndexed { index, park ->
@@ -117,16 +122,23 @@ fun AndroidRideContextPanel(
                 }
             }
 
-            if (store.attractions.isNotEmpty()) {
+            if (store.selectedPark != null) {
                 HorizontalDivider()
                 Text("Attraktion auswählen", style = MaterialTheme.typography.titleMedium)
-                store.attractions.take(20).forEach { attraction ->
-                    FilterChip(
-                        selected = store.selectedAttraction?.id == attraction.id,
-                        onClick = { store.selectAttraction(attraction) },
-                        label = { Text(attraction.name) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                store.selectedAttraction?.let { selected ->
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            RadioButton(true, null)
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(selected.name, style = MaterialTheme.typography.titleMedium)
+                                Text(selected.provider, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                } ?: Text("Noch keine Attraktion ausgewählt.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Button(onClick = { showAttractionPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("${store.attractions.size} Attraktionen öffnen & auswählen")
                 }
             }
 
@@ -180,6 +192,76 @@ fun AndroidRideContextPanel(
             )
         }
     }
+
+    if (showAttractionPicker) AttractionPickerDialog(
+        attractions = store.attractions,
+        selected = store.selectedAttraction,
+        onSelect = { store.selectAttraction(it); showAttractionPicker = false },
+        onManual = { store.selectManualAttraction(it); showAttractionPicker = false },
+        onDismiss = { showAttractionPicker = false },
+    )
+}
+
+@Composable
+private fun AttractionPickerDialog(
+    attractions: List<NearbyAttraction>,
+    selected: NearbyAttraction?,
+    onSelect: (NearbyAttraction) -> Unit,
+    onManual: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var search by remember { mutableStateOf("") }
+    var manualName by remember { mutableStateOf("") }
+    val filtered = remember(attractions, search) {
+        attractions.filter { search.isBlank() || it.name.contains(search.trim(), ignoreCase = true) }.take(100)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Attraktion auswählen") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                OutlinedTextField(
+                    value = search,
+                    onValueChange = { search = it },
+                    label = { Text("Gefundene Attraktionen filtern") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (filtered.isEmpty()) Text("Keine passende OSM-Attraktion gefunden. Du kannst sie unten manuell eintragen.", style = MaterialTheme.typography.bodySmall)
+                else LazyColumn(Modifier.fillMaxWidth().heightIn(max = 330.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(filtered, key = { it.id }) { attraction ->
+                        Card(
+                            onClick = { onSelect(attraction) },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (selected?.id == attraction.id) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            ),
+                        ) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 9.dp, vertical = 7.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                RadioButton(selected?.id == attraction.id, onClick = { onSelect(attraction) })
+                                Spacer(Modifier.width(7.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(attraction.name, style = MaterialTheme.typography.titleSmall)
+                                    attraction.distanceM?.let { Text("${it.toInt()} m vom Aufnahmeort", style = MaterialTheme.typography.labelSmall) }
+                                }
+                            }
+                        }
+                    }
+                }
+                HorizontalDivider()
+                OutlinedTextField(
+                    value = manualName,
+                    onValueChange = { manualName = it },
+                    label = { Text("Nicht gelistet: Name manuell") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedButton(onClick = { onManual(manualName) }, enabled = manualName.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+                    Text("Manuellen Namen übernehmen")
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Fertig") } },
+    )
 }
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -189,10 +271,12 @@ private fun NearbyParkMap(
     parks: List<NearbyPark>,
     attractions: List<NearbyAttraction>,
     selectedPark: NearbyPark?,
+    selectedAttraction: NearbyAttraction?,
     radiusM: Int,
     selectPark: (NearbyPark) -> Unit,
+    selectAttraction: (NearbyAttraction) -> Unit,
 ) {
-    val html = remember(center, parks, attractions, selectedPark, radiusM) { mapHtml(center, parks, attractions, selectedPark, radiusM) }
+    val html = remember(center, parks, attractions, selectedPark, selectedAttraction, radiusM) { mapHtml(center, parks, attractions, selectedPark, selectedAttraction, radiusM) }
     AndroidView(
         factory = { context ->
             WebView(context).apply {
@@ -214,6 +298,10 @@ private fun NearbyParkMap(
                     private fun handleMapUri(uri: Uri): Boolean {
                         if (uri.scheme == "ridetracker" && uri.host == "park") {
                             uri.lastPathSegment?.toIntOrNull()?.let { index -> parks.getOrNull(index)?.let(selectPark) }
+                            return true
+                        }
+                        if (uri.scheme == "ridetracker" && uri.host == "attraction") {
+                            uri.lastPathSegment?.toIntOrNull()?.let { index -> attractions.getOrNull(index)?.let(selectAttraction) }
                             return true
                         }
                         return uri.host != "tile.openstreetmap.org" && uri.host != "www.openstreetmap.org"
@@ -264,7 +352,7 @@ private fun StockImagePreview(url: String, title: String) {
     )
 }
 
-private fun mapHtml(center: GeoPoint, parks: List<NearbyPark>, attractions: List<NearbyAttraction>, selectedPark: NearbyPark?, radiusM: Int): String {
+private fun mapHtml(center: GeoPoint, parks: List<NearbyPark>, attractions: List<NearbyAttraction>, selectedPark: NearbyPark?, selectedAttraction: NearbyAttraction?, radiusM: Int): String {
     val zoom = when { radiusM <= 5_000 -> 13; radiusM <= 15_000 -> 11; radiusM <= 30_000 -> 10; else -> 9 }
     val centerPixel = project(center.latitude, center.longitude, zoom)
     val tileCount = 1 shl zoom
@@ -288,13 +376,14 @@ private fun mapHtml(center: GeoPoint, parks: List<NearbyPark>, attractions: List
             val selected = if (park.id == selectedPark?.id) " selected" else ""
             append("<a class='marker park$selected' href='ridetracker://park/$index' title='${escapeHtml(park.name)}' style='left:calc(50% + ${left}px);top:calc(50% + ${top}px)'>${index + 1}</a>")
         }
-        attractions.take(50).forEach { attraction ->
-            val latitude = attraction.latitude ?: return@forEach
-            val longitude = attraction.longitude ?: return@forEach
+        attractions.take(50).forEachIndexed { index, attraction ->
+            val latitude = attraction.latitude ?: return@forEachIndexed
+            val longitude = attraction.longitude ?: return@forEachIndexed
             val pixel = project(latitude, longitude, zoom)
             val left = pixel.first - centerPixel.first
             val top = pixel.second - centerPixel.second
-            append("<span class='marker attraction' title='${escapeHtml(attraction.name)}' style='left:calc(50% + ${left}px);top:calc(50% + ${top}px)'>◆</span>")
+            val selected = if (attraction.id == selectedAttraction?.id) " selected" else ""
+            append("<a class='marker attraction$selected' href='ridetracker://attraction/$index' title='${escapeHtml(attraction.name)}' style='left:calc(50% + ${left}px);top:calc(50% + ${top}px)'>◆</a>")
         }
     }
     return """
