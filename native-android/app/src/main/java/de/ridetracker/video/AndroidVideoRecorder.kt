@@ -27,10 +27,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import androidx.core.util.Consumer
 import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.delay
 import java.io.File
-import java.util.function.Consumer
 
 @androidx.annotation.OptIn(markerClass = [ExperimentalCamera2Interop::class])
 class AndroidVideoRecorder(
