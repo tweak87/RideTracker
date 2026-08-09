@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "1.0.0",
+  "devices": {
+    "phone-motion": {
+      "pluginId": "internal-sensors",
+      "purpose": "Misst Beschleunigung und Lage des Smartphones. Daraus werden die fahrzeugbezogenen G-Kräfte, Bewegungsrichtung und Vibrationen berechnet.",
+      "hint": "Bewege das Telefon vorsichtig in verschiedene Richtungen. Nach der Kalibrierung sollten die Achsen zur Fahrzeugrichtung passen.",
+      "visualization": "multiline",
+      "channels": [
+        {"metric":"lateralG","label":"Lateral","unit":"g"},
+        {"metric":"verticalG","label":"Vertikal","unit":"g"},
+        {"metric":"longitudinalG","label":"Longitudinal","unit":"g"}
+      ]
+    },
+    "phone-gps": {
+      "pluginId": "internal-sensors",
+      "purpose": "Bestimmt Position und Geschwindigkeit. Die Daten bilden die gefahrene Strecke ab und ergänzen die Bewegungsmessung um Ortsbezug.",
+      "hint": "GPS reagiert langsamer als die Bewegungssensoren. Gute Sicht zum Himmel verbessert Genauigkeit und Aktualisierungsrate.",
+      "visualization": "line",
+      "channels": [{"metric":"speedKmh","label":"Geschwindigkeit","unit":"km/h"}]
+    },
+    "phone-camera": {
+      "pluginId": "camera-source",
+      "purpose": "Erzeugt das Livebild und die Videoaufnahme. Das HUD wird zeitlich mit diesem Videostrom synchronisiert.",
+      "hint": "Die Anzeige zeigt, ob eine Live-Vorschau und eine aktive Aufnahme bestehen.",
+      "visualization": "state",
+      "channels": [{"metric":"preview","label":"Livebild","unit":""},{"metric":"recording","label":"Aufnahme","unit":""}]
+    },
+    "ble-heart": {
+      "pluginId": "ble-heart-rate",
+      "purpose": "Liest die Herzfrequenz eines Bluetooth-Pulssensors. Der Wert kann im HUD und in der Fahrtauswertung angezeigt werden.",
+      "hint": "Nur BPM wird ausgewertet; eine daraus erzeugte Kurve ist keine medizinische EKG-Aufzeichnung.",
+      "visualization": "pulse",
+      "channels": [{"metric":"heartRateBpm","label":"Puls","unit":"BPM"}]
+    },
+    "external-imu": {
+      "pluginId": "external-imu",
+      "purpose": "Eine externe IMU kann Beschleunigung und Drehrate mit höherer Messrate oder besserer Montageposition liefern als das Smartphone.",
+      "hint": "Für verwertbare G-Kräfte muss die externe IMU separat zur Fahrzeugrichtung kalibriert werden.",
+      "visualization": "multiline",
+      "channels": [{"metric":"acceleration","label":"Beschleunigung","unit":"m/s²"},{"metric":"gyroscope","label":"Drehrate","unit":"rad/s"}]
+    },
+    "external-gnss": {
+      "pluginId": "external-gnss",
+      "purpose": "Ein externer GNSS-Empfänger liefert Position, Geschwindigkeit und gegebenenfalls Höhe mit höherer Aktualisierungsrate oder Genauigkeit.",
+      "hint": "RTK- oder Mehrfrequenz-Empfänger können die Streckenrekonstruktion deutlich verbessern.",
+      "visualization": "line",
+      "channels": [{"metric":"speedKmh","label":"Geschwindigkeit","unit":"km/h"},{"metric":"altitude","label":"Höhe","unit":"m"}]
+    },
+    "external-camera": {
+      "pluginId": "camera-source",
+      "purpose": "Eine externe Kamera kann anstelle der Smartphone-Kamera als Bildquelle verwendet werden, sofern ihr Stream von der Plattform unterstützt wird.",
+      "hint": "Verfügbarkeit und Latenz hängen vom verwendeten Transport und Kameramodell ab.",
+      "visualization": "state",
+      "channels": [{"metric":"preview","label":"Livebild","unit":""},{"metric":"recording","label":"Aufnahme","unit":""}]
+    },
+    "custom": {
+      "pluginId": "custom",
+      "purpose": "Benutzerdefiniertes Gerät. Verfügbare Messkanäle werden live dargestellt, sobald das Plugin Telemetriedaten liefert.",
+      "hint": "Ordne dem Gerät eindeutige Metriken und Einheiten zu, damit HUD und Auswertung die Werte korrekt verwenden können.",
+      "visualization": "line",
+      "channels": []
+    }
+  }
+}

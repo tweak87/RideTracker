@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ridetracker.app/schema/configuration-snapshot-1.0.0.json",
+  "title": "RideTracker Configuration Snapshot",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "coreVersion",
+    "capturedAt",
+    "platform",
+    "devices",
+    "sourceRouting",
+    "camera",
+    "hud",
+    "calibration"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "coreVersion": { "type": "string", "minLength": 1 },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "platform": { "enum": ["web", "ios", "android"] },
+    "devices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["id", "name", "type", "enabled"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "minLength": 1 },
+          "enabled": { "type": "boolean" },
+          "pluginId": { "type": ["string", "null"] },
+          "channels": { "type": "array" },
+          "calibration": { "type": ["object", "null"] }
+        }
+      }
+    },
+    "sourceRouting": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["metric", "primarySource", "fallbackSources", "minimumQuality", "maxAgeMs"],
+        "properties": {
+          "metric": { "type": "string", "minLength": 1 },
+          "primarySource": { "type": "string" },
+          "fallbackSources": { "type": "array", "items": { "type": "string" } },
+          "minimumQuality": { "type": "number", "minimum": 0, "maximum": 1 },
+          "maxAgeMs": { "type": "integer", "minimum": 0 },
+          "interpolation": { "enum": ["none", "hold", "linear"] },
+          "widgetId": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "camera": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["primaryId", "fallbackIds", "sources"],
+      "properties": {
+        "primaryId": { "type": ["string", "null"] },
+        "fallbackIds": { "type": "array", "items": { "type": "string" } },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["id", "name", "available"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "name": { "type": "string", "minLength": 1 },
+              "position": { "type": ["string", "null"] },
+              "transport": { "type": ["string", "null"] },
+              "available": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "hud": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["version", "profiles"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "activeProfile": { "type": ["string", "null"] },
+        "profiles": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "watermark": { "type": ["object", "null"] }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["mode", "forwardEdge"],
+      "properties": {
+        "mode": { "type": "string", "minLength": 1 },
+        "forwardEdge": { "type": "string", "minLength": 1 },
+        "deviceCalibration": { "type": ["object", "null"] }
+      }
+    }
+  }
+}

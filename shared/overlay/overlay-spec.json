@@ -1,0 +1,79 @@
+{
+  "version": "1.1.0",
+  "designWidth": 1920,
+  "designHeight": 1080,
+  "portraitDesignWidth": 1080,
+  "portraitDesignHeight": 1920,
+  "axes": {
+    "x": "lateral",
+    "y": "longitudinal",
+    "z": "vertical",
+    "positive": { "lateral": "right", "longitudinal": "forward", "vertical": "up" }
+  },
+  "theme": {
+    "cyan": "#00E5FF",
+    "white": "#F5FBFF",
+    "muted": "#7D929A",
+    "panel": "#DB061416",
+    "grid": "#59234047",
+    "heart": "#FF334E",
+    "warning": "#FFAA20",
+    "critical": "#FF3B30"
+  },
+  "layouts": {
+    "landscape": {
+      "pulse": [0.020, 0.618, 0.292, 0.315],
+      "gDial": [0.330, 0.440, 0.340, 0.360],
+      "gValues": [0.330, 0.820, 0.340, 0.110],
+      "speed": [0.704, 0.608, 0.277, 0.330],
+      "compass": [0.410, 0.040, 0.180, 0.180],
+      "vibration": [0.801, 0.061, 0.185, 0.240],
+      "dynamics": [0.020, 0.055, 0.260, 0.185]
+    },
+    "portrait": {
+      "vibration": [0.055, 0.030, 0.410, 0.130],
+      "dynamics": [0.535, 0.030, 0.410, 0.130],
+      "compass": [0.330, 0.170, 0.340, 0.130],
+      "gDial": [0.080, 0.280, 0.840, 0.270],
+      "gValues": [0.070, 0.570, 0.860, 0.100],
+      "pulse": [0.055, 0.700, 0.410, 0.245],
+      "speed": [0.535, 0.700, 0.410, 0.245]
+    }
+  },
+  "limits": {
+    "gDisplayRange": 4.0,
+    "speedScales": [100, 200, 300],
+    "pulseWarning": 120,
+    "pulseCritical": 160,
+    "vibrationWarning": 3.0,
+    "vibrationCritical": 7.0,
+    "jerkWarningGPerSecond": 8.0,
+    "jerkCriticalGPerSecond": 15.0,
+    "rollRateWarningDegPerSecond": 90.0
+  },
+  "derivedMetrics": {
+    "totalG": "sqrt(lateral^2 + longitudinal^2 + vertical^2)",
+    "jerk": "d(gForce)/dt",
+    "airtime": "verticalG < 0.20",
+    "positiveLoad": "verticalG > 1.00",
+    "braking": "longitudinalG < -0.20",
+    "launch": "longitudinalG > 0.20",
+    "rollRate": "angularVelocityForwardAxis",
+    "pitchRate": "angularVelocityLateralAxis",
+    "yawRate": "angularVelocityVerticalAxis"
+  },
+  "smoothingMs": {
+    "gPointer": 80,
+    "gNumbers": 150,
+    "speed": 250,
+    "heartRate": 300,
+    "vibration": 100,
+    "jerk": 120,
+    "rotationRate": 100
+  },
+  "sampling": {
+    "motionHz": 100,
+    "displayHz": 60,
+    "vibrationHz": 25
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ridetracker.app/schemas/device-registry.schema.json",
+  "title": "RideTracker Device Registry",
+  "type": "object",
+  "required": ["version", "devices", "metricBindings"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "devices": { "type": "array", "items": { "$ref": "#/$defs/device" } },
+    "metricBindings": { "type": "array", "items": { "$ref": "#/$defs/binding" } }
+  },
+  "$defs": {
+    "channel": {
+      "type": "object",
+      "required": ["id", "metric", "unit", "enabled"],
+      "properties": {
+        "id": { "type": "string" }, "metric": { "type": "string" }, "unit": { "type": "string" },
+        "enabled": { "type": "boolean" }, "sampleRateHz": { "type": "number", "minimum": 0 },
+        "quality": { "type": "number", "minimum": 0, "maximum": 1 },
+        "calibration": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "device": {
+      "type": "object",
+      "required": ["id", "name", "type", "transport", "enabled", "channels"],
+      "properties": {
+        "id": { "type": "string" }, "name": { "type": "string" },
+        "type": { "enum": ["phone", "watch", "heartRate", "imu", "gnss", "barometer", "microphone", "camera", "temperature", "custom"] },
+        "transport": { "enum": ["internal", "bluetooth-le", "bluetooth-classic", "usb", "wifi", "network", "file"] },
+        "enabled": { "type": "boolean" }, "autoReconnect": { "type": "boolean" },
+        "channels": { "type": "array", "items": { "$ref": "#/$defs/channel" } },
+        "metadata": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "required": ["metric", "primarySource", "fallbackSources", "minimumQuality", "maxAgeMs"],
+      "properties": {
+        "metric": { "type": "string" },
+        "primarySource": { "type": "string", "description": "deviceId/channelId" },
+        "fallbackSources": { "type": "array", "items": { "type": "string" } },
+        "minimumQuality": { "type": "number", "minimum": 0, "maximum": 1 },
+        "maxAgeMs": { "type": "integer", "minimum": 0 },
+        "interpolation": { "enum": ["none", "hold", "linear"] },
+        "widgetId": { "type": "string" }
+      }
+    }
+  }
+}

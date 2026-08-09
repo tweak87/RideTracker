@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { chooseSpeedScale, normalizeFrame, pointerPosition, smoothValue, vibrationLevel } from './overlay-core.js';
+const spec = JSON.parse(fs.readFileSync(new URL('./overlay-spec.json', import.meta.url)));
+assert.equal(spec.designWidth, 1920);
+assert.equal(spec.portraitDesignHeight, 1920);
+assert.equal(spec.axes.x, 'lateral');
+assert.equal(spec.axes.y, 'longitudinal');
+assert.equal(spec.axes.z, 'vertical');
+assert.deepEqual(spec.layouts.landscape.gDial, [0.330,0.440,0.340,0.360]);
+assert.deepEqual(spec.layouts.portrait.gDial, [0.080,0.280,0.840,0.270]);
+assert.deepEqual(spec.layouts.portrait.compass, [0.330,0.170,0.340,0.130]);
+assert.deepEqual(spec.layouts.landscape.compass, [0.410,0.040,0.180,0.180]);
+for (const layout of Object.values(spec.layouts)) for (const rect of Object.values(layout)) {
+  assert.equal(rect.length, 4);
+  assert.ok(rect.every(Number.isFinite));
+  assert.ok(rect[0] >= 0 && rect[1] >= 0 && rect[2] > 0 && rect[3] > 0);
+  assert.ok(rect[0] + rect[2] <= 1.001 && rect[1] + rect[3] <= 1.001);
+}
+assert.equal(spec.derivedMetrics.jerk, 'd(gForce)/dt');
+assert.equal(chooseSpeedScale(87, 91, spec.limits.speedScales), 100);
+assert.equal(chooseSpeedScale(187, 201, spec.limits.speedScales), 300);
+assert.equal(vibrationLevel(2.9, spec.limits), 'low');
+assert.equal(vibrationLevel(3.1, spec.limits), 'medium');
+assert.equal(vibrationLevel(7.1, spec.limits), 'high');
+const p = pointerPosition(4, -4, 4, 100, 100, 50); assert.deepEqual(p, {x:150,y:150});
+assert.ok(smoothValue(0, 10, 80, 80) > 6 && smoothValue(0,10,80,80) < 7);
+const frame = normalizeFrame({lateralG:.8,normalG:2.4,longitudinalG:-.5,speedMS:87/3.6,heartRateBpm:142},18450);
+assert.equal(frame.gForce.vertical,2.4); assert.equal(frame.speed.valueKmh,87); assert.equal(frame.heartRate.bpm,142);
+assert.equal(normalizeFrame({headingDeg:405}).compass.headingDeg,45);
+console.log('Overlay core tests passed');
