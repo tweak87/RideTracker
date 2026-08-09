@@ -4,7 +4,7 @@ import android.app.Activity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.matchParentSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -98,7 +98,7 @@ fun RideTrackerLogo(modifier: Modifier = Modifier) {
             .size(42.dp)
             .background(Brush.linearGradient(listOf(Color(0xFF12364B), Color(0xFF07131F))), RoundedCornerShape(14.dp)),
     ) {
-        Canvas(Modifier.matchParentSize()) {
+        Canvas(Modifier.fillMaxSize()) {
             val stroke = size.minDimension * .085f
             val bounds = Rect(size.width * .18f, size.height * .21f, size.width * .82f, size.height * .79f)
             drawArc(RideCyan, 205f, 244f, false, topLeft = bounds.topLeft, size = bounds.size, style = Stroke(stroke, cap = StrokeCap.Round))
