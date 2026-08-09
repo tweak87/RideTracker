@@ -42,7 +42,14 @@ jobs:
 
       - name: Build standard, device-test and Fire OS APKs
         working-directory: native-android
-        run: gradle :app:assembleDebug :app:assembleDeviceTest :app:assembleFireTest --stacktrace
+        # Package each variant in a fresh, single-worker JVM. ApkFlinger otherwise
+        # retains the three compressed APK graphs at once and can exhaust the
+        # hosted runner heap after lint has warmed the Gradle daemon.
+        run: |
+          gradle --stop
+          gradle :app:assembleDebug --no-daemon --max-workers=1 --stacktrace
+          gradle :app:assembleDeviceTest --no-daemon --max-workers=1 --stacktrace
+          gradle :app:assembleFireTest --no-daemon --max-workers=1 --stacktrace
 
       - name: Prepare installable APK
         run: |
